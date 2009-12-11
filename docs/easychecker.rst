@@ -83,25 +83,58 @@ maybe wrote like this ::
 Imitate json and database's style, these most likely using checker.
 so, the json's style identifier must be supported ::
         
-        python style identifier    json style identifier
+    python style identifier    json style identifier
+    
+    dict                       object
+    list / tuple               array
+    str                        string
+    int                        number
+    
+    supported all identifier
+    
+    
+    database datatype's style  checker's style
+    
+    string(20)                 string(-20)
+    int(5)                     int(-5)         # not same meaning
+    
+    not compelete copy.
         
-        dict                       object
-        list / tuple               array
-        str                        string
-        int                        number
         
-        supported all identifier
+In usually, checker often couple with parser, to keep the program high
+efficiency, we like making recursion once than twice. so the checker need
+a function to parse the datastructures or accelerate the parser ::
+    
+    foo_doc = '''
         
+        Arguments `a`'s datastructures                            .value as a, f
+            dict( int:int, ... )
+                  F   F
+        Arguments `b`'s datastructures                               .value as b
+            list( str, ... )
+            
+        Return datastructures                                       .value as ''
+            dict( str:str, ... )
         
-        database datatype's style  checker's style
+        '''
+    
+    doc = easydocstring( foo_doc )
+    
+    foo_a_check = Checker( doc['a'], parser=[doc['f'],] )
+    foo_b_check = Checker( doc['b'] )
+    foo_r_check = Checker( doc[''] )
+    
+    
+    def foo( a, b ):
         
-        string(20)                 string(-20)
-        int(5)                     int(-5)         # not same meaning
+        a = a.copy()
         
-        not compelete copy.
+        assert ( not foo_a_check( a, parser = { 'F' : lambda x : b[x] } ) ) \
+               and ( not foo_b_check(b) )
         
+        assert not foo_r_check(a)
         
-Has translate format
+        return a
 
 
 
