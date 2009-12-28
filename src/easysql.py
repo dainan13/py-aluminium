@@ -13,12 +13,49 @@ CR = dict( [ ( getattr(CR, e), e )
          )
 '''
 
+
+class EasySqlException( Exception ):
+    """
+    Default WorkFlow Exception
+    """
+    pass
+
+class DuplicateError(EasySqlException):
+    pass
+
+class PrimaryKeyError(EasySqlException):
+    pass
+
+class NotFoundError(EasySqlException):
+    pass
+
+class TypeError(EasySqlException, TypeError ):
+    pass
+
+
+def condcheck( func ):
+    
+    def _checker( self, another ):
+        
+        if self.iscond == True :
+            raise EasySqlException, 'Syntax Error of `this` in easysql'
+        
+        return func( self, another )
+    
+    _checker._decorator = func
+    _checker.__name__ = func.__name__
+    _checker.__doc__  = func.__doc__
+    
+    return _checker
+
 class This( object ):
     
-    def __init__( self, colname ):
+    def __init__( self, colname=None ):
         
-        self.str = '`'+colname+'`'
+        self.iscond = False
+        self.str = '`'+colname+'`' if colname else ''
         
+    @condcheck
     def __add__ ( self, another ):
         
         self.str = '(' + self.str + '+' + \
@@ -27,6 +64,7 @@ class This( object ):
         
         return self
     
+    @condcheck
     def __sub__( self, another ):
         
         self.str = '(' + self.str + '-' + \
@@ -35,6 +73,7 @@ class This( object ):
         
         return self
     
+    @condcheck
     def __mul__( self, another ) :
         
         self.str = '(' + self.str + '*' + \
@@ -43,6 +82,7 @@ class This( object ):
         
         return self
     
+    @condcheck
     def __div__( self, another ) :
         
         self.str = '(' + self.str + '/' + \
@@ -51,16 +91,82 @@ class This( object ):
         
         return self
     
+    @condcheck
+    def __gt__( self, another ):
+        
+        self.iscond = True
+        
+        self.str = '(' + self.str + '>' + \
+        ( another._tosql if hasattr( another, '_tosql' ) else str(another) ) + \
+        ')'
+    
+    @condcheck
+    def __ge__( self, another ):
+        
+        self.iscond = True
+        
+        self.str = '(' + self.str + '>=' + \
+        ( another._tosql if hasattr( another, '_tosql' ) else str(another) ) + \
+        ')'
+        
+        return self
+    
+    @condcheck
+    def __lt__( self, another ):
+        
+        self.iscond = True
+        
+        self.str = '(' + self.str + '<' + \
+        ( another._tosql if hasattr( another, '_tosql' ) else str(another) ) + \
+        ')'
+    
+    @condcheck
+    def __le__( self, another ):
+        
+        self.iscond = True
+        
+        self.str = '(' + self.str + '<=' + \
+        ( another._tosql if hasattr( another, '_tosql' ) else str(another) ) + \
+        ')'
+        
+        return self
+    
     def _tosql( self ):
         
         return self.str
-
+    
 def this( colname ):
     return This( colname )
+
+SQLThisType = type( This() )
+
+
+
+
+class SQLFunction( object ):
     
-    
-    
-    
+    def __init__ ( self, fname ):
+        
+        self.fname = fname
+        
+    def __call__ ( self, *args ):
+        
+        args = ','.join( [ a._tosql if hasattr( a, '_tosql' )
+                                    else "'"+str(a)+"'"
+                           for a in args ] )
+        
+        r = This('')
+        r.str = self.fname+'('+args+')'
+        
+        return r 
+
+def func( fname ):
+    return SQLFunction(fname)
+
+
+
+
+
 class Default( object ):
     
     def __init__( self ):
@@ -87,40 +193,40 @@ def null( ):
     
     
     
+class Raw( object ):
+    
+    def __init__( self, raw ):
+        self. raw = raw 
+    
+    def _tosql(self):
+        return raw
+    
+def raw( rawdata ):
+    return Raw( rawdata )
+    
+    
     
     
     
 class NoArg( object ):
     pass
     
-    
-    
-    
-class EasySqlException( Exception ):
-    """
-    Default WorkFlow Exception
-    """
-    pass
-
-class DuplicateError(EasySqlException):
-    pass
-
-class PrimaryKeyError(EasySqlException):
-    pass
-
-class NotFoundError(EasySqlException):
-    pass
-
-class TypeError(EasySqlException, TypeError ):
-    pass
 
 
+ArrayTypes = ( types.ListType, types.TupleType )
+StrTypes = ( types.StringType, types.UnicodeType )
 
 
 class Tablet( object ) :
     '''
     tablet of table
     '''
+    
+    def _buildrow( self, row ):
+        
+        return dict( [ ( k, v._tosql() if hasattr(v, '_tosql')
+                            else "'"+str(v)+"'"
+                       ) for k, v in row.items() if k in self.cols ] )
     
     def __init__ ( self, name, cols=[] ):
         
@@ -130,7 +236,20 @@ class Tablet( object ) :
         
         pass
         
-    def _insert( self, rows, dup = None, ignore = True ):
+    def _insert( self, rows, dup=None ):
+        
+        rows = [ self._buildrow(row) for row in rows ]
+        dup = self._buildrow(dup) if dup else None
+        
+        sql = self._insert_sql( rows, dup )
+        
+        # self.query()
+        print sql
+        
+        # return ( affect rows number , lastid )
+        return 1, 1
+        
+    def _insert_sql( self, rows, dup = None, ignore = True ):
         '''
         INSERT [LOW_PRIORITY | DELAYED | HIGH_PRIORITY] [IGNORE]
             [INTO] tbl_name [(col_name,...)]
@@ -160,12 +279,23 @@ class Tablet( object ) :
             ) if dup else '',
         ] )
         
+        return sql
+    
+    def _select( self, cond=None, condx=[], cols=None, limit=None, offset=None ):
+        
+        cond = self._buildrow(cond) if cond else None
+        
+        sql = self._select_sql( cond, condx, cols, limit, offset )
+        
+        # self.query()
         print sql
         
-        return 1, 1
+        # return ( result rows, result )
+        return 1, [{'a':1,'b':2,'c':3,'d':4,'e':5}]
     
-    def _select( self,
-                 cond=None, cols=None, limit=None, offset=None, vset=None ):
+    def _select_sql( self,
+                     cond=None, condx=[], cols=None,
+                     limit=None, offset=None, vset=None ):
         '''
         SELECT
             [ALL | DISTINCT | DISTINCTROW ]
@@ -193,26 +323,38 @@ class Tablet( object ) :
         
         cols = cols or self.cols
         
-        
+        print 's',condx
         sql = ' '.join( [
             
             'SELECT',
             'DISTINCT' if vset else '',
             ','.join([ '`%s`' % (c,) for c in cols ]),
             'FROM `%s`' % self.name ,
-            ('WHERE %s' % ( ','.join( [ '`%s`=%s' % i
-                                        for i in cond.items() ] ), )
-            ) if cond else '',
+            'WHERE' if cond or condx!=[] else '',
+                ','.join( [ '`%s`=%s' % i for i in cond.items() ] ) \
+                                                                if cond else '',
+                ',' if cond and condx !=[] else '',
+                ','.join( [ i._tosql() for i in condx ] ),
             ('LIMIT %d' % (limit,) ) if limit else '',
             ('OFFSET %d' % (offset,) ) if limit and offset else '',
             
         ] )
         
+        return sql
+        
+    def _delete( self, cond=None, condx=[], limit=None ):
+        
+        cond = self._buildrow(cond) if cond else None
+        
+        sql = self._delete_sql( cond, condx, limit )
+        
+        # self.query()
         print sql
         
-        return 1, [{'a':1,'b':2,'c':3,'d':4,'e':5}]
+        # return ( affect rows, None )
+        return 1, None
         
-    def _delete( self, cond=None, limit=None, ignore = True ):
+    def _delete_sql( self, cond=None, condx=[], limit=None, ignore = True ):
         '''
         DELETE [LOW_PRIORITY] [QUICK] [IGNORE] FROM tbl_name
             [WHERE where_condition]
@@ -222,21 +364,33 @@ class Tablet( object ) :
         
         sql = ' '.join( [
             
-            'UPDATE',
+            'DELETE',
             'IGNORE' if ignore else '',
             'FROM `%s`' % self.name ,
-            ('WHERE %s' % ( ','.join( [ '`%s`=%s' % i
-                                        for i in cond.items() ] ), )
-            ) if cond else '',
+            'WHERE' if cond or condx!=[] else '',
+                ','.join( [ '`%s`=%s' % i for i in cond.items() ] ) \
+                                                                if cond else '',
+                ',' if cond and condx !=[] else '',
+                ','.join( [ i._tosql() for i in condx ] ),
             ('LIMIT %d' % (limit,) ) if limit else '',
             
         ] )
         
-        print sql
-        
-        return 1, None
+        return sql
         
     def _replace( self, rows ):
+        
+        rows = [ self._buildrow(row) for row in rows ]
+        
+        sql = self._replace_sql( rows )
+        
+        # self.query()
+        print sql
+        
+        # return ( affect rows, lastid )
+        return 1, 1
+        
+    def _replace_sql( self, rows ):
         '''
         REPLACE [LOW_PRIORITY | DELAYED]
             [INTO] tbl_name [(col_name,...)]
@@ -260,17 +414,32 @@ class Tablet( object ) :
             
         ] )
         
+        return sql
+        
+    def _update( self, row, cond=None, condx=[], limit=None):
+        
+        row = self._buildrow(row)
+        cond = self._buildrow(cond) if cond else None
+        
+        sql = self._update_sql( row, cond, condx, limit )
+        
+        # self.query()
         print sql
         
+        # return ( matched rows, affectrows )
         return 1, 1
         
-    def _update( self, row, cond=None, limit=None, ignore = True ):
+        
+    def _update_sql( self, row, cond=None, condx=[],
+                           limit=None, ignore = True  ):
         '''
         UPDATE [LOW_PRIORITY] [IGNORE] table_reference
             SET col_name1={expr1|DEFAULT} [, col_name2={expr2|DEFAULT}] ...
             [WHERE where_condition]
             [ORDER BY ...]
             [LIMIT row_count]
+            
+        using Mysql_info() to get the match number affact number
         '''
         
         sql = ' '.join( [
@@ -278,19 +447,18 @@ class Tablet( object ) :
             'UPDATE',
             'IGNORE' if ignore else '',
             '`%s`' % self.name ,
-            'SET %s' % ( ','.join( [ '`%s`=%s' % i
-                                        for i in row.items() ] ) ),
-            ('WHERE %s' % ( ','.join( [ '`%s`=%s' % i
-                                        for i in cond.items() ] ), )
-            ) if cond else '',
+            'SET',
+                ','.join( [ '`%s`=%s' % i for i in row.items() ] ),
+            'WHERE' if cond or condx!=[] else '',
+                ','.join( [ '`%s`=%s' % i for i in cond.items() ] ) \
+                                                                if cond else '',
+                ',' if cond and condx !=[] else '',
+                ','.join( [ i._tosql for i in condx ] ),
             ('LIMIT %d' % (limit,) ) if limit else '',
             
         ] )
         
-        print sql
-        
-        return 1, None
-
+        return sql
 
 class Table ( object ) :
     '''
@@ -305,31 +473,114 @@ class Table ( object ) :
         return rst.fetch_row( rst.num_rows() )
         
     
-    def __init__ ( self, name, cols = [] ):
+    @staticmethod
+    def _sliceparser( slc ):
+        '''
+        table[::]
+        table[col,col,[col,]]
+        table[(col,col,)]
+        table[::(cond,cond)]
+        talbe[::cond]
+        talbe[col,::]
+        '''
         
-        self.name = name
+        type_slc = type(slc)
         
-        self.cols = cols
+        if type_slc in StrTypes :
+            
+            cols = [slc,]
+            slc = None
+            type_slc = None
+        
+        elif type_slc in ArrayTypes :
+            
+            if type( slc[-1] ) == types.SliceType :
+                
+                cols = slc[:-1]
+                cols = sum([c if c in ArrayTypes else [c,] for c in cols], [])
+                slc = slc[-1]
+                type_slc = type(slc)
+                
+            else :
+                
+                for i, e in enumerate(slc):
+                    if type(e) in ( types.DictType, SQLThisType ):
+                        break
+                else :
+                    i += 1
+                
+                cols = slc[:i]
+                cols = sum([c if c in ArrayTypes else [c,] for c in cols ], [])
+                
+                slc = slc[i:]
+                type_slc = None
+            
+        else :
+            cols = []
+            
+        if type_slc == None :
+            limit = 1
+            offset = None
+            cond = {} if slc == [] else slc
+            single = True
+        elif type_slc == types.DictType :
+            #cols = []
+            limit = 1
+            offset = None
+            cond = slc
+            single = True
+        elif type_slc == types.SliceType :
+            #cols = []
+            offset = slc.start
+            limit = slc.stop
+            cond = slc.step
+            single = False
+        else :
+            raise Exception, slc
+            
+        type_cond = type(cond)
+            
+        if type_cond in ArrayTypes :
+            
+            cond = dict( sum( [ s.items() for s in cond
+                                if type(s) == types.DictType
+                              ], [] ) )
+            condx = [ s for s in slc if type(s) == SQLThisType ]
+            
+        elif type_cond == types.DictType :
+            
+            condx = []
+            
+        elif type_cond == types.NoneType :
+            
+            condx = []
+            
+        else :
+            
+            raise Exception, cond
+            
+        return cols, offset, limit, cond, condx, single
+    
+    def __init__ ( self, tablets = [] ):
         
         self.colconv = []
         
-        self.tablets = [ Tablet('testtable') ]
+        #self.tablets = [ Tablet('testtable') ]
+        self.tablets = tablets
         
         return
         
     def _splitter( self, row ):
         
         return [0,]
-        
-    def _buildrow( self, row ):
-        
-        return dict( [ ( k, v._tosql() if hasattr(v, '_tosql')
-                            else "'"+str(v)+"'"
-                       ) for k, v in row.items() ] )
     
     def _gettablets( self, tbl ):
         
         return self.tablets[0]
+        
+    def _buildrow( self, row ):
+        
+        return row.copy()
         
     def _write( self, rows, ondup = None ):
         
@@ -357,6 +608,7 @@ class Table ( object ) :
         
         rows = [ self._buildrow(row) for row in rows ]
         tbls = [ self._splitter(row) for row in rows ]
+        tblc = [ r for r, t in zip(rows, tbls) if len(t) != 1 ]
         if tblc != [] :
             raise PrimaryKeyError, \
                            ( 'Can not find the tablet on replace', tblc )
@@ -374,7 +626,7 @@ class Table ( object ) :
         return n, lastids
 
     
-    def _read( self, cond, cols = None, limit = None, offset = None ):
+    def _read( self, cond, condx=[], cols = None, limit = None, offset = None ):
         
         cond = self._buildrow(cond) if cond else cond
         tbls = self._splitter(cond) # todo : set to all tablets if cond is none
@@ -383,7 +635,7 @@ class Table ( object ) :
         rst = []
         nx = 0
         for tbl in tbls : # read lazy
-            n, r = self._gettablets(tbl)._select( cond, cols, tlimit )
+            n, r = self._gettablets(tbl)._select( cond, condx, cols, tlimit )
             nx += n
             rst = rst + r
             tlimit = ( tlimit - n ) if tlimit != None else tlimit
@@ -392,7 +644,7 @@ class Table ( object ) :
         
         return nx, rst
         
-    def _set( self, row, cond, limit = None ):
+    def _set( self, row, cond, condx=[], limit = None ):
         
         cond = self._buildrow(cond) if cond else cond
         tbls = self._splitter(cond) # todo : set to all tablets if cond is none
@@ -402,7 +654,7 @@ class Table ( object ) :
         tlimit = limit
         nx = 0
         for tbl in tbls :
-            n, r = self._gettablets(tbl)._update( row, cond, tlimit )
+            n, r = self._gettablets(tbl)._update( row, cond, condx, tlimit )
             nx += n
             tlimit = ( tlimit - n ) if tlimit != None else tlimit
             if tlimit <= 0 :
@@ -410,32 +662,56 @@ class Table ( object ) :
         
         return nx, None
     
-    def _delete( self, cond, limit = None ):
+    def _delete( self, cond, condx=[], limit = None ):
         
         cond = self._buildrow(cond) if cond else cond
         tbls = self._splitter(cond) # todo : set to all tablets if cond is none
         
         tlimit = limit
-        rst = []
         nx = 0
         for tbl in tbls : # read lazy
-            n, r = self._gettablets(tbl)._delete( cond, tlimit )
+            n, r = self._gettablets(tbl)._delete( cond, condx, tlimit )
             nx += n
-            rst = rst + r
             tlimit = ( tlimit - n ) if tlimit != None else tlimit
             if tlimit <= 0 :
                 break
         
         return nx, None
         
-    def __lshift__ ( self, row ):
+    def __lshift__ ( self, rows ):
         '''
         table << {'attr':'inserted'}
+        table << [{'attr':'inserted'},]
         '''
         
-        n, lastid = self._write( [row,] )
+        if type(rows) == types.DictType :
+            rows = [rows,]
+            single = True
+        elif type(rows) in ( types.ListType, types.TupleType ) :
+            single = False
+        else :
+            raise TypeError, 'easysql << must row|[row,...]'
         
-        if n == 0:
+        n, lastid = self._write( rows )
+        
+        if single == True and n == 0:
+            raise DuplicateError, ''
+        
+        return self
+    
+    def __iadd__ ( self, rows ):
+        '''
+        table += [{'attr':'inserted'},]
+        '''
+        
+        if type(rows) in ( types.ListType, types.TupleType ) :
+            single = False
+        else :
+            raise TypeError, 'easysql << must row|[row,...]'
+        
+        n, lastid = self._write( rows )
+        
+        if n != len(rows):
             raise DuplicateError, ''
         
         return self
@@ -473,7 +749,7 @@ class Table ( object ) :
         table.get({'ID':1}, default=None, keys=[] )
         '''
         
-        n, rst = self._read( cond, cols=keys, limit=1)
+        n, rst = self._read( cond, [], cols=keys, limit=1)
         
         if n != 1 and default != NoArg :
             return default
@@ -497,16 +773,16 @@ class Table ( object ) :
         
         return rst[0]
         
-    def gets( self, cond, keys = [] ):
+    def gets( self, cond, keys=[], limit=None, offset=None):
         '''
-        table.gets({'ID':1}, keys=[], limited=())
+        table.gets( {'a':1}, keys=[], limit=n, offset = p )
         '''
         
-        n, rst = self._read( cond, cols=keys, limit=1)
+        n, rst = self._read( cond, [], cols=keys, limit=limit, offset=offset )
         
         return rst
 
-    def __getitem__( self, sls ):
+    def __getitem__( self, slc ):
         '''
         table[{'ID':1}]
         table['a','b']
@@ -519,59 +795,9 @@ class Table ( object ) :
         table[('a','b'),::{'ID':10}]
         '''
         
-        if type(sls) in ( types.StringType, types.UnicodeType ):
-            sls = (sls,)
+        keys, offset, limit, cond, condx, single = self._sliceparser( slc )
         
-        if type(sls) == types.DictType :
-            keys = None
-            cond = sls
-            limit = 1
-            offset = None
-            single = True
-        
-        if type(sls) == types.TupleType :
-            
-            if type(sls[-1]) == types.SliceType :
-                keys = sls[:-1]
-                cond = sls[-1].step
-                limit = sls[-1].stop
-                offset = sls[-1].start
-                single = False
-            elif type(sls[-1]) == types.DictType :
-                keys = sls[:-1]
-                cond = sls[-1]
-                limit = 1
-                offset = None
-                single = True
-            else :
-                keys = sls
-                cond = None
-                limit = None
-                offset = None
-                single = True
-                
-        if type(sls) == types.SliceType :
-            keys = None
-            cond = sls.step
-            limit = sls.stop
-            offset = sls.start
-            single = False
-            
-        offset = None if offset == 1 else offset
-        
-        if keys :
-            
-            keys = [ x if type(x) in ( types.TupleType, types.ListType )
-                       else [x,]
-                     for x in keys ]
-            keys = sum(keys,[])
-        
-            if not all( [ type(k) == types.StringType for k in keys ] ):
-                raise TypeError, \
-                          ( 'easysql indices(get) must be as '\
-                            '[[col, col, ... ,][offset:limit:]where]', sls )
-        
-        n, rst = self._read( cond, keys, limit, offset )
+        n, rst = self._read( cond, condx, keys, limit, offset )
         
         if single == False :
             return rst
@@ -581,8 +807,36 @@ class Table ( object ) :
         
         return rst[0]
         
+    def set( self, cond, row ):
+        '''
+        table.set( {'ID':1}, {'attr':'updated'} )
+        '''
         
-    def __setitem__( self, sls, value ):
+        if row == {} :
+            raise TypeError, \
+                      ( 'value must at least one to set', value, condk )
+        
+        n, x = self._set( row, cond, [], 1 )
+        
+        if n == 0 :
+            raise NotFoundError, 'no found'
+        
+        return
+    
+    def sets( self, cond, row, limit ):
+        '''
+        table.sets( {'ID':1}, {'attr':'updated'}, limit=n )
+        '''
+        
+        if row == {} :
+            raise TypeError, \
+                      ( 'value must at least one to set', value, condk )
+        
+        n, x = self._set( row, cond, [], limit )
+        
+        return n
+        
+    def __setitem__( self, slc, value ):
         '''
         table[{'ID':1}] = {'A':1}
         table[10:50] = {'A':1}
@@ -593,98 +847,90 @@ class Table ( object ) :
         table[('a','b'),::{'ID':10}] = {'a':1,'b':2,'c':4}
         '''
         
-        if type(sls) in ( types.StringType, types.UnicodeType ):
-            sls = (sls,)
+        keys, offset, limit, cond, condx, single = self._sliceparser( slc )
         
-        if type(sls) == types.DictType :
-            cond = sls
-            condk = []
-            limit = 1
-            single = True
+        cond = dict(   ( cond.items() if cond else [] ) \
+                     + [ ( k, value[k] ) for k in keys ] )
         
-        if type(sls) == types.TupleType :
-            
-            if type(sls[-1]) == types.SliceType :
-                cond = sls[-1].step
-                condk = sls[:-1]
-                limit = sls[-1].stop
-                single = False
-                if sls[-1].start != None :
-                    raise TypeError, ( 'offset must be none in set', sls )
-            elif type(sls[-1]) == types.DictType :
-                cond = sls[-1]
-                condk = sls[:-1]
-                limit = 1
-                single = True
-            else :
-                cond = None
-                condk = sls
-                limit = None
-                single = True
-                
-        if type(sls) == types.SliceType :
-            cond = sls.step
-            condk = []
-            limit = sls.stop
-            single = False
-            
-            if sls[-1].start != None :
-                raise TypeError, ( 'offset must be none in set', sls )
-            
-            
-        condk = [ x if type(x) in ( types.TupleType, types.ListType )
-                   else [x,]
-                 for x in condk ]
-        condk = sum(condk,[])
-        
-        if not all( [ type(k) == types.StringType for k in condk ] ):
-            raise TypeError, \
-                      ( 'easysql indices(set) must be as '\
-                        '[[col, col, ... ,][:limit:]where]', sls )
-        
-        cond = cond.items() if cond != None else []
-        cond = cond + [ ( k, value[k] ) for k in condk ]
-        cond = dict(cond) if cond != [] else None
-        
-        row = dict([ (k, v) for k, v in value.items() if k not in condk ])
+        row = dict([ (k, v) for k, v in value.items() if k not in keys ])
         
         if row == {} :
             raise TypeError, \
                       ( 'value must at least one to set', value, condk )
             
-        n, x = self._set( row, cond, limit )
+        n, x = self._set( row, cond, condx, limit )
         
         if single == True and n == 0 :
             raise NotFoundError, 'not found'
         
         return
     
-    def __delitem__( self, sls ):
+    def __ilshift__( self, rows ):
+        '''
+        table <<= {'attr':'inserted'}
+        table <<= [{'attr':'inserted'},]
+        '''
+        
+        if type(rows) == types.DictType :
+            rows = [rows,]
+            single = True
+        elif type(rows) in ( types.ListType, types.TupleType ) :
+            single = False
+        else :
+            raise TypeError, 'easysql << must row|[row,...]'
+        
+        n, x = self._replace( rows )
+        
+        return self
+        
+    def load( self, row ):
+        '''
+        table.load( {'attr':'replaced'} )
+        '''
+        
+        n, x = self._replace( [row, ] )
+        
+        if n == 0 :
+            raise EasySqlException, 'row error in load.'
+        
+        return x[0]
+        
+    def loads( self, rows ):
+        '''
+        table.loads( [{'attr':'replaced'},] )
+        '''
+        
+        n, x = self._replace( rows )
+        
+        return n
+    
+    def remove( self, cond ):
+        
+        n, x = self._delete( cond, [], 1 )
+        
+        if n == 0 :
+            raise NotFoundError, 'not found'
+        
+        return
+    
+    def removes( self, cond, limit=None ):
+        
+        n, x = self._delete( cond, [], limit )
+        
+        return n
+    
+    def __delitem__( self, slc ):
         '''
         del table[{'attr1':1}]
         del table[::{'attr1':1}]
         '''
         
-        if type(sls) == types.DictType :
-            
-            cond = sls
-            condk = []
-            limit = 1
-            offset = None
-            single = True
-            
-        elif type(sls) == types.SliceType :
-            
-            cond = sls.step
-            condk = []
-            limit = sls.stop
-            offset = sls.start
-            single = False
-            
-        else :
-            raise TypeError, \
-                      ( 'easysql indices(delete) must be as '\
-                        '[offset:limit:]where]', sls )
+        keys, offset, limit, cond, condx, single = self._sliceparser( slc )
+        
+        n, x = self._delete( cond, condx, limit )
+        
+        if single == True and n == 0 :
+            raise NotFoundError, 'not found'
         
         return
     
@@ -695,7 +941,7 @@ class Table ( object ) :
         
         return
     
-    def __invert__(obj):
+    def __invert__( self, obj ):
         '''
         (~table)[...]
         SQL(table)[...]
@@ -703,27 +949,74 @@ class Table ( object ) :
         '''
         
         return
+    
+    def __concat__( self, other ):
+        
+        return Tablet( self.tablets + other.tablets )
+        
+    def __len__( self ):
+        
+        return len(tablets)
+        
+    @staticmethod
+    def sum( table ):
+        
+        return Tablet( sum([ t.tablets for t in table ],[]) )
 
 if __name__ == '__main__' :
     
-    a = Table('A')
+    t = Table([Tablet('testtable'),])
     
-    a << {'a':1,'b':2} << {'c':1,'d':2}
+    
+    print '-- insert --'
+    
+    t << {'a':1,'b':2} << {'c':1,'d':2}
+    print t.append( {'a':1,'b':2} )
+    
+    t << [{'a':1,'b':2},{'c':1,'d':2}]
+    t += [{'a':1,'b':2},]
+    print t.extend([{'a':1,'b':2},{'c':1,'d':2}])
+    
+    t.append( {'a':1}, ondup = {'b':2} )
+    
+    print '-- select --'
+    
+    print t[{'a':1}]
+    print t['a','b']
+    print t.get( {'a':1} )
     
     x = {'a':1}
-    a >> x
-    print 'x',x
+    t >> x
+    print 'x', x
     
-    a[{'a':1}]
+    print t[::{'a':1}]
+    print t['a','b',:50:]
+    print t.gets( {'a':1}, limit=3, offset=8 )
     
-    keys = ['a','b']
-    a[keys,]
-    print 'a[:]',a[:]
+    print '-- update --'
     
-    a.extend( [{'a':1,'b':2},{'b':2,'c':3},{'a':default(),'c':3}] )
+    t[{'a':1}] = {'b':this('c')+1}
+    t['a'] = {'a':1,'b':this('c')+2}
+    t.set( {'a':1}, {'b':default()} )
     
-    a[{'a':1}] = {'b':this('c')+1}
-    a['a',::] = {'a':1,'b':this('c')+2}
+    t[::{'attr1':1}] = {'b':2}
+    t['a',::] = {'a':1,'b':this('c')+2}
+    t.sets( {'a':1}, {'b':2}, limit=5 )
+    
+    print '-- replace --'
+    
+    t <<= {'a':1}
+    print t.load( {'a':1} )
+    t <<= [{'a':1},]
+    print t.loads( [{'a':1},] )
+    
+    
+    print '-- delete --'
+    
+    del t[{'a':1}]
+    t.remove({'a':1})
+    del t[::{'a':1}]
+    t.removes({'a':1})
 
 
 
