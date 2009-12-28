@@ -12,24 +12,30 @@ The aim is a datastructure checker which like the datastructure defines in
 documents.
 
 there is an example function ::
+
+    # doc.txt
+    
+    '''
+    Function : foo
+    
+    Arguments datastructures :
+        a  ->  dict( int:int, ... )
+        b  ->  list( str, ... )
+        
+    Return datastructures:
+        dict( str:str, ... )
+    '''
+    
+    # code.py :
     
     def foo( a, b ):
-        '''
-        Arguments `a`'s datastructures :
-            dict( int:int, ... )
-        Arguments `b`'s datastructures :
-            list( str, ... )
-            
-        Return datastructures:
-            dict( str:str, ... )
-        '''
         
         return dict([ (b[k], k[v]) for k, v in a.items() ])
         
 We want to check that the aruments passed in is compitiable to the
-datastructures written in function docstring. Write the code to check arguments?
-NO. we already write the documents in function docstring, i didn't like to
-write it in my code. so, i want to write a lib which trans the datastructures
+datastructures written in document. Write the code to check arguments?
+NO. we already write the datastructures define in documents, i didn't like to
+translate it to code. so, i want to write a lib which trans the datastructures
 in documents to a reality checker in code. it may be like this ::
     
     foo_a_check = Checker( 'dict( int:int, ... )' )
@@ -37,15 +43,6 @@ in documents to a reality checker in code. it may be like this ::
     foo_r_check = Checker( 'dict( str:str, ... )' )
     
     def foo_safe( a, b ):
-        '''
-        Arguments `a`'s datastructures :
-            dict( int:int, ... )
-        Arguments `b`'s datastructures :
-            list( str, ... )
-            
-        Return datastructures:
-            dict( str:str, ... )
-        '''
         
         assert ( not foo_a_check(a) ) and ( not foo_b_check(b) )
         
@@ -58,13 +55,15 @@ in documents to a reality checker in code. it may be like this ::
 It can used with `autochecker` and `easydocstring` , a combo application
 maybe wrote like this ::
     
-    safe = selfwrapper (
-        autochecker,
-        lambda this: Parachecker(
-            dict( [ ( k, Checker(v) )
-                    for k, v in easydocstring( this.__doc__ ) ] )
-        )
-    )
+    import easydocstring
+    import autochecker
+    
+    def safe( func ):
+        
+        checkers = easydocstring.parsedocstring( func.__doc__ )
+        checkers = dict( [ (k, Checker(v)) for k, v in chekers.items() ] )
+        
+        return autochecker.Parachecker( checkers )( func )
     
     @safe
     def foo( a, b ):
@@ -186,77 +185,82 @@ string | number                123 -> T ; '123' -> T
 
 
 
-== Grammer ==
+ Grammer
+=========================
 
--- Basic Grammer --
+
+ Basic Grammer
+-------------------------
 
 checker( [ checker, ... ] ) or \
 checker( [ checker, ... ] [ checker:checker, ...] )
 
--- Checker's Type --
 
-tag checker
+ Checker's Type
+-------------------------
+
+**tag checker**
     
-    tag checker is the additional checker of parent checker
-    it check will the obj which the parent checker checked.
-    
-      eg :
-        checker : A(T)
-        data    : o
-        logic   : checker_A(o) and checker_T(o)
-    
-    and tag checker can't using as top checker.
-    
-    you can use 'checkerattr' wrapper to set a checker as tag checker.
-    
-      eg :
-        @checkerattr('tag')
-        @autologchecker
-        def checker_T( self, x ):
-            ...
+tag checker is the additional checker of parent checker
+it check will the obj which the parent checker checked.
+
+eg ::
+  checker : A(T)
+    data    : o
+    logic   : checker_A(o) and checker_T(o)
+
+and tag checker can't using as top checker.
+
+you can use 'checkerattr' wrapper to set a checker as tag checker.
+
+eg ::
+    @checkerattr('tag')
+    @autologchecker
+    def checker_T( self, x ):
+        ...
         
     
-child checker ( default )
+**child checker ( default )**
     
-    child checker check for the test data's child item.
-    it only be used in 'object ( in python as dict )' or
-    'array ( in python as list or tuple )'.
-    
-      eg :
-        checker : A(C)
-        data    : o # list type or tuple type
-        logic   : checker_A(o) and all( [ checker_C(x) for x in o ] )
-    
-      eg :
-        checker : A(K:V)
-        data    : o # dict type
-        logic   : checker_A(o) and \
-                  all([ checker_K(k) and checker_K(v) for k, v in o.items() ])
-    
-    and if has multi child checker, the child item passed any one will be ok.
-      
-      eg :
-        checker : A(C1,C2,C3)
-        data    : o
-        logic   : checker_A(o) and \
-                  all( [ any( [ checker_C1(x),
-                                checker_C2(x),
-                                checker_C3(x),
-                              ]) for x in o ] )
-    
-absolute checker
-    
-    absolute checker is a type of child checker, it has all property of
-    child checker. 'object' or 'array' will check that is there child item
-    pass the checker. if not, the parent checker will return False.
-    Commonly, we use '#' to make a child checker to an absolute checker.
-    Also you can use 'checkerattr' wrapper to set a checker as absolute
-    checker , but it not recommend , it will confound the child checker and
-    absolute checker.
+child checker check for the test data's child item.
+it only be used in 'object ( in python as dict )' or
+'array ( in python as list or tuple )'.
 
-      eg :
-        checker : A(#C)
-        data    : o # list type or tuple type
-        logic   : checker_A(o) and all( [ checker_C(x) for x in o ] ) \
-                  and len( [ True for x in o if checker_C(x) ] ) > 1
+eg ::
+    checker : A(C)
+    data    : o # list type or tuple type
+    logic   : checker_A(o) and all( [ checker_C(x) for x in o ] )
+
+eg ::
+    checker : A(K:V)
+    data    : o # dict type
+    logic   : checker_A(o) and \
+              all([ checker_K(k) and checker_K(v) for k, v in o.items() ])
+
+and if has multi child checker, the child item passed any one will be ok.
+  
+eg ::
+    checker : A(C1,C2,C3)
+    data    : o
+    logic   : checker_A(o) and \
+              all( [ any( [ checker_C1(x),
+                            checker_C2(x),
+                            checker_C3(x),
+                          ]) for x in o ] )
+    
+**absolute checker**
+    
+absolute checker is a type of child checker, it has all property of
+child checker. 'object' or 'array' will check that is there child item
+pass the checker. if not, the parent checker will return False.
+Commonly, we use '#' to make a child checker to an absolute checker.
+Also you can use 'checkerattr' wrapper to set a checker as absolute
+checker , but it not recommend , it will confound the child checker and
+absolute checker.
+
+eg ::
+    checker : A(#C)
+    data    : o # list type or tuple type
+    logic   : checker_A(o) and all( [ checker_C(x) for x in o ] ) \
+              and len( [ True for x in o if checker_C(x) ] ) > 1
 
