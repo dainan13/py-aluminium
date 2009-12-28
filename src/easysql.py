@@ -4,15 +4,6 @@ import threading
 
 import MySQLdb
 
-'''
-CR = MySQLdb.constants.CR
-CR = dict( [ ( getattr(CR, e), e )
-             for e in vars(CR)
-             if not e.startswith('__')
-           ]
-         )
-'''
-
 
 class EasySqlException( Exception ):
     """
@@ -217,16 +208,22 @@ ArrayTypes = ( types.ListType, types.TupleType )
 StrTypes = ( types.StringType, types.UnicodeType )
 
 
+'''
+CR = MySQLdb.constants.CR
+CR = dict( [ ( getattr(CR, e), e )
+             for e in vars(CR)
+             if not e.startswith('__')
+           ]
+         )
+         
+self.conn = MySQLdb.connections.Connection()
+'''
+
+
 class Tablet( object ) :
     '''
     tablet of table
     '''
-    
-    def _buildrow( self, row ):
-        
-        return dict( [ ( k, v._tosql() if hasattr(v, '_tosql')
-                            else "'"+str(v)+"'"
-                       ) for k, v in row.items() if k in self.cols ] )
     
     def __init__ ( self, name, cols=[] ):
         
@@ -234,7 +231,12 @@ class Tablet( object ) :
         
         self.cols = ['a','b','c','d','e']
         
-        pass
+        
+    def _buildrow( self, row ):
+        
+        return dict( [ ( k, v._tosql() if hasattr(v, '_tosql')
+                            else "'"+str(v)+"'"
+                       ) for k, v in row.items() if k in self.cols ] )
         
     def _insert( self, rows, dup=None ):
         
@@ -417,6 +419,12 @@ class Tablet( object ) :
         return sql
         
     def _update( self, row, cond=None, condx=[], limit=None):
+        '''
+        
+        using Mysql_info() to get the match number affact number
+        
+        return ( matched rows, affectrows )
+        '''
         
         row = self._buildrow(row)
         cond = self._buildrow(cond) if cond else None
@@ -426,7 +434,7 @@ class Tablet( object ) :
         # self.query()
         print sql
         
-        # return ( matched rows, affectrows )
+        # conn.info()
         return 1, 1
         
         
@@ -438,8 +446,6 @@ class Tablet( object ) :
             [WHERE where_condition]
             [ORDER BY ...]
             [LIMIT row_count]
-            
-        using Mysql_info() to get the match number affact number
         '''
         
         sql = ' '.join( [
