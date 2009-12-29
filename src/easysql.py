@@ -143,7 +143,7 @@ class SQLFunction( object ):
     def __call__ ( self, *args ):
         
         args = ','.join( [ a._tosql if hasattr( a, '_tosql' )
-                                    else "'"+str(a)+"'"
+                                    else "'"+MySQLdb.escape_string(str(a))+"'"
                            for a in args ] )
         
         r = This('')
@@ -215,21 +215,185 @@ CR = dict( [ ( getattr(CR, e), e )
              if not e.startswith('__')
            ]
          )
-         
-self.conn = MySQLdb.connections.Connection()
 '''
 
+class MultiDimDict():
+    
+    def __init__( self ):
+        
+        self.d = {}
+    
+    def __setitem__( self, keys, value ):
+        
+        x = self.d
+        
+        for k in keys[:-1] :
+            
+            if k not in x :
+                x[k] = {}
+            
+            x = x[k]
+            
+        x[keys[-1]] = value
+        
+        return self
+    
+    def __getitem__( self, keys ):
+        
+        x = self.d
+        
+        for k in keys :
+            if k not in x :
+                raise KeyError, ( 'not found key', key )
+            
+            x = x[k]
+        
+        return x
+    
+    def __contains__ ( self, keys ):
+        
+        x = self.d
+        
+        for k in keys :
+            if k not in x :
+                return False
+            x = x[k]
+            
+        return True
+    
+    def getdefault( self, keys, default=None ):
+        
+        x = self.d
+        
+        for k in keys :
+            if k not in x :
+                return default
+            
+            x = x[k]
+        
+        return x
+    
+    get = getdefault
+
+
+class SQLConnectionPool( object ):
+    '''
+    Connection Pool
+    '''
+    
+    def __init__( self, ):
+        
+        self.conns = MultiDimDict()
+        
+        self._longlink = False
+        
+        return
+    
+    def _read( self, conn, sql ):
+        
+        conn.query(sql)
+        
+        rst = conn.store_result()
+        
+        rst = rst.fetch_row(rst.num_rows())
+        
+        return rst
+    
+    def _write( self, conn, sql ):
+        '''
+        using Mysql_info() to get the match number affact number
+        using Mysql_insert_id() to get lastid
+        
+        
+        info :
+        { 'Records': 2, 'Duplicates': 1, 'Warnings': 0 }
+        { 'Rows matched': 1, 'Changed': 0, 'Warnings': 0 }
+        '''
+        conn.query(sql)
+        
+        affect = conn.affected_rows()
+        
+        lastid = conn.insert_id()
+        lastid = lastid if lastid != False else None
+        
+        info = conn.info()
+        if info != None :
+            info = [ w.split(':') for w in info.split('  ') if w != '' ]
+            info = [ ( k.strip(' '), int(v.strip(' ')) ) for k, v in info ]
+            info = dict(info)
+        
+        conn.commit()
+        
+        print 'ali>', affect, lastid, info
+        
+        return affect, lastid, info
+    
+    def read( self, conn_args, sql ):
+        
+        print 'sql>', sql
+        
+        conn = self._get( conn_args )
+        rconn = None
+        
+        try :
+            r = self._read( conn, sql )
+            rconn = conn
+        finally :
+            self._put( conn_args, rconn )
+        
+        return r
+    
+    def write( self, conn_args, sql ):
+        
+        print 'sql>', sql
+        
+        conn = self._get( conn_args )
+        rconn = None
+        
+        try :
+            r = self._write( conn, sql )
+            rconn = conn
+        finally :
+            self._put( conn_args, rconn )
+            
+        return r
+    
+    def _get( self, conn_args ):
+        
+        x = self.conns.get( conn_args, None )
+        
+        if x == None :
+            
+            conn = \
+            MySQLdb.Connection(
+                host=conn_args[0], port=conn_args[1], db=conn_args[4],
+                user=conn_args[2], passwd=conn_args[3]
+            )
+        
+        return conn
+    
+    def _put( self, conn_args, conn ):
+        
+        if self._longlink == True :
+            self.conns[conn_args] = conn
+        else :
+            self.conns[conn_args] = None
+            
+        return
+    
 
 class Tablet( object ) :
     '''
     tablet of table
     '''
     
-    def __init__ ( self, name, cols=[] ):
+    def __init__ ( self, name, conn_args, cols=[] ):
+        
+        self.conn_args = conn_args
         
         self.name = name
         
-        self.cols = ['a','b','c','d','e']
+        self.cols = cols
         
         
     def _buildrow( self, row ):
@@ -238,18 +402,19 @@ class Tablet( object ) :
                             else "'"+str(v)+"'"
                        ) for k, v in row.items() if k in self.cols ] )
         
-    def _insert( self, rows, dup=None ):
+    def _insert( self, connpool, rows, dup=None ):
+        '''
+        return ( affect rows number , lastid )
+        '''
         
         rows = [ self._buildrow(row) for row in rows ]
         dup = self._buildrow(dup) if dup else None
         
         sql = self._insert_sql( rows, dup )
         
-        # self.query()
-        print sql
+        affectrows, lastid, info = connpool.write( self.conn_args, sql )
         
-        # return ( affect rows number , lastid )
-        return 1, 1
+        return affectrows, lastid
         
     def _insert_sql( self, rows, dup = None, ignore = True ):
         '''
@@ -283,17 +448,23 @@ class Tablet( object ) :
         
         return sql
     
-    def _select( self, cond=None, condx=[], cols=None, limit=None, offset=None ):
+    def _select( self, connpool,
+                 cond=None, condx=[], cols=None, limit=None, offset=None ):
+        '''
+        return ( result rows, result )
+        '''
         
         cond = self._buildrow(cond) if cond else None
         
         sql = self._select_sql( cond, condx, cols, limit, offset )
         
-        # self.query()
-        print sql
+        rst = connpool.read( self.conn_args , sql )
         
-        # return ( result rows, result )
-        return 1, [{'a':1,'b':2,'c':3,'d':4,'e':5}]
+        cols = cols or self.cols
+        
+        rst = [ dict(zip(cols,row)) for row in rst ]
+        
+        return len(rst), rst
     
     def _select_sql( self,
                      cond=None, condx=[], cols=None,
@@ -325,7 +496,6 @@ class Tablet( object ) :
         
         cols = cols or self.cols
         
-        print 's',condx
         sql = ' '.join( [
             
             'SELECT',
@@ -344,17 +514,17 @@ class Tablet( object ) :
         
         return sql
         
-    def _delete( self, cond=None, condx=[], limit=None ):
-        
+    def _delete( self, connpool, cond=None, condx=[], limit=None ):
+        '''
+        return ( affect rows, None )
+        '''
         cond = self._buildrow(cond) if cond else None
         
         sql = self._delete_sql( cond, condx, limit )
         
-        # self.query()
-        print sql
+        affectrows, lastid, info = connpool.write( self.conn_args, sql )
         
-        # return ( affect rows, None )
-        return 1, None
+        return affectrows, None
         
     def _delete_sql( self, cond=None, condx=[], limit=None, ignore = True ):
         '''
@@ -380,17 +550,18 @@ class Tablet( object ) :
         
         return sql
         
-    def _replace( self, rows ):
+    def _replace( self, connpool, rows ):
+        '''
+        return ( affect rows, lastid )
+        '''
         
         rows = [ self._buildrow(row) for row in rows ]
         
         sql = self._replace_sql( rows )
         
-        # self.query()
-        print sql
+        affectrows, lastid, info = connpool.write( self.conn_args, sql )
         
-        # return ( affect rows, lastid )
-        return 1, 1
+        return affectrows, lastid
         
     def _replace_sql( self, rows ):
         '''
@@ -418,11 +589,8 @@ class Tablet( object ) :
         
         return sql
         
-    def _update( self, row, cond=None, condx=[], limit=None):
+    def _update( self, connpool, row, cond=None, condx=[], limit=None):
         '''
-        
-        using Mysql_info() to get the match number affact number
-        
         return ( matched rows, affectrows )
         '''
         
@@ -431,11 +599,9 @@ class Tablet( object ) :
         
         sql = self._update_sql( row, cond, condx, limit )
         
-        # self.query()
-        print sql
+        affectrows, lastid, info = connpool.write( self.conn_args, sql )
         
-        # conn.info()
-        return 1, 1
+        return info['Rows matched'], affectrows
         
         
     def _update_sql( self, row, cond=None, condx=[],
@@ -567,11 +733,13 @@ class Table ( object ) :
             
         return cols, offset, limit, cond, condx, single
     
-    def __init__ ( self, tablets = [] ):
+    def __init__ ( self, tablets = [], name=None ):
+        
+        self.name = name
         
         self.colconv = []
         
-        #self.tablets = [ Tablet('testtable') ]
+        self.connpool = SQLConnectionPool()
         self.tablets = tablets
         
         return
@@ -602,7 +770,7 @@ class Table ( object ) :
         tblrows = [ ( tbl, [ r for r, t in zip(rows,tbls) if t == tbl ] )
                     for tbl in set(tbls) ]
         
-        rsts = [ self._gettablets(tbl)._insert( rows, ondup )
+        rsts = [ self._gettablets(tbl)._insert( self.connpool, rows, ondup )
                  for tbl, rows in tblrows ]
         
         n, lastids = zip(*rsts)
@@ -623,7 +791,7 @@ class Table ( object ) :
         tblrows = [ ( tbl, [ r for r, t in zip(rows,tbls) if t == tbl ] )
                     for tbl in set(tbls) ]
         
-        rsts = [ self._gettablets(tbl)._replace( rows )
+        rsts = [ self._gettablets(tbl)._replace( self.connpool, rows )
                  for tbl, rows in tblrows ]
         
         n, lastids = zip(*rsts)
@@ -641,7 +809,8 @@ class Table ( object ) :
         rst = []
         nx = 0
         for tbl in tbls : # read lazy
-            n, r = self._gettablets(tbl)._select( cond, condx, cols, tlimit )
+            n, r = self._gettablets(tbl)._select( self.connpool,
+                                                  cond, condx, cols, tlimit )
             nx += n
             rst = rst + r
             tlimit = ( tlimit - n ) if tlimit != None else tlimit
@@ -660,7 +829,8 @@ class Table ( object ) :
         tlimit = limit
         nx = 0
         for tbl in tbls :
-            n, r = self._gettablets(tbl)._update( row, cond, condx, tlimit )
+            n, r = self._gettablets(tbl)._update( self.connpool,
+                                                  row, cond, condx, tlimit )
             nx += n
             tlimit = ( tlimit - n ) if tlimit != None else tlimit
             if tlimit <= 0 :
@@ -676,7 +846,8 @@ class Table ( object ) :
         tlimit = limit
         nx = 0
         for tbl in tbls : # read lazy
-            n, r = self._gettablets(tbl)._delete( cond, condx, tlimit )
+            n, r = self._gettablets(tbl)._delete( self.connpool,
+                                                  cond, condx, tlimit )
             nx += n
             tlimit = ( tlimit - n ) if tlimit != None else tlimit
             if tlimit <= 0 :
@@ -967,62 +1138,112 @@ class Table ( object ) :
     @staticmethod
     def sum( table ):
         
-        return Tablet( sum([ t.tablets for t in table ],[]) )
+        return Table( sum([ t.tablets for t in table ],[]) )
+
+def maketables( host, port, user, passwd, db, tablename=None ):
+    
+    p = SQLConnectionPool()
+    
+    conn_args = ( host, port, user, passwd, db )
+    
+    tblnames = p.read( conn_args,
+                       "SHOW FULL TABLES FROM `%s` "
+                                "WHERE table_type = 'BASE TABLE'" % (db,) )
+    
+    tblnames = [ t[0] for t in tblnames
+                 if tablename==None or t[0]==tablename ]
+    
+    tblcols = [     p.read( conn_args, "DESCRIBE `%s`.`%s`" % (db,n) )
+                for n in tblnames ]
+    
+    tblcols = [ [ col[0] for col in cols ] for cols in tblcols ]
+    
+    tablets = [     Tablet( n, conn_args, cols )
+                for n, cols in zip(tblnames, tblcols) ]
+    
+    return [ Table( [t,], t.name ) for t in tablets ]
+    
+    
+    
+def magic_maketable( conns ):
+    
+    return
 
 if __name__ == '__main__' :
     
-    t = Table([Tablet('testtable'),])
+    #t = Table([Tablet('testtable'),])
+    #
+    #
+    #print '-- insert --'
+    #
+    #t << {'a':1,'b':2} << {'c':1,'d':2}
+    #print t.append( {'a':1,'b':2} )
+    #
+    #t << [{'a':1,'b':2},{'c':1,'d':2}]
+    #t += [{'a':1,'b':2},]
+    #print t.extend([{'a':1,'b':2},{'c':1,'d':2}])
+    #
+    #t.append( {'a':1}, ondup = {'b':2} )
+    #
+    #print '-- select --'
+    #
+    #print t[{'a':1}]
+    #print t['a','b']
+    #print t.get( {'a':1} )
+    #
+    #x = {'a':1}
+    #t >> x
+    #print 'x', x
+    #
+    #print t[::{'a':1}]
+    #print t['a','b',:50:]
+    #print t.gets( {'a':1}, limit=3, offset=8 )
+    #
+    #print '-- update --'
+    #
+    #t[{'a':1}] = {'b':this('c')+1}
+    #t['a'] = {'a':1,'b':this('c')+2}
+    #t.set( {'a':1}, {'b':default()} )
+    #
+    #t[::{'attr1':1}] = {'b':2}
+    #t['a',::] = {'a':1,'b':this('c')+2}
+    #t.sets( {'a':1}, {'b':2}, limit=5 )
+    #
+    #print '-- replace --'
+    #
+    #t <<= {'a':1}
+    #print t.load( {'a':1} )
+    #t <<= [{'a':1},]
+    #print t.loads( [{'a':1},] )
+    #
+    #
+    #print '-- delete --'
+    #
+    #del t[{'a':1}]
+    #t.remove({'a':1})
+    #del t[::{'a':1}]
+    #t.removes({'a':1})
+    
+    t = maketables( '127.0.0.1', 3306, 'S3ADMIN', 'vll9ver5t@l1',
+                    'HybridS3Admin', 'AdminUser' )[0]
+    
+    a =  { 'Account':'admin9',
+           'md5Password':'0',
+           'AccessKey':'022QF06E7MXBSH9DHM06',
+           'SecretAccessKey':'kWcrlUX5JEDGM/LtmEENI/aVmYvHNif5zB+d9+ct',
+           'Email':'x@x',
+         }
+    
+    b =  { 'Account':'admin45',
+           'md5Password':'0',
+           'AccessKey':'022QF06E7MXBSH9DHM78',
+           'SecretAccessKey':'kWcrlUX5JEDGM/LtmEENI/aVmYvHNif5zB+d9+ct',
+           'Email':'x@x',
+         }
+    
+    print t.append( a, ondup={'Email':'z@x'} )
+    print t.extend( [a, b] )
+    
+    print t[{'Account':'admin'}]
     
     
-    print '-- insert --'
-    
-    t << {'a':1,'b':2} << {'c':1,'d':2}
-    print t.append( {'a':1,'b':2} )
-    
-    t << [{'a':1,'b':2},{'c':1,'d':2}]
-    t += [{'a':1,'b':2},]
-    print t.extend([{'a':1,'b':2},{'c':1,'d':2}])
-    
-    t.append( {'a':1}, ondup = {'b':2} )
-    
-    print '-- select --'
-    
-    print t[{'a':1}]
-    print t['a','b']
-    print t.get( {'a':1} )
-    
-    x = {'a':1}
-    t >> x
-    print 'x', x
-    
-    print t[::{'a':1}]
-    print t['a','b',:50:]
-    print t.gets( {'a':1}, limit=3, offset=8 )
-    
-    print '-- update --'
-    
-    t[{'a':1}] = {'b':this('c')+1}
-    t['a'] = {'a':1,'b':this('c')+2}
-    t.set( {'a':1}, {'b':default()} )
-    
-    t[::{'attr1':1}] = {'b':2}
-    t['a',::] = {'a':1,'b':this('c')+2}
-    t.sets( {'a':1}, {'b':2}, limit=5 )
-    
-    print '-- replace --'
-    
-    t <<= {'a':1}
-    print t.load( {'a':1} )
-    t <<= [{'a':1},]
-    print t.loads( [{'a':1},] )
-    
-    
-    print '-- delete --'
-    
-    del t[{'a':1}]
-    t.remove({'a':1})
-    del t[::{'a':1}]
-    t.removes({'a':1})
-
-
-
