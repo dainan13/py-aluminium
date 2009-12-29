@@ -1,6 +1,7 @@
 
 import types
 import threading
+import random
 
 import MySQLdb
 
@@ -87,18 +88,16 @@ class This( object ):
         
         self.iscond = True
         
-        self.str = '(' + self.str + '>' + \
-        ( another._tosql if hasattr( another, '_tosql' ) else str(another) ) + \
-        ')'
+        self.str = self.str + '>' + \
+        ( another._tosql if hasattr( another, '_tosql' ) else str(another) )
     
     @condcheck
     def __ge__( self, another ):
         
         self.iscond = True
         
-        self.str = '(' + self.str + '>=' + \
-        ( another._tosql if hasattr( another, '_tosql' ) else str(another) ) + \
-        ')'
+        self.str = self.str + '>=' + \
+        ( another._tosql if hasattr( another, '_tosql' ) else str(another) )
         
         return self
     
@@ -107,18 +106,49 @@ class This( object ):
         
         self.iscond = True
         
-        self.str = '(' + self.str + '<' + \
-        ( another._tosql if hasattr( another, '_tosql' ) else str(another) ) + \
-        ')'
+        self.str = self.str + '<' + \
+        ( another._tosql if hasattr( another, '_tosql' ) else str(another) )
     
     @condcheck
     def __le__( self, another ):
         
         self.iscond = True
         
-        self.str = '(' + self.str + '<=' + \
-        ( another._tosql if hasattr( another, '_tosql' ) else str(another) ) + \
-        ')'
+        self.str = self.str + '<=' + \
+        ( another._tosql if hasattr( another, '_tosql' ) else str(another) ) 
+        
+        return self
+    
+    @condcheck
+    def startswith( self, another ):
+        
+        self.iscond = True
+        
+        if type(another) == types.StringType :
+            raise TypeError, 'this.startswith argment must be string'
+        
+        self.str =   self.str + '>=' + "'" + another + "'" \
+                   + ' AND ' \
+                   + self.str + '<=' \
+                           + "'" + another[:-1] + chr(ord(another[-1])+1)+ "'"
+        
+        return self
+        
+    @condcheck
+    def endswith( self, another ):
+        
+        self.iscond = True
+        
+        self.str = self.str + " LIKE '%" + another + "'"
+        
+        return self
+    
+    @condcheck
+    def hassub( self, another ):
+        
+        self.iscond = True
+        
+        self.str = self.str + " LIKE '%" + another + "%'"
         
         return self
     
@@ -305,7 +335,7 @@ class SQLConnectionPool( object ):
         using Mysql_insert_id() to get lastid
         
         
-        info :
+        info (eg) :
         { 'Records': 2, 'Duplicates': 1, 'Warnings': 0 }
         { 'Rows matched': 1, 'Changed': 0, 'Warnings': 0 }
         '''
@@ -746,11 +776,11 @@ class Table ( object ) :
         
     def _splitter( self, row ):
         
-        return [0,]
+        return [self.tablets,]
     
     def _gettablets( self, tbl ):
         
-        return self.tablets[0]
+        return random.choice(tbl)
         
     def _buildrow( self, row ):
         
@@ -867,7 +897,7 @@ class Table ( object ) :
         elif type(rows) in ( types.ListType, types.TupleType ) :
             single = False
         else :
-            raise TypeError, 'easysql << must row|[row,...]'
+            raise TypeError, 'easysql.__lshift__ indices must row|[row,...]'
         
         n, lastid = self._write( rows )
         
@@ -884,7 +914,7 @@ class Table ( object ) :
         if type(rows) in ( types.ListType, types.TupleType ) :
             single = False
         else :
-            raise TypeError, 'easysql << must row|[row,...]'
+            raise TypeError, 'easysql.__iadd__ argment must row|[row,...]'
         
         n, lastid = self._write( rows )
         
@@ -1141,6 +1171,11 @@ class Table ( object ) :
         return Table( sum([ t.tablets for t in table ],[]) )
 
 def maketables( host, port, user, passwd, db, tablename=None ):
+    '''
+    SHOW TALBES
+    DESCRIBE
+    SHOW GRANTS
+    '''
     
     p = SQLConnectionPool()
     
