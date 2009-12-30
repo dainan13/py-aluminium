@@ -25,6 +25,18 @@ class TypeError(EasySqlException, TypeError ):
     pass
 
 
+def sqlstr( v ):
+    
+    if hasattr(v, '_tosql'):
+        return v._tosql()
+    
+    if v in types.StringTypes :
+        return '"'+MySQLdb.escape_string(v)+'"'
+    else :
+        return "'"+MySQLdb.escape_string(str(v))+"'"
+
+
+
 def condcheck( func ):
     
     def _checker( self, another ):
@@ -50,54 +62,58 @@ class This( object ):
     @condcheck
     def __add__ ( self, another ):
         
-        self.str = '(' + self.str + '+' + \
-        ( another._tosql if hasattr( another, '_tosql' ) else str(another) ) + \
-        ')'
+        self.str = '(' + self.str + '+' + sqlstr(another)+ ')'
         
         return self
     
     @condcheck
     def __sub__( self, another ):
         
-        self.str = '(' + self.str + '-' + \
-        ( another._tosql if hasattr( another, '_tosql' ) else str(another) ) + \
-        ')'
+        self.str = '(' + self.str + '-' + sqlstr(another)+ ')'
         
         return self
     
     @condcheck
     def __mul__( self, another ) :
         
-        self.str = '(' + self.str + '*' + \
-        ( another._tosql if hasattr( another, '_tosql' ) else str(another) ) + \
-        ')'
+        self.str = '(' + self.str + '*' + sqlstr(another)+ ')'
         
         return self
     
     @condcheck
     def __div__( self, another ) :
         
-        self.str = '(' + self.str + '/' + \
-        ( another._tosql if hasattr( another, '_tosql' ) else str(another) ) + \
-        ')'
+        self.str = '(' + self.str + '/' + sqlstr(another)+ ')'
         
         return self
+    
+    @condcheck
+    def __eq__( self, another ):
+        
+        self.iscond = True
+        
+        self.str = self.str + '=' + sqlstr(another)
+        
+    @condcheck
+    def __ne__( self, another ):
+        
+        self.iscond = True
+        
+        self.str = self.str + '!=' + sqlstr(another)
     
     @condcheck
     def __gt__( self, another ):
         
         self.iscond = True
         
-        self.str = self.str + '>' + \
-        ( another._tosql if hasattr( another, '_tosql' ) else str(another) )
+        self.str = self.str + '>' + sqlstr(another)
     
     @condcheck
     def __ge__( self, another ):
         
         self.iscond = True
         
-        self.str = self.str + '>=' + \
-        ( another._tosql if hasattr( another, '_tosql' ) else str(another) )
+        self.str = self.str + '>=' + sqlstr(another)
         
         return self
     
@@ -106,16 +122,14 @@ class This( object ):
         
         self.iscond = True
         
-        self.str = self.str + '<' + \
-        ( another._tosql if hasattr( another, '_tosql' ) else str(another) )
+        self.str = self.str + '<' + sqlstr(another)
     
     @condcheck
     def __le__( self, another ):
         
         self.iscond = True
         
-        self.str = self.str + '<=' + \
-        ( another._tosql if hasattr( another, '_tosql' ) else str(another) ) 
+        self.str = self.str + '<=' + sqlstr(another)
         
         return self
     
@@ -172,9 +186,7 @@ class SQLFunction( object ):
         
     def __call__ ( self, *args ):
         
-        args = ','.join( [ a._tosql if hasattr( a, '_tosql' )
-                                    else "'"+MySQLdb.escape_string(str(a))+"'"
-                           for a in args ] )
+        args = ','.join( [ sqlstr(a) for a in args ] )
         
         r = This('')
         r.str = self.fname+'('+args+')'
@@ -428,9 +440,8 @@ class Tablet( object ) :
         
     def _buildrow( self, row ):
         
-        return dict( [ ( k, v._tosql() if hasattr(v, '_tosql')
-                            else "'"+str(v)+"'"
-                       ) for k, v in row.items() if k in self.cols ] )
+        return dict( [ ( k, sqlstr(v) ) for k, v in row.items() 
+                                        if k in self.cols ] )
         
     def _insert( self, connpool, rows, dup=None ):
         '''
@@ -662,6 +673,24 @@ class Tablet( object ) :
         
         return sql
 
+
+
+class ListWithHashKey(list):
+    
+    def __init__( self, l, hashseed ):
+        
+        self.hashkey = hash(hashseed)
+        
+        super( ListWithHashKey, self ).__init__(l)
+        
+        return
+    
+    def __hash__( self ):
+        
+        return self.hashkey
+
+
+
 class Table ( object ) :
     '''
     table class of easysql
@@ -768,6 +797,7 @@ class Table ( object ) :
         self.name = name
         
         self.colconv = []
+        self.colset = set([])
         
         self.connpool = SQLConnectionPool()
         self.tablets = tablets
@@ -776,19 +806,57 @@ class Table ( object ) :
         
     def _splitter( self, row ):
         
-        return [self.tablets,]
+        return [ListWithHashKey(self.tablets, ''),]
     
     def _gettablets( self, tbl ):
         
         return random.choice(tbl)
         
-    def _buildrow( self, row ):
+    def _conv( self, row, k_in, k_out, conv ):
         
-        return row.copy()
+        if any([ k not in row for k in k_in ]):
+            return []
+        
+        return zip( k_out, conv( *[ row[k] for k in k_in ] ) )
+        
+    def _encoderow( self, row ):
+        
+        newcols = [     self._conv( row, cc[0], cc[1], cc[2] )
+                    for cc in self.colconv ]
+        
+        return dict(row.items()+sum(newcols,[]))
+        
+    def _decoderow( self, row ):
+        
+        newcols = [     self._conv( row, cc[1], cc[0], cc[3] )
+                    for cc in self.colconv ]
+        
+        return dict( [ (k, v) for k, v in row.items()
+                              if k not in self.colset ]\
+                     + sum( newcols, [] ) )
+        
+    def setsplitter( self, splitter ):
+        
+        return
+        
+    def setconverter( self, encoder, decoder=None,
+                            encoder_key=None, decoder_key=None ):
+        
+        if decoder == None :
+            decoder = lambda x : x
+        
+        if decoder_key == None :
+            decoder_key = encoder_key
+        
+        self.colconv += [( encoder_key, decoder_key, encoder, decoder),]
+        
+        self.colset = self.colset & set( decoder_key )
+        
+        return
         
     def _write( self, rows, ondup = None ):
         
-        rows = [ self._buildrow(row) for row in rows ]
+        rows = [ self._encoderow(row) for row in rows ]
         
         tbls = [ self._splitter(row) for row in rows ]
         tblc = [ r for r, t in zip(rows, tbls) if len(t) != 1 ]
@@ -810,7 +878,7 @@ class Table ( object ) :
     
     def _replace( self, rows ):
         
-        rows = [ self._buildrow(row) for row in rows ]
+        rows = [ self._encoderow(row) for row in rows ]
         tbls = [ self._splitter(row) for row in rows ]
         tblc = [ r for r, t in zip(rows, tbls) if len(t) != 1 ]
         if tblc != [] :
@@ -832,7 +900,7 @@ class Table ( object ) :
     
     def _read( self, cond, condx=[], cols = None, limit = None, offset = None ):
         
-        cond = self._buildrow(cond) if cond else cond
+        cond = self._encoderow(cond) if cond else cond
         tbls = self._splitter(cond) # todo : set to all tablets if cond is none
         
         tlimit = limit
@@ -847,11 +915,14 @@ class Table ( object ) :
             if tlimit <= 0 :
                 break
         
+        
+        rst = [ self._decoderow(r) for r in rst ]
+        
         return nx, rst
         
     def _set( self, row, cond, condx=[], limit = None ):
         
-        cond = self._buildrow(cond) if cond else cond
+        cond = self._encoderow(cond) if cond else cond
         tbls = self._splitter(cond) # todo : set to all tablets if cond is none
         
         row = self._buildrow(row)
@@ -870,7 +941,7 @@ class Table ( object ) :
     
     def _delete( self, cond, condx=[], limit = None ):
         
-        cond = self._buildrow(cond) if cond else cond
+        cond = self._encoderow(cond) if cond else cond
         tbls = self._splitter(cond) # todo : set to all tablets if cond is none
         
         tlimit = limit
@@ -1157,9 +1228,9 @@ class Table ( object ) :
         
         return
     
-    def __concat__( self, other ):
+    def __add__( self, other ):
         
-        return Tablet( self.tablets + other.tablets )
+        return Table( self.tablets + other.tablets, self.name )
         
     def __len__( self ):
         
@@ -1168,7 +1239,33 @@ class Table ( object ) :
     @staticmethod
     def sum( table ):
         
-        return Table( sum([ t.tablets for t in table ],[]) )
+        return Table( sum([ t.tablets for t in table ],[]), self.name )
+
+
+
+class DataBase ( object ):
+    
+    def __init__( self, tables ):
+        
+        self.tables = dict( [ ( t.name, t ) for t in tables ] )
+        
+    def __getattr__( self, key ):
+        
+        return self.tables[key]
+        
+    @staticmethod
+    def bytablename( tbls ):
+        
+        tbls = [    sum( [ t for t in tbls if t.name == tn ],
+                           Table([], tn) )
+                 for tn in set([ t.name for t in tbls ]) ]
+        
+        return DataBase(tbls)
+        
+    def keys( self ):
+        
+        return self.tables.keys()
+
 
 def maketables( host, port, user, passwd, db, tablename=None ):
     '''
