@@ -37,143 +37,126 @@ def sqlstr( v ):
 
 
 
-def condcheck( func ):
+class Raw( object ):
     
-    def _checker( self, another ):
-        
-        if self.iscond == True :
-            raise EasySqlException, 'Syntax Error of `this` in easysql'
-        
-        return func( self, another )
+    def __init__( self, raw ):
+        self.raw = raw 
     
-    _checker._decorator = func
-    _checker.__name__ = func.__name__
-    _checker.__doc__  = func.__doc__
-    
-    return _checker
+    def _tosql(self):
+        return raw
 
-class This( object ):
-    
-    def __init__( self, colname=None ):
+raw = Raw
+
+
+class Condition( Raw ):
+    pass
+
+class Expression( Raw ):
         
-        self.iscond = False
-        self.str = '`'+colname+'`' if colname else ''
-        
-    @condcheck
     def __add__ ( self, another ):
         
-        self.str = '(' + self.str + '+' + sqlstr(another)+ ')'
-        
+        self.raw = '(' + self.raw + '+' + sqlstr(another)+ ')'
         return self
     
-    @condcheck
     def __sub__( self, another ):
         
-        self.str = '(' + self.str + '-' + sqlstr(another)+ ')'
-        
+        self.raw = '(' + self.raw + '-' + sqlstr(another)+ ')'
         return self
     
-    @condcheck
     def __mul__( self, another ) :
         
-        self.str = '(' + self.str + '*' + sqlstr(another)+ ')'
-        
+        self.raw = '(' + self.raw + '*' + sqlstr(another)+ ')'
         return self
     
-    @condcheck
     def __div__( self, another ) :
         
-        self.str = '(' + self.str + '/' + sqlstr(another)+ ')'
-        
+        self.raw = '(' + self.raw + '/' + sqlstr(another)+ ')'
         return self
     
-    @condcheck
+    
+class This( Raw ):
+    
+    def __init__( self, colname ):
+        super( This, self ).__init__('`'+colname+'`')
+        
+    def __add__ ( self, another ):
+        
+        return Expression( '(' + self.raw + '+' + sqlstr(another)+ ')' )
+    
+    def __sub__( self, another ):
+        
+        return Expression( '(' + self.raw + '-' + sqlstr(another)+ ')' )
+    
+    def __mul__( self, another ) :
+        
+        return Expression( '(' + self.raw + '*' + sqlstr(another)+ ')' )
+    
+    def __div__( self, another ) :
+        
+        return Expression( '(' + self.raw + '/' + sqlstr(another)+ ')' )
+    
     def __eq__( self, another ):
         
-        self.iscond = True
+        return Condition( self.raw + '=' + sqlstr(another) )
         
-        self.str = self.str + '=' + sqlstr(another)
-        
-    @condcheck
     def __ne__( self, another ):
         
-        self.iscond = True
-        
-        self.str = self.str + '!=' + sqlstr(another)
+        return Condition( self.raw + '!=' + sqlstr(another) )
     
-    @condcheck
     def __gt__( self, another ):
         
-        self.iscond = True
-        
-        self.str = self.str + '>' + sqlstr(another)
+        return Condition( self.raw + '>' + sqlstr(another) )
     
-    @condcheck
     def __ge__( self, another ):
         
-        self.iscond = True
-        
-        self.str = self.str + '>=' + sqlstr(another)
-        
-        return self
+        return Condition( self.raw + '>=' + sqlstr(another) )
     
-    @condcheck
     def __lt__( self, another ):
         
-        self.iscond = True
-        
-        self.str = self.str + '<' + sqlstr(another)
+        return Condition( self.raw + '<' + sqlstr(another) )
     
-    @condcheck
     def __le__( self, another ):
         
-        self.iscond = True
-        
-        self.str = self.str + '<=' + sqlstr(another)
-        
-        return self
-    
-    @condcheck
+        return Condition( self.raw + '<=' + sqlstr(another) )
+
     def startswith( self, another ):
-        
-        self.iscond = True
         
         if type(another) == types.StringType :
             raise TypeError, 'this.startswith argment must be string'
         
-        self.str =   self.str + '>=' + "'" + another + "'" \
-                   + ' AND ' \
-                   + self.str + '<=' \
-                           + "'" + another[:-1] + chr(ord(another[-1])+1)+ "'"
+        raw =   self.str + '>=' + sqlstr(another) \
+              + ' AND ' \
+              + self.str + '<=' + sqlstr(another[:-1]+chr(ord(another[-1])+1))
         
-        return self
+        return condition(raw)
         
-    @condcheck
     def endswith( self, another ):
         
-        self.iscond = True
+        if type(another) == types.StringType :
+            raise TypeError, 'this.startswith argment must be string'
         
-        self.str = self.str + " LIKE '%" + another + "'"
+        raw = self.str + " LIKE '%" + another + "'"
         
-        return self
+        return condition(raw)
     
-    @condcheck
     def hassub( self, another ):
         
-        self.iscond = True
+        if type(another) == types.StringType :
+            raise TypeError, 'this.startswith argment must be string'
         
-        self.str = self.str + " LIKE '%" + another + "%'"
+        raw = self.str + " LIKE '%" + another + "%'"
         
-        return self
+        return condition(raw)
     
     def _tosql( self ):
         
         return self.str
     
-def this( colname ):
-    return This( colname )
+this = This
 
-SQLThisType = type( This() )
+SQLThisType = This
+SQLCondType = Condition
+SQLExprType = Expression
 
 
 
@@ -188,59 +171,47 @@ class SQLFunction( object ):
         
         args = ','.join( [ sqlstr(a) for a in args ] )
         
-        r = This('')
-        r.str = self.fname+'('+args+')'
+        raw = self.fname+'('+args+')'
         
-        return r 
+        return Expression(r)
 
-def func( fname ):
-    return SQLFunction(fname)
-
+func = SQLFunction
 
 
 
 
-class Default( object ):
+
+class Default( Raw ):
     
     def __init__( self ):
         pass
         
-    def _tosql( self ):
+    @staticmethod
+    def _tosql():
         return 'DEFAULT'
     
-def default( ):
-    return Default()
+default = Default
     
     
     
-class Null( object ):
+class Null( Raw ):
     
     def __init__( self ):
         pass
         
-    def _tosql( self ):
+    @staticmethod
+    def _tosql():
         return 'NULL'
     
-def null( ):
-    return Null()
-    
-    
-    
-class Raw( object ):
-    
-    def __init__( self, raw ):
-        self. raw = raw 
-    
-    def _tosql(self):
-        return raw
-    
-def raw( rawdata ):
-    return Raw( rawdata )
-    
-    
-    
-    
-    
+null = Null
+
+
+
+
+
+
+
+
 class NoArg( object ):
     pass
     
@@ -436,6 +407,7 @@ class Tablet( object ) :
         self.name = name
         
         self.cols = cols
+        self.defaultcols = [ c for c in cols if not c.startswith('_') ]
         
         
     def _buildrow( self, row ):
@@ -501,7 +473,7 @@ class Tablet( object ) :
         
         rst = connpool.read( self.conn_args , sql )
         
-        cols = cols or self.cols
+        cols = cols or self.defaultcols
         
         rst = [ dict(zip(cols,row)) for row in rst ]
         
@@ -535,7 +507,7 @@ class Tablet( object ) :
             [FOR UPDATE | LOCK IN SHARE MODE]]
         '''
         
-        cols = cols or self.cols
+        cols = cols or self.defaultcols
         
         sql = ' '.join( [
             
@@ -1294,12 +1266,9 @@ def maketables( host, port, user, passwd, db, tablename=None ):
                 for n, cols in zip(tblnames, tblcols) ]
     
     return [ Table( [t,], t.name ) for t in tablets ]
-    
-    
-    
-def magic_maketable( conns ):
-    
-    return
+
+
+
 
 if __name__ == '__main__' :
     
