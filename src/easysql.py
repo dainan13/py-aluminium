@@ -37,15 +37,44 @@ def sqlstr( v ):
 
 
 
+
+
+
 class Raw( object ):
     
-    def __init__( self, raw ):
-        self.raw = raw 
+    def __init__( self, _raw ):
+        self._raw = _raw
     
     def _tosql(self):
-        return raw
+        return self._raw
 
 raw = Raw
+
+
+class Default( Raw ):
+    
+    def __init__( self ):
+        pass
+        
+    @staticmethod
+    def _tosql():
+        return 'DEFAULT'
+    
+default = Default
+    
+    
+    
+class Null( Raw ):
+    
+    def __init__( self ):
+        pass
+        
+    @staticmethod
+    def _tosql():
+        return 'NULL'
+    
+null = Null
+
 
 
 class Condition( Raw ):
@@ -55,22 +84,22 @@ class Expression( Raw ):
         
     def __add__ ( self, another ):
         
-        self.raw = '(' + self.raw + '+' + sqlstr(another)+ ')'
+        self._raw = '(' + self._raw + '+' + sqlstr(another)+ ')'
         return self
     
     def __sub__( self, another ):
         
-        self.raw = '(' + self.raw + '-' + sqlstr(another)+ ')'
+        self._raw = '(' + self._raw + '-' + sqlstr(another)+ ')'
         return self
     
     def __mul__( self, another ) :
         
-        self.raw = '(' + self.raw + '*' + sqlstr(another)+ ')'
+        self._raw = '(' + self._raw + '*' + sqlstr(another)+ ')'
         return self
     
     def __div__( self, another ) :
         
-        self.raw = '(' + self.raw + '/' + sqlstr(another)+ ')'
+        self._raw = '(' + self._raw + '/' + sqlstr(another)+ ')'
         return self
     
     
@@ -81,76 +110,78 @@ class This( Raw ):
         
     def __add__ ( self, another ):
         
-        return Expression( '(' + self.raw + '+' + sqlstr(another)+ ')' )
+        return Expression( '(' + self._raw + '+' + sqlstr(another)+ ')' )
     
     def __sub__( self, another ):
         
-        return Expression( '(' + self.raw + '-' + sqlstr(another)+ ')' )
+        return Expression( '(' + self._raw + '-' + sqlstr(another)+ ')' )
     
     def __mul__( self, another ) :
         
-        return Expression( '(' + self.raw + '*' + sqlstr(another)+ ')' )
+        return Expression( '(' + self._raw + '*' + sqlstr(another)+ ')' )
     
     def __div__( self, another ) :
         
-        return Expression( '(' + self.raw + '/' + sqlstr(another)+ ')' )
+        return Expression( '(' + self._raw + '/' + sqlstr(another)+ ')' )
     
     def __eq__( self, another ):
         
-        return Condition( self.raw + '=' + sqlstr(another) )
+        if another in ( Null, Default ) or type(another) in ( Null, Default ):
+            return Condition( self._raw + ' IS ' + sqlstr(another) )
+        
+        return Condition( self._raw + '=' + sqlstr(another) )
         
     def __ne__( self, another ):
         
-        return Condition( self.raw + '!=' + sqlstr(another) )
+        if another in ( Null, Default ) or type(another) in ( Null, Default ):
+            return Condition( self._raw + ' IS NOT ' + sqlstr(another) )
+        
+        return Condition( self._raw + '!=' + sqlstr(another) )
     
     def __gt__( self, another ):
         
-        return Condition( self.raw + '>' + sqlstr(another) )
+        return Condition( self._raw + '>' + sqlstr(another) )
     
     def __ge__( self, another ):
         
-        return Condition( self.raw + '>=' + sqlstr(another) )
+        return Condition( self._raw + '>=' + sqlstr(another) )
     
     def __lt__( self, another ):
         
-        return Condition( self.raw + '<' + sqlstr(another) )
+        return Condition( self._raw + '<' + sqlstr(another) )
     
     def __le__( self, another ):
         
-        return Condition( self.raw + '<=' + sqlstr(another) )
-
+        return Condition( self._raw + '<=' + sqlstr(another) )
+        
     def startswith( self, another ):
         
         if type(another) == types.StringType :
             raise TypeError, 'this.startswith argment must be string'
         
-        raw =   self.str + '>=' + sqlstr(another) \
-              + ' AND ' \
-              + self.str + '<=' + sqlstr(another[:-1]+chr(ord(another[-1])+1))
+        _raw =   self._raw + '>=' + sqlstr(another) \
+               + ' AND ' \
+               + self._raw + '<=' + sqlstr(another[:-1]+chr(ord(another[-1])+1))
         
-        return condition(raw)
+        return Condition(_raw)
         
     def endswith( self, another ):
         
         if type(another) == types.StringType :
             raise TypeError, 'this.startswith argment must be string'
         
-        raw = self.str + " LIKE '%" + another + "'"
+        _raw = self._raw + " LIKE '%" + another + "'"
         
-        return condition(raw)
+        return Condition(_raw)
     
     def hassub( self, another ):
         
         if type(another) == types.StringType :
             raise TypeError, 'this.startswith argment must be string'
         
-        raw = self.str + " LIKE '%" + another + "%'"
+        _raw = self._raw + " LIKE '%" + another + "%'"
         
-        return condition(raw)
-    
-    def _tosql( self ):
-        
-        return self.str
+        return Condition(_raw)
     
 this = This
 
@@ -177,33 +208,6 @@ class SQLFunction( object ):
 
 func = SQLFunction
 
-
-
-
-
-class Default( Raw ):
-    
-    def __init__( self ):
-        pass
-        
-    @staticmethod
-    def _tosql():
-        return 'DEFAULT'
-    
-default = Default
-    
-    
-    
-class Null( Raw ):
-    
-    def __init__( self ):
-        pass
-        
-    @staticmethod
-    def _tosql():
-        return 'NULL'
-    
-null = Null
 
 
 
@@ -462,14 +466,15 @@ class Tablet( object ) :
         return sql
     
     def _select( self, connpool,
-                 cond=None, condx=[], cols=None, limit=None, offset=None ):
+                 cond=None, condx=[], cols=None, limit=None, offset=None,
+                 order=None ):
         '''
         return ( result rows, result )
         '''
         
         cond = self._buildrow(cond) if cond else None
         
-        sql = self._select_sql( cond, condx, cols, limit, offset )
+        sql = self._select_sql( cond, condx, cols, limit, offset, order )
         
         rst = connpool.read( self.conn_args , sql )
         
@@ -481,7 +486,8 @@ class Tablet( object ) :
     
     def _select_sql( self,
                      cond=None, condx=[], cols=None,
-                     limit=None, offset=None, vset=None ):
+                     limit=None, offset=None,
+                     order=None, vset=None ):
         '''
         SELECT
             [ALL | DISTINCT | DISTINCTROW ]
@@ -520,6 +526,10 @@ class Tablet( object ) :
                                                                 if cond else '',
                 ',' if cond and condx !=[] else '',
                 ','.join( [ i._tosql() for i in condx ] ),
+            'ORDER BY' if order else '',
+                ','.join( [ '`%s` DESC' % o[1:] if o.startswith('~') else \
+                            ( '`%s`' % o )
+                            for o in order ] ) if order else '',
             ('LIMIT %d' % (limit,) ) if limit else '',
             ('OFFSET %d' % (offset,) ) if limit and offset else '',
             
@@ -644,6 +654,8 @@ class Tablet( object ) :
         ] )
         
         return sql
+    
+    
 
 
 
@@ -679,90 +691,48 @@ class Table ( object ) :
     @staticmethod
     def _sliceparser( slc ):
         '''
-        table[::]
-        table[col,col,[col,]]
-        table[(col,col,)]
-        table[::(cond,cond)]
-        talbe[::cond]
-        talbe[col,::]
+        table[ col, ..., cond,... , offset:limit:order ]
         '''
         
-        type_slc = type(slc)
+        print slc
         
-        if type_slc in StrTypes :
-            
-            cols = [slc,]
-            slc = None
-            type_slc = None
+        if type( slc ) not in ArrayTypes :
+            slc = [slc,]
         
-        elif type_slc in ArrayTypes :
-            
-            if type( slc[-1] ) == types.SliceType :
-                
-                cols = slc[:-1]
-                cols = sum([c if c in ArrayTypes else [c,] for c in cols], [])
-                slc = slc[-1]
-                type_slc = type(slc)
-                
-            else :
-                
-                for i, e in enumerate(slc):
-                    if type(e) in ( types.DictType, SQLThisType ):
-                        break
-                else :
-                    i += 1
-                
-                cols = slc[:i]
-                cols = sum([c if c in ArrayTypes else [c,] for c in cols ], [])
-                
-                slc = slc[i:]
-                type_slc = None
-            
-        else :
-            cols = []
-            
-        if type_slc == None :
-            limit = 1
-            offset = None
-            cond = {} if slc == [] else slc
-            single = True
-        elif type_slc == types.DictType :
-            #cols = []
-            limit = 1
-            offset = None
-            cond = slc
-            single = True
-        elif type_slc == types.SliceType :
-            #cols = []
-            offset = slc.start
-            limit = slc.stop
-            cond = slc.step
+        if type(slc[-1]) == types.SliceType :
             single = False
+            offset = slc[-1].start
+            limit = slc[-1].stop
+            order = slc[-1].step
+            order = order if order in ArrayTypes or order==None else [order,]
+            slc = slc[:-1]
         else :
-            raise Exception, slc
-            
-        type_cond = type(cond)
-            
-        if type_cond in ArrayTypes :
-            
-            cond = dict( sum( [ s.items() for s in cond
-                                if type(s) == types.DictType
-                              ], [] ) )
-            condx = [ s for s in slc if type(s) == SQLThisType ]
-            
-        elif type_cond == types.DictType :
-            
-            condx = []
-            
-        elif type_cond == types.NoneType :
-            
-            condx = []
-            
-        else :
-            
-            raise Exception, cond
-            
-        return cols, offset, limit, cond, condx, single
+            single = True
+            offset = None
+            limit = None
+            order = None
+        
+        slc = [ s if type(s) in ArrayTypes else [s,] for s in slc ]
+        slc = sum( slc, [] )
+        
+        cols  = [ s for s in slc if type(s) in types.StringTypes ]
+        cond  = [ s for s in slc if type(s) == types.DictType ]
+        condx = [ s for s in slc if type(s) == SQLCondType ]
+        
+        print single, cols, cond, condx, offset, limit, order
+        return single, cols, cond, condx, offset, limit, order
+    
+    @staticmethod
+    def _slice( slc, single ):
+        
+        single.append( ( slc.start, slc.stop ) )
+        
+        if slc.step == None :
+            return []
+        elif slc.step in ArrayTypes :
+            return slc.step
+        
+        return [slc.step]
     
     def __init__ ( self, tablets = [], name=None ):
         
@@ -870,7 +840,10 @@ class Table ( object ) :
         return n, lastids
 
     
-    def _read( self, cond, condx=[], cols = None, limit = None, offset = None ):
+    def _read( self, cond, condx=[],
+                     cols=None, limit=None, offset=None, order=None ):
+        
+        print 'order>',order
         
         cond = self._encoderow(cond) if cond else cond
         tbls = self._splitter(cond) # todo : set to all tablets if cond is none
@@ -880,7 +853,9 @@ class Table ( object ) :
         nx = 0
         for tbl in tbls : # read lazy
             n, r = self._gettablets(tbl)._select( self.connpool,
-                                                  cond, condx, cols, tlimit )
+                                                  cond, condx, cols, tlimit,
+                                                  None, order
+                                                )
             nx += n
             rst = rst + r
             tlimit = ( tlimit - n ) if tlimit != None else tlimit
@@ -1035,19 +1010,12 @@ class Table ( object ) :
     def __getitem__( self, slc ):
         '''
         table[{'ID':1}]
-        table['a','b']
-        table['a','b',{'ID':1}]
-        table[10:50]
-        talbe[::{'ID':1}]]
-        table['a','b',0:50:{'ID':10}]
-        table['a','b',{'ID':1}:50:{'ID':10}]
-        
-        table[('a','b'),::{'ID':10}]
         '''
         
-        keys, offset, limit, cond, condx, single = self._sliceparser( slc )
+        single, keys, cond, condx, offset, limit, order = \
+                                                       self._sliceparser( slc )
         
-        n, rst = self._read( cond, condx, keys, limit, offset )
+        n, rst = self._read( cond, condx, keys, limit, offset, order )
         
         if single == False :
             return rst
@@ -1089,15 +1057,10 @@ class Table ( object ) :
     def __setitem__( self, slc, value ):
         '''
         table[{'ID':1}] = {'A':1}
-        table[10:50] = {'A':1}
-        talbe[::{'ID':1}]] = {'A':1}
-        table['ID'] = {'ID':1, 'A':1}
-        table['a','b',:50] = {'a':1,'b':2,'ID':gt(3)}
-        
-        table[('a','b'),::{'ID':10}] = {'a':1,'b':2,'c':4}
         '''
         
-        keys, offset, limit, cond, condx, single = self._sliceparser( slc )
+        single, keys, cond, condx, offset, limit, order = \
+                                                       self._sliceparser( slc )
         
         cond = dict(   ( cond.items() if cond else [] ) \
                      + [ ( k, value[k] ) for k in keys ] )
@@ -1172,10 +1135,11 @@ class Table ( object ) :
     def __delitem__( self, slc ):
         '''
         del table[{'attr1':1}]
-        del table[::{'attr1':1}]
+        del table[{'attr1':1},::]
         '''
         
-        keys, offset, limit, cond, condx, single = self._sliceparser( slc )
+        single, cols, cond, condx, offset, limit, order = \
+                                                       self._sliceparser( slc )
         
         n, x = self._delete( cond, condx, limit )
         
