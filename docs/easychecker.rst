@@ -205,7 +205,7 @@ tag checker is the additional checker of parent checker
 it check will the obj which the parent checker checked.
 
 eg ::
-  checker : A(T)
+    checker : A(T)
     data    : o
     logic   : checker_A(o) and checker_T(o)
 
