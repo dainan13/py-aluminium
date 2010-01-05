@@ -1232,6 +1232,83 @@ def maketables( host, port, user, passwd, db, tablename=None ):
     return [ Table( [t,], t.name ) for t in tablets ]
 
 
+class ENUM_INT( object ):
+    
+    def __init__( self, l ):
+        self._l = l
+        
+    def en( self, x ):
+        return self._l.index(x)
+        
+    def de( self, x ):
+        return self._l[x]
+        
+    
+
+class LIST_MOD( object ):
+    
+    def __init__( self, l ):
+        
+        self._l = l
+        self.range = [ ( ( 255 << x ), x ) for x in range(0,len(l),8) ]
+    
+    def en( self, x ):
+        
+        mods = [ self._l.index(i) for i in x ]
+        mods = sum( [(1<<m) for m in mods] )
+        
+        mods = [ ( mods & m ) >> x for m, x in self.range ]
+        
+        return ''.join( chr(m) for m in mods )
+    
+    def de( self, x ):
+        
+        lst = [ [ ( i & ( 1 << z ) ) == 0 for z in range(8) ] for i in x ]
+        lst = sum(lst)
+        lst = [ i for i, z in zip( self._l, lst ) if z == True ] 
+        
+        return lst
+
+class ANY_JSON( object ):
+        
+    @staticmethod
+    def en( x ):
+        return (json.dumps( x, encoding='utf-8' ),)
+    
+    @staticmethod
+    def de( x ):
+        return (json.loads( x, encoding='utf-8' ),)
+        
+        
+class HEX_BIN( object ):
+    
+    @staticmethod
+    def en(x):
+        return (x.decode('hex'),)
+    
+    @staticmethod
+    def de(x):
+        return (x.encode('hex'),)
+
+class BOOL_BIN( object ):
+    
+    @staticmethod
+    def en(x):
+        return ('\x01' if x == True else '\x00',)
+        
+    @staticmethod
+    def de(x):
+        return (x == '\x01',)
+        
+class DATATIME_SQL( object ):
+    
+    @staticmethod
+    def en(x):
+        return ( x.strftime('%Y-%m-%d %H:%M:%S'), )
+    
+    @staticmethod
+    def de(x):
+        return x
 
 
 if __name__ == '__main__' :
