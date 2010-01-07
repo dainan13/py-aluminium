@@ -91,6 +91,16 @@ def this( _old ):
 
 
 
+def real( func ):
+    
+    while( hasattr( func, '_decorator' ) ):
+        func = func._decorator
+        
+    return func
+
+
+
+
 if __name__ == '__main__' :
     
 
