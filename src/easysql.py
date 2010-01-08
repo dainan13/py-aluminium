@@ -2,6 +2,7 @@
 import types
 import threading
 import random
+import json
 
 import MySQLdb
 
@@ -78,7 +79,12 @@ null = Null
 
 
 class Condition( Raw ):
-    pass
+    
+    def __mod__( self, vals ):
+        
+        return Expression( 'IF(' + self._raw + ',' \
+                                 + sqlstr(vals[0]) + ',' \
+                                 + sqlstr(vals[1]) + ')' )
 
 class Expression( Raw ):
         
@@ -184,6 +190,7 @@ class This( Raw ):
         return Condition(_raw)
     
 this = This
+
 
 SQLThisType = This
 SQLCondType = Condition
@@ -522,10 +529,10 @@ class Tablet( object ) :
             ','.join([ '`%s`' % (c,) for c in cols ]),
             'FROM `%s`' % self.name ,
             'WHERE' if cond or condx!=[] else '',
-                ','.join( [ '`%s`=%s' % i for i in cond.items() ] ) \
+                ' AND '.join( [ '`%s`=%s' % i for i in cond.items() ] ) \
                                                                 if cond else '',
-                ',' if cond and condx !=[] else '',
-                ','.join( [ i._tosql() for i in condx ] ),
+                'AND' if cond and condx !=[] else '',
+                ' AND '.join( [ i._tosql() for i in condx ] ),
             'ORDER BY' if order else '',
                 ','.join( [ '`%s` DESC' % o[1:] if o.startswith('~') else \
                             ( '`%s`' % o )
@@ -563,10 +570,10 @@ class Tablet( object ) :
             'IGNORE' if ignore else '',
             'FROM `%s`' % self.name ,
             'WHERE' if cond or condx!=[] else '',
-                ','.join( [ '`%s`=%s' % i for i in cond.items() ] ) \
+                ' AND '.join( [ '`%s`=%s' % i for i in cond.items() ] ) \
                                                                 if cond else '',
-                ',' if cond and condx !=[] else '',
-                ','.join( [ i._tosql() for i in condx ] ),
+                'AND' if cond and condx !=[] else '',
+                ' AND '.join( [ i._tosql() for i in condx ] ),
             ('LIMIT %d' % (limit,) ) if limit else '',
             
         ] )
@@ -645,10 +652,10 @@ class Tablet( object ) :
             'SET',
                 ','.join( [ '`%s`=%s' % i for i in row.items() ] ),
             'WHERE' if cond or condx!=[] else '',
-                ','.join( [ '`%s`=%s' % i for i in cond.items() ] ) \
+                ' AND '.join( [ '`%s`=%s' % i for i in cond.items() ] ) \
                                                                 if cond else '',
-                ',' if cond and condx !=[] else '',
-                ','.join( [ i._tosql for i in condx ] ),
+                'AND' if cond and condx !=[] else '',
+                ' AND '.join( [ i._tosql() for i in condx ] ),
             ('LIMIT %d' % (limit,) ) if limit else '',
             
         ] )
@@ -719,7 +726,11 @@ class Table ( object ) :
         cond  = [ s for s in slc if type(s) == types.DictType ]
         condx = [ s for s in slc if type(s) == SQLCondType ]
         
-        print single, cols, cond, condx, offset, limit, order
+        print 'sql> single:', single
+        print 'sql> cols:', cols
+        print 'sql> cond:', cond, condx
+        print 'sql> offset|limit:', offset, limit
+        print 'sql> order:', order
         return single, cols, cond, condx, offset, limit, order
     
     @staticmethod
@@ -756,10 +767,14 @@ class Table ( object ) :
         
     def _conv( self, row, k_in, k_out, conv ):
         
-        if any([ k not in row for k in k_in ]):
-            return []
-        
-        return zip( k_out, conv( *[ row[k] for k in k_in ] ) )
+        try :
+            if any([ k not in row for k in k_in ]):
+                return []
+            
+            return zip( k_out, conv( *[ row[k] for k in k_in ] ) )
+        except Exception as e :
+            print 'Error in %s -> %s conv' % ( str(k_in), str(k_out) )
+            raise e
         
     def _encoderow( self, row ):
         
@@ -843,7 +858,8 @@ class Table ( object ) :
     def _read( self, cond, condx=[],
                      cols=None, limit=None, offset=None, order=None ):
         
-        print 'order>',order
+        if type( cond ) in ArrayTypes :
+            cond = dict(sum([ c.items() for c in cond ], []))
         
         cond = self._encoderow(cond) if cond else cond
         tbls = self._splitter(cond) # todo : set to all tablets if cond is none
@@ -869,10 +885,13 @@ class Table ( object ) :
         
     def _set( self, row, cond, condx=[], limit = None ):
         
+        if type( cond ) in ArrayTypes :
+            cond = dict(sum([ c.items() for c in cond ], []))
+        
         cond = self._encoderow(cond) if cond else cond
         tbls = self._splitter(cond) # todo : set to all tablets if cond is none
         
-        row = self._buildrow(row)
+        row = self._encoderow(row)
         
         tlimit = limit
         nx = 0
@@ -887,6 +906,9 @@ class Table ( object ) :
         return nx, None
     
     def _delete( self, cond, condx=[], limit = None ):
+        
+        if type( cond ) in ArrayTypes :
+            cond = dict(sum([ c.items() for c in cond ], []))
         
         cond = self._encoderow(cond) if cond else cond
         tbls = self._splitter(cond) # todo : set to all tablets if cond is none
@@ -953,7 +975,7 @@ class Table ( object ) :
         
         n, lastid = self._write( [row,], ondup )
         
-        if n == 1 :
+        if n == 0 :
             return None
         else :
             return lastid[0]
@@ -1061,6 +1083,9 @@ class Table ( object ) :
         
         single, keys, cond, condx, offset, limit, order = \
                                                        self._sliceparser( slc )
+        
+        if type( cond ) in ArrayTypes :
+            cond = dict(sum([ c.items() for c in cond ], []))
         
         cond = dict(   ( cond.items() if cond else [] ) \
                      + [ ( k, value[k] ) for k in keys ] )
@@ -1187,6 +1212,9 @@ class DataBase ( object ):
         
     def __getattr__( self, key ):
         
+        if key not in self.tables :
+            raise KeyError, 'not has table named `%s`' %(key,)
+        
         return self.tables[key]
         
     @staticmethod
@@ -1294,13 +1322,15 @@ class BOOL_BIN( object ):
     
     @staticmethod
     def en(x):
-        return ('\x01' if x == True else '\x00',)
+        print 'bb.en>',x
+        return (chr(1) if x == True else chr(0),)
         
     @staticmethod
     def de(x):
-        return (x == '\x01',)
+        print 'bb.de>',x
+        return (x == chr(1),)
         
-class DATATIME_SQL( object ):
+class DATETIME_SQL( object ):
     
     @staticmethod
     def en(x):
@@ -1308,7 +1338,7 @@ class DATATIME_SQL( object ):
     
     @staticmethod
     def de(x):
-        return x
+        return ( x, )
 
 
 if __name__ == '__main__' :
