@@ -1,97 +1,95 @@
 
 
-import __builtin__
-
 import easydecorator
 import traceback
+import sys
 
 
-__builtin__.Exception = None
-
-
-class BaseHookException():
+class AutoLog():
     
-    _switch = False
-    
-    def __init__( self, *args, **kwargs ):
+    def __init__( self, logger ):
         
-        self._callback( )
+        self.logger = logger
+        
+        self.laste = None
+        self.S = []
+        
+        self.info = []
         
         return
     
-    @staticmethod
-    def start():
-        BaseHookException._switch = True
+    def __enter__( self ):
         
-    @staticmethod
-    def stop():
-        BaseHookException._switch = True
+        sys.settrace( self )
+        
+        return self
     
-    def _callback( self ):
-        #if BaseHookException._switch == True :
-            print 'ERROR:', self.__class__.__name__
-
-
-OrignalTypeError
-
-def hook( e ):
-    
-    print 'Hook>', e.__name__
-    
-    try :
+    def __exit__( self, exc_type, exc_value, traceback ):
         
-        e.__base__ = BaseHookException
-        e.__bases__ = tuple( [BaseHookException,] + list(e.__bases__) )
-        return
+        self.info.append( (self.laste,self.S) )
         
-    except TypeError, te :
+        self.info = self.info[1:]
         
-        print 'sub>', e.__subclasses__()
         
-        for se in e.__subclasses__():
-            hook( se )
+        self.logger( self.info )
         
-        class _NEWCLASS( BaseHookException, e ):
-            pass
-        
-        _NEWCLASS.__name__ = e.__name__
-        
-        setattr( __builtin__, e.__name__, _NEWCLASS )
+        sys.settrace( None )
         
         return
     
-    raise BaseException, 'Autolog Error'
+    def __call__( self, frame, event, args ):
+            
+        if event == 'exception':
+            
+            if args[1] is self.laste :
+                self.S.append( ( frame.f_code.co_name,
+                                 frame.f_code.co_filename,
+                                 frame.f_lineno
+                             ) )
+            
+            else :
+                self.info.append( (self.laste,self.S) )
+                self.laste = args[1]
+                self.S = [( frame.f_code.co_name,
+                            frame.f_code.co_filename,
+                            frame.f_lineno
+                         ),]
+                
+        return self
 
-hook(BaseException)
 
 
-@easydecorator.decorator_builder(0)
-def autolog( old, *args, **kwargs ):
+
+
+@easydecorator.decorator_builder(1)
+def autolog( old, logger, *args, **kwargs ):
     
-    BaseHookException._switch = True
-    
-    try :
+    with AutoLog(logger) :
         return old(*args, **kwargs)
-    finally :
-        print 'TB>', traceback.print_exc()
-        
-    BaseHookException._switch = False
+
+
 
 
 
 if __name__ == '__main__':
     
-    @autolog()
+    from pprint import pprint
+    
+    def myraise( e ):
+        raise e
+        return
+    
+    @autolog(pprint)
     def foo( erl ):
         
         for e in erl :
             
             try :
-                raise e('HAHA')
+                myraise( e('HAHA') )
             except :
                 pass
         
         return
     
     foo([Exception,TypeError,ValueError,AttributeError])
-    
+    #foo([Exception,TypeError])
