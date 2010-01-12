@@ -462,7 +462,7 @@ class Tablet( object ) :
             'IGNORE' if ignore else '',
             'INTO',
             '`'+self.name+'`',
-            '(%s)' % ( ','.join( [ '`%s`' % (c,) for c in cols ] ) ),
+            '(%s)' % ( ','.join( [ '`%s`' % (str(c),) for c in cols ] ) ),
             'VALUES',
             ','.join( [ '(%s)' % ( ','.join(r), ) for r in rows ] ),
             ('ON DUPLICATE KEY UPDATE %s' %
@@ -526,7 +526,7 @@ class Tablet( object ) :
             
             'SELECT',
             'DISTINCT' if vset else '',
-            ','.join([ '`%s`' % (c,) for c in cols ]),
+            ','.join([ '`%s`' % (str(c),) for c in cols ]),
             'FROM `%s`' % self.name ,
             'WHERE' if cond or condx!=[] else '',
                 ' AND '.join( [ '`%s`=%s' % i for i in cond.items() ] ) \
@@ -611,7 +611,7 @@ class Tablet( object ) :
             # LOW_PRIORITY or DELAYED or ''
             'INTO',
             '`'+self.name+'`',
-            '(%s)' % ( ','.join( [ '`%s`' % (c,) for c in cols ] ) ),
+            '(%s)' % ( ','.join( [ '`%s`' % (str(c),) for c in cols ] ) ),
             'VALUES',
             ','.join( [ '(%s)' % ( ','.join(r), ) for r in rows ] ),
             
@@ -781,14 +781,14 @@ class Table ( object ) :
         newcols = [     self._conv( row, cc[0], cc[1], cc[2] )
                     for cc in self.colconv ]
         
-        return dict(row.items()+sum(newcols,[]))
+        return dict([ (str(k), v) for k, v in row.items() ]+sum(newcols,[]))
         
     def _decoderow( self, row ):
         
         newcols = [     self._conv( row, cc[1], cc[0], cc[3] )
                     for cc in self.colconv ]
         
-        return dict( [ (k, v) for k, v in row.items()
+        return dict( [ (str(k), v) for k, v in row.items()
                               if k not in self.colset ]\
                      + sum( newcols, [] ) )
         
