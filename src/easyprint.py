@@ -1,7 +1,7 @@
 
 import types
 
-
+from pprint import pprint
 
 
 
@@ -40,26 +40,64 @@ def _xzip( matrix ):
     maxlen = max( [ len(r) for r in matrix ] )
     m2 = [ r + ['',]*(maxlen-len(r)) for r in matrix ]
     
-    return zip(m2)
+    return zip(*m2)
+
 
 def _format( v, cols ):
     
     if cols == {} :
         return str(v).splitlines()
         
-    if type(data) not in ( types.ListType, types.TupleType ) :
+    if type(v) not in ( types.ListType, types.TupleType ) :
         v = [v,]
         
     r = []
     
     for vi in v :
         
-        if type(vi) != types.DictType :
+        if type(vi) == types.DictType :
+            r.append( [ _format( vi[k], cols[k] ) if k in vi else ''
+                        for k in cols.keys() ] )
+        else :
             r.append( _format( vi, {} ) )
-            
-        r.append( _format( vi, cols[k] ) for k in cols.keys() )
     
     return _xzip(r)
+
+
+def _width( v, cols, collens=None ):
+    
+    if collens == None :
+        collens = {}
+        rl = True
+    else :
+        rl = False
+    
+    if cols == {} :
+        print 'v>',v
+        r = max( [ len(vi) for vi in v ] )
+        return r
+        
+    for k in cols :
+        collens[k] = {}
+        
+    print 'ck>', cols.keys()
+    print 'v2>', v
+    
+    #for vi in v :
+        
+    
+    #for k, vi in zip( cols.keys(), v ) :
+    #    r = max( [ _width( vii, cols[k], collens[k] ) for vii in vi ] )
+    #    collens[k][None] = r
+    
+    print 'collens>',collens
+    r = sum( [ c[None] for c in collens.values() ] )
+    
+    if rl == True :
+        collens[None] = r
+        return collens
+    else :
+        return r
 
 def easyprint( data, cols = None ):
     
@@ -68,14 +106,20 @@ def easyprint( data, cols = None ):
         cols = getcols( data )
     elif type(cols) == types.IntType :
         cols = getcols( data, cols )
-        
-    if data not in ( types.ListType, types.TupleType ):
-        data = [data,]
-        
-    for r in data :
-        r = [ r.get( k, '' ) for k in cols.keys() ]
-        
+     
+    fdata = _format( data, cols )
+    pprint( fdata )
+    
+    #collens = _width( fdata, cols )
+    #pprint( collens )
+    
     return
+
+
+
+
+
+
 
 if __name__ == '__main__' :
     
@@ -85,8 +129,13 @@ if __name__ == '__main__' :
         ]
     
     b = [ { 'col A' : 'A.1', 'col B': 'B.1' },
-          { 'col A' : 'A.2', 'col B': {'subcol A': 'B.A.2', 'subcol B': 'B.A.2'} },
+          { 'col A' : 'A.2', 'col B': {'subcol A': 'B.A.2', 'subcol B': 'B.B.2'} },
         ]
     
-    print getcols(a)
-    print getcols(b)
+    c = [ { 'col A' : 'A.1', 'col B': 'B.1' },
+          { 'col A' : 'A.2', 'col B': 'B.2' },
+        ]
+    
+    #easyprint(a)
+    easyprint(b)
+    easyprint(c)
