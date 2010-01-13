@@ -5,6 +5,16 @@ from pprint import pprint
 
 
 
+def _coltree( Name, d ):
+    return ( Name, {}, tuple( _coltree(k, v) for k, v in d.items() ) )
+
+def _coldata( t ):
+    
+    if t[2] == ():
+        return t[0]
+    
+    return [ t[0], dict([ (v[0], _coldata(v)) for v in t[2] ]) ]
+
 def getcols( data, level = 2 ):
     
     cols = {}
@@ -32,7 +42,7 @@ def getcols( data, level = 2 ):
                 r.setdefault( k, {} )
                 s.append( ( vi[k], lv+1, r[k] ) )
     
-    return cols
+    return _coltree( '', cols )
 
 
 def _xzip( matrix ):
@@ -45,7 +55,7 @@ def _xzip( matrix ):
 
 def _format( v, cols ):
     
-    if cols == {} :
+    if cols == None or cols[2] == () :
         return str(v).splitlines()
         
     if type(v) not in ( types.ListType, types.TupleType ) :
@@ -56,48 +66,46 @@ def _format( v, cols ):
     for vi in v :
         
         if type(vi) == types.DictType :
-            r.append( [ _format( vi[k], cols[k] ) if k in vi else ''
-                        for k in cols.keys() ] )
+            ri = [ _format( vi[subc[0]], subc ) if subc[0] in vi else ''
+                   for subc in cols[2] ]
+            r.append( _xzip(ri) )
         else :
-            r.append( _format( vi, {} ) )
+            r.append( _format( vi, None ) )
     
-    return _xzip(r)
+    return sum(r,[])
 
 
-def _width( v, cols, collens=None ):
+
+def _width( v, cols ):
     
-    if collens == None :
-        collens = {}
-        rl = True
+    if type(v) == types.TupleType :
+        r = sum( [ _width( vi, cols[2][i] ) for i, vi in enumerate(v) ] )
+        r += len(v)-1
     else :
-        rl = False
+        r = len(v)
     
-    if cols == {} :
-        print 'v>',v
-        r = max( [ len(vi) for vi in v ] )
-        return r
-        
-    for k in cols :
-        collens[k] = {}
-        
-    print 'ck>', cols.keys()
-    print 'v2>', v
+    cols[1]['__width__'] = max( cols[1].get('__width__',len(cols[0])), r )
     
-    #for vi in v :
-        
+    return cols[1]['__width__']
     
-    #for k, vi in zip( cols.keys(), v ) :
-    #    r = max( [ _width( vii, cols[k], collens[k] ) for vii in vi ] )
-    #    collens[k][None] = r
+def width( v, cols ):
     
-    print 'collens>',collens
-    r = sum( [ c[None] for c in collens.values() ] )
+    for vi in v :
+        _width( vi, cols )
     
-    if rl == True :
-        collens[None] = r
-        return collens
+    return
+
+def _print( v, cols ):
+    
+    if type(v) == types.TupleType :
+        return ' '.join([ _print(vi, cols[2][i]) for i, vi in enumerate(v) ])
     else :
-        return r
+        return v.ljust(cols[1]['__width__'])
+
+def eprint( v, cols ):
+    
+    for vi in v :
+        print _print( vi, cols )
 
 def easyprint( data, cols = None ):
     
@@ -106,12 +114,18 @@ def easyprint( data, cols = None ):
         cols = getcols( data )
     elif type(cols) == types.IntType :
         cols = getcols( data, cols )
-     
-    fdata = _format( data, cols )
-    pprint( fdata )
     
-    #collens = _width( fdata, cols )
-    #pprint( collens )
+    #print cols
+    
+    fdata = _format( data, cols )
+    width( fdata, cols )
+    
+    cdata = _coldata( cols )
+    cdata = _format( cdata, cols )
+    
+    eprint( cdata, cols )
+    print '-'*cols[1]['__width__']
+    eprint( fdata, cols )
     
     return
 
@@ -136,6 +150,15 @@ if __name__ == '__main__' :
           { 'col A' : 'A.2', 'col B': 'B.2' },
         ]
     
+    d = [ { 'colA' : 'A.1.alpha\r\nA.1.beta' ,
+            'colB' : 'B.1.alpha\r\nB.1.beta\r\nB.1.gamma\r\nB.1.delta' },
+          { 'colA' : 'A.2.alpha\r\nA.2.beta' ,
+            'colB' : 'B.2.alpha' }
+        ]
+    
     #easyprint(a)
     easyprint(b)
+    print
     easyprint(c)
+    print
+    easyprint(d)
