@@ -259,6 +259,18 @@ class EasyDoc( object ):
     
     
     
+    
+    
+DEFAULT_E = EasyDoc()
+    
+def parse( doc ):
+    
+    return DEFAULT_E.parse( doc )
+    
+    
+    
+    
+    
 if __name__=='__main__':
     
     from pprint import pprint
