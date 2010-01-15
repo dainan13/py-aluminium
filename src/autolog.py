@@ -44,7 +44,8 @@ class AutoLog():
             if args[1] is self.laste :
                 self.S.append( ( frame.f_code.co_name,
                                  frame.f_code.co_filename,
-                                 frame.f_lineno
+                                 frame.f_lineno,
+                                 frame.f_locals.copy(),
                              ) )
             
             else :
@@ -52,7 +53,8 @@ class AutoLog():
                 self.laste = args[1]
                 self.S = [( frame.f_code.co_name,
                             frame.f_code.co_filename,
-                            frame.f_lineno
+                            frame.f_lineno,
+                            frame.f_locals.copy(),
                          ),]
                 
         return self
@@ -92,4 +94,4 @@ if __name__ == '__main__':
         return
     
     foo([Exception,TypeError,ValueError,AttributeError])
-    #foo([Exception,TypeError])
+    foo([Exception,TypeError])

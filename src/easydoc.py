@@ -16,6 +16,22 @@ class MapableTuple( tuple ):
             ind = self._keys[ind]
         
         return super( MapableTuple, self ).__getitem__( ind )
+        
+    def keys():
+        
+        return self._keys.keys()
+        
+    def __contains__( self, key ):
+        
+        return key in self._keys
+    
+    def __iter__( self ):
+        
+        return self._key.__iter__()
+        
+    def __len__( self ):
+        
+        return len( self._key )
 
 
 
@@ -56,7 +72,7 @@ class Table( object ):
                 c = self.columns[rows.start]
                 
                 rs = [ i for i, r in enumerate(self.values)
-                       if r[c] == i.stop ]
+                       if r[c] == rows.stop ]
                 if len(rs) > 1 :
                     raise IndexError, \
                           ( 'Multi Rows "%s"="%s" ' % (i.start,i.stop) ) \
@@ -190,7 +206,7 @@ class EasyDoc( object ):
             format, args = format[:z], format[z:]
             args = self.getargs( eval('self.getargs%s' % (args,) ) )
         
-        return {'':name,'__type__':format,'__args__':args}
+        return {'':name,'__type__':format.lower(),'__args__':args}
     
     def parse_value( self, lines ):
         

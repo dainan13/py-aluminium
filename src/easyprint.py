@@ -4,9 +4,49 @@ import types
 from pprint import pprint
 
 
+def _namescore( name ):
+    
+    score = 0
+    
+    name = name.lower()
+    
+    if name.endswith('id') :
+        score += 100
+        score -= len(name)-2
+    
+    if name.endswith('name') :
+        score += 80
+        score -= len(name)-4
+    
+    if name.startswith('last-') :
+        score -= 50
+        score -= len(name)-5
+        
+    if name.find('data') != -1 or name.find('time') != -1 :
+        score -= 50
+        score -= len(name)-5
+    
+    if name.find('url') != -1 or name.find('address') != -1 :
+        score -= 30
+        score -= len(name)-5
+    
+    return -score
+
+def smartsort( kvpair ):
+    
+    l = kvpair[:]
+    
+    l.sort( key = lambda x : [_namescore(x[0]),x[0]] )
+    
+    return l
+
+
 
 def _coltree( Name, d ):
-    return ( Name, {}, tuple( _coltree(k, v) for k, v in d.items() ) )
+    return ( Name, {}, tuple( _coltree(k, v)
+                              for k, v in smartsort( d.items() )
+                            )
+           )
 
 def _coldata( t ):
     
@@ -48,7 +88,7 @@ def getcols( data, level = 2 ):
 def _xzip( matrix ):
     
     maxlen = max( [ len(r) for r in matrix ] )
-    m2 = [ r + ['',]*(maxlen-len(r)) for r in matrix ]
+    m2 = [ list(r) + ['',]*(maxlen-len(r)) for r in matrix ]
     
     return zip(*m2)
 

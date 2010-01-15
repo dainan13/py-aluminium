@@ -348,13 +348,13 @@ class SQLConnectionPool( object ):
         
         conn.commit()
         
-        print 'ali>', affect, lastid, info
+        #print 'ali>', affect, lastid, info
         
         return affect, lastid, info
     
     def read( self, conn_args, sql ):
         
-        print 'sql>', sql
+        print 'sql>', repr(sql)
         
         conn = self._get( conn_args )
         rconn = None
@@ -369,7 +369,7 @@ class SQLConnectionPool( object ):
     
     def write( self, conn_args, sql ):
         
-        print 'sql>', sql
+        print 'sql>', repr(sql)
         
         conn = self._get( conn_args )
         rconn = None
@@ -701,7 +701,7 @@ class Table ( object ) :
         table[ col, ..., cond,... , offset:limit:order ]
         '''
         
-        print slc
+        #print slc
         
         if type( slc ) not in ArrayTypes :
             slc = [slc,]
@@ -726,11 +726,11 @@ class Table ( object ) :
         cond  = [ s for s in slc if type(s) == types.DictType ]
         condx = [ s for s in slc if type(s) == SQLCondType ]
         
-        print 'sql> single:', single
-        print 'sql> cols:', cols
-        print 'sql> cond:', cond, condx
-        print 'sql> offset|limit:', offset, limit
-        print 'sql> order:', order
+        #print 'sql> single:', single
+        #print 'sql> cols:', cols
+        #print 'sql> cond:', cond, condx
+        #print 'sql> offset|limit:', offset, limit
+        #print 'sql> order:', order
         return single, cols, cond, condx, offset, limit, order
     
     @staticmethod
@@ -1230,6 +1230,24 @@ class DataBase ( object ):
         
         return self.tables.keys()
 
+def gettablenames( host, port, user, passwd, db ):
+    '''
+    SHOW TALBES
+    '''
+    
+    p = SQLConnectionPool()
+    
+    conn_args = ( host, port, user, passwd, db )
+    
+    tblnames = p.read( conn_args,
+                       "SHOW FULL TABLES FROM `%s` "
+                                "WHERE table_type = 'BASE TABLE'" % (db,) )
+    
+    tblnames = [ t[0] for t in tblnames
+                 if tablename==None or t[0]==tablename ]
+    
+    return tblnames
+
 
 def maketables( host, port, user, passwd, db, tablename=None ):
     '''
@@ -1322,12 +1340,12 @@ class BOOL_BIN( object ):
     
     @staticmethod
     def en(x):
-        print 'bb.en>',x
+        #print 'bb.en>',x
         return (chr(1) if x == True else chr(0),)
         
     @staticmethod
     def de(x):
-        print 'bb.de>',x
+        #print 'bb.de>',x
         return (x == chr(1),)
         
 class DATETIME_SQL( object ):
