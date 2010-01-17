@@ -91,7 +91,7 @@ class Memcache( object ):
     def _replace( key, flags, exptime, contain ):
         return self._store( 'replace', key, flags, exptime, contain )
 
-    def _read( self, keys ):
+    def _get( self, keys ):
         '''
         get <key>*\r\n
         
