@@ -10,6 +10,9 @@ def _namescore( name ):
     
     name = name.lower()
     
+    if name in ( '!','#' ) :
+        score += 150
+    
     if name.endswith('id') :
         score += 100
         score -= len(name)-2
@@ -147,7 +150,14 @@ def eprint( v, cols ):
     for vi in v :
         print _print( vi, cols )
 
+def ifdict( di ):
+    
+    return [ { 'Key':k, 'Value':v } for k, v in di.items() ]
+
 def easyprint( data, cols = None ):
+    
+    if type(data) == types.DictType :
+        data = ifdict(data)
     
     # get the cols if not fixed
     if cols == None :

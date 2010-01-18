@@ -86,6 +86,8 @@ class Condition( Raw ):
                                  + sqlstr(vals[0]) + ',' \
                                  + sqlstr(vals[1]) + ')' )
 
+cond = Condition
+
 class Expression( Raw ):
         
     def __add__ ( self, another ):
@@ -107,6 +109,8 @@ class Expression( Raw ):
         
         self._raw = '(' + self._raw + '/' + sqlstr(another)+ ')'
         return self
+    
+expr = Expression
     
     
 class This( Raw ):
@@ -1243,8 +1247,7 @@ def gettablenames( host, port, user, passwd, db ):
                        "SHOW FULL TABLES FROM `%s` "
                                 "WHERE table_type = 'BASE TABLE'" % (db,) )
     
-    tblnames = [ t[0] for t in tblnames
-                 if tablename==None or t[0]==tablename ]
+    tblnames = [ t[0] for t in tblnames ]
     
     return tblnames
 
@@ -1284,10 +1287,10 @@ class ENUM_INT( object ):
         self._l = l
         
     def en( self, x ):
-        return self._l.index(x)
+        return ( self._l.index(x), )
         
     def de( self, x ):
-        return self._l[x]
+        return ( self._l[x], )
         
     
 
@@ -1305,15 +1308,15 @@ class LIST_MOD( object ):
         
         mods = [ ( mods & m ) >> x for m, x in self.range ]
         
-        return ''.join( chr(m) for m in mods )
+        return ( ''.join( chr(m) for m in mods ), )
     
     def de( self, x ):
         
-        lst = [ [ ( i & ( 1 << z ) ) == 0 for z in range(8) ] for i in x ]
-        lst = sum(lst)
+        lst = [ [ ( ord(i) & ( 1 << z ) ) != 0 for z in range(8) ] for i in x ]
+        lst = sum(lst,[])
         lst = [ i for i, z in zip( self._l, lst ) if z == True ] 
         
-        return lst
+        return ( lst, )
 
 class ANY_JSON( object ):
         
