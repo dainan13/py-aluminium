@@ -758,12 +758,13 @@ class Table ( object ) :
         
         self.connpool = SQLConnectionPool()
         self.tablets = tablets
+        self.hashtablets = {'':ListWithHashKey(self.tablets, '')}
         
         return
         
     def _splitter( self, row ):
         
-        return [ListWithHashKey(self.tablets, ''),]
+        return self.hashtablets['']
     
     def _gettablets( self, tbl ):
         

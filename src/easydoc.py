@@ -49,6 +49,10 @@ class Table( object ):
         
         return
     
+    def todict( self ):
+        
+        return [ dict( zip(self.columns.keys(), r) ) for r in values ]
+    
     def __getitem__( self, rows ):
         '''
         t[1]
