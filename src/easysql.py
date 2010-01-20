@@ -760,11 +760,30 @@ class Table ( object ) :
         self.tablets = tablets
         self.hashtablets = {'':ListWithHashKey(self.tablets, '')}
         
+        self.splitter = lambda x : ['',]
+        
         return
         
     def _splitter( self, row ):
         
-        return self.hashtablets['']
+        return [ self.hashtablets[h] for h in self.splitter(row) ]
+    
+    def _hashtablets( self, hasher ):
+        
+        h = [ hasher(t) for t in self.tablets ]
+        hset = set(h)
+        h = zip( self.tablets, h )
+        
+        self.hashtablets = dict(
+                             [ ( hs,
+                                 ListWithHashKey( [ t for t, ha in h
+                                                      if ha == hs ],
+                                                  hs
+                                                )
+                               ) for hs in hset ]
+                           )
+        
+        return
     
     def _gettablets( self, tbl ):
         
@@ -772,14 +791,10 @@ class Table ( object ) :
         
     def _conv( self, row, k_in, k_out, conv ):
         
-        try :
-            if any([ k not in row for k in k_in ]):
-                return []
-            
-            return zip( k_out, conv( *[ row[k] for k in k_in ] ) )
-        except Exception as e :
-            print 'Error in %s -> %s conv' % ( str(k_in), str(k_out) )
-            raise e
+        if any([ k not in row for k in k_in ]):
+            return []
+        
+        return zip( k_out, conv( *[ row[k] for k in k_in ] ) )
         
     def _encoderow( self, row ):
         
@@ -797,9 +812,9 @@ class Table ( object ) :
                               if k not in self.colset ]\
                      + sum( newcols, [] ) )
         
-    def setsplitter( self, splitter ):
-        
-        return
+    #def setsplitter( self, splitter ):
+    #    
+    #    return
         
     def setconverter( self, encoder, decoder=None,
                             encoder_key=None, decoder_key=None ):
@@ -980,7 +995,7 @@ class Table ( object ) :
         
         n, lastid = self._write( [row,], ondup )
         
-        if n == 0 :
+        if n != 1 :
             return None
         else :
             return lastid[0]
