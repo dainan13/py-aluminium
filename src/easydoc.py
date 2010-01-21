@@ -17,7 +17,7 @@ class MapableTuple( tuple ):
         
         return super( MapableTuple, self ).__getitem__( ind )
         
-    def keys():
+    def keys( self ):
         
         return self._keys.keys()
         
@@ -25,14 +25,24 @@ class MapableTuple( tuple ):
         
         return key in self._keys
     
-    def __iter__( self ):
-        
-        return self._key.__iter__()
+    #def __iter__( self ):
+    #    
+    #    return self._keys.__iter__()
         
     def __len__( self ):
         
-        return len( self._key )
-
+        return len( self._keys )
+        
+    def items( self ):
+        
+        r = self._keys.items()
+        r.sort( key = lambda x : x[1] )
+        
+        return [ (k, self[i]) for k, i in r]
+        
+    def todict( self ):
+        
+        return dict( self.items() )
 
 
 
@@ -128,89 +138,147 @@ class EasyDocError( Exception ):
     
 class EasyDoc( object ):
     
-    def __init__( self, sep='##!#' ):
+    def __init__( self, sep=1, title='##!#' ):
         
         self.sep = sep
+        self.title = title
         
     def parse( self, doc ):
         
         stages = self.splitstage(doc)
         
-        hs, bs = zip(*stages)
+        heads, bodys = zip(*stages)
         
-        hs = [ self.stageargs(h) for h in hs ]
+        # get the real body
+        ends = [ getattr( self, 'ends_'+h['__ends__'] ) for h in heads ]
+        bodys = [ e(b) for e, b in zip(ends,bodys) ]
         
-        ns = [ h.get('',None) for h in hs ]
+        # parse indent
+        bodys = [ [ l[h['__indent__']:] for l in b ] 
+                  for h, b in zip( heads, bodys ) ]
         
-        ts = [ getattr( self, 'parse_'+h['__type__'] ) for h in hs ]
+        # get the names
+        names = [ h.get('',None) for h in heads ]
         
-        ps = [ h['__args__'] for h in hs ]
+        # parse the body
+        parses = [ getattr( self, 'parse_'+h['__type__'] ) for h in heads ]
+        argses = [ h['__args__'] for h in heads ]
+        bodys  = [ p( b, *a[0], **a[1] )
+                   for p, a, b in zip(parses, argses, bodys) ]
         
-        bs = [ t(b,*p[0],**p[1]) for t, b, p in zip(ts,bs,ps) ]
-        
-        m = MapableTuple( bs )
-        m.setkeys(ns)
+        m = MapableTuple( bodys )
+        m.setkeys(names)
         
         return m
     
     def splitstage( self, doc ):
+        '''
+        split stage
+        '''
         
         dls = doc.splitlines()
-        e = [ l.strip()=='' for l in dls ]
-        e = zip([True]+e,e+[True])
+        len_dls = len(dls)
+        striped_dls = [ l.strip() for l in dls ]
+        e = [ l=='' for l in striped_dls ]
+        e = [ e[ (i-self.sep) if i>self.sep else 0 :i] for i in range(len_dls) ]
+        e = [ all(el) for el in e ]
+        t = [ l.startswith(self.title) for l in striped_dls ]
         
-        gh = [ i for i, em in enumerate(e) if em[0]==True and em[1]==False ]
-        gt = [ i for i, em in enumerate(e) if em[0]==False and em[1]==True ]
+        s = [ i for e, t, i in zip(e,t,range(len_dls)) if e==True and t==True ]
+        s = [ dls[h:n] for h, n in zip( s, s[1:]+[None,] )]
         
-        g = [ dls[h:t] for h, t in zip(gh,gt) ]
         
-        stages = [ ( gi[0].strip(), gi[1:], gi[0].find(self.sep) )
-                     for gi in g if gi[0].strip().startswith(self.sep) ]
+        s = [ (self.parsetitle(st[0]),st[1:]) for st in s ]
         
-        stages = [ ( h, [ li[t:] for li in b ] )
-                   for h, b, t in stages ]
-        
-        return stages
+        return s
     
     @staticmethod
     def getargs( *args, **kwargs ):
         return ( args, kwargs )
     
-    def stageargs( self, stagehead ):
-        '''
-        eg :
-            Infos or Name                  .object as Name
-        '''
+    @staticmethod
+    def read_stage_args( t ):
         
-        head = stagehead[len(self.sep):]
+        x = False
         
-        dot = head.rfind('.')
+        for i in range(len(t)):
+            if not t[i].isalpha() :
+                break
+        else :
+            return t, None, None, None
+        
+        ty = t[0:i]
+        t = t[i:].lstrip()
+        
+        args = None
+        
+        if t[0] == '(' :
+            c = 0
+            for i in range(len(t)):
+                if t[i] == '(' :
+                    c += 1
+                if t[i] == ')' :
+                    c -= 1
+                    if c == 0 :
+                        break
+            else :
+                return ty, t, None, None
+            
+            args = t[0:i+1]
+            t = t[i+1:]
+            
+        t = t.lstrip()
+        
+        t = t.split()
+        
+        t = dict( zip( t[::2],t[1::2] ) )
+        
+        return ty, args, t.get('ends',None), t.get('as',None)
+    
+    def parsetitle( self, t ):
+        
+        leftspace = t.find( self.title )
+        t = t[ leftspace + len(self.title) : ]
+        
+        dot = t.rfind('.')
         
         if dot < 0 :
             raise SyntexError, 'doc must have a type'
         
-        args = head[dot:]
+        ty, args, ends, name = self.read_stage_args( t[dot+1:] )
         
-        sp = args.rsplit(None, 2)
+        args = ([],{}) if args == None else \
+                            self.getargs( eval('self.getargs%s' % (args,) ) )
+        name = name or t[:dot].strip()
+        ends = ends or 'E1'
+        ty = ty.lower()
         
-        if len(sp) == 3 and sp[-2] == 'as' and sp[-1].find(')') == -1 :
-            name = sp[-1]
-            format = sp[0][1:]
-            info = head[:dot].strip()
+        return { '': name,
+                 '__type__': ty,
+                 '__args__': args,
+                 '__ends__': ends,
+                 '__indent__': leftspace,
+               }
+        
+    def _ends_E( self, lines, n ):
+        
+        e = [ l.strip()=='' for l in lines ]
+        e = [ e[i:i+n] for i in range(len(lines)) ]
+        e = [ i for i, el in enumerate(e) if all(el) ]
+        
+        if e == []:
+            return lines
         else :
-            name = head[:dot].strip()
-            format = args[1:]
-            info = name
+            return lines[:e[0]]
         
-        z = format.find('(')
+    def ends_E1( self, lines ):
+        return self._ends_E( lines, 1 )
         
-        if z < 0 :
-            args = [(),{}]
-        else :
-            format, args = format[:z], format[z:]
-            args = self.getargs( eval('self.getargs%s' % (args,) ) )
+    def ends_E2( self, lines ):
+        return self._ends_E( lines, 2 )
         
-        return {'':name,'__type__':format.lower(),'__args__':args}
+    def ends_E3( self, lines ):
+        return self._ends_E( lines, 3 )
     
     def parse_value( self, lines ):
         
@@ -327,6 +395,19 @@ if __name__=='__main__':
         !              Geography     A
         Marry          Society       B
         !              History       A
+        
+        ##!# FOO                                       .value ends E2 as Metas_C
+        array(
+            #.Subject1     : string,
+            #.Subject2     : string,
+            
+            #.Result1      : ascii(1),
+            #.Result2      : ascii(1),
+        )
+        
+        
+        ##!# BAR                                               .value as Metas_D
+        A
         '''
         
     e = EasyDoc()
@@ -351,3 +432,5 @@ if __name__=='__main__':
     
     print r['Table_A'][1,1]
     #b
+    
+    print r['Metas_C']
