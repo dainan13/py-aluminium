@@ -3,6 +3,66 @@ import types
 
 
 
+def _splitword( text, quotes ):
+    
+    if text[0] in quotes :
+        s = text.find(text[0],1)
+        return text[0], text[1:s], text[s+1:]
+        
+    else :
+        for i in range(len(text)):
+            if text[i].isalpha() == False :
+                return '', text[:i], text[i:]
+        
+        return '', text, ''
+
+def buildformattingstring( text, sign=('/*%','*/'), quotes=['"','\'','`'] ):
+    '''
+    /*%(Arg)s*/'ABC' => "'%(Arg)s'", {'Arg':'ABC'}
+    '''
+    
+    text = text.split(sign[0])
+    
+    head, body = text[0], text[1:]
+    
+    body = [ b.split(sign[1],1) for b in body ]
+    
+    for b in body:
+        if len(b) != 2 :
+            raise ValueError, ( 'can not find the end of sign', b[0] )
+    
+    signcnt, body = zip(*body)
+    
+    ns = [ s[1:].split(')',1)[0] if s[0] == '(' else None for s in signcnt ]
+    
+    body = [ _splitword(b, quotes) for b in body ]
+    
+    qs, ds, bs = zip(*body)
+    
+    body = [ [ '%s%%%s%s' % (q,s,q), b.replace('%','%%') ] 
+             for s, q, b in zip( signcnt, qs, bs )]
+    
+    body = sum( body, [] )
+    
+    text= [head.replace('%','%%'),]+body
+    
+    text = ''.join(text)
+    
+    ns_n = [ n == None for n in ns ]
+    
+    if all( ns_n ):
+        return text, ds
+    elif any( ns_n ):
+        raise ValueError, 'Mapping key and non-Mapping key all in text'
+    
+    ds = dict(zip(ns,ds))
+    
+    return text, ds
+
+
+
+
+
 class MapableTuple( tuple ):
     
     def setkeys( self, names ):
