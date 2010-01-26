@@ -1246,6 +1246,18 @@ class DataBase ( object ):
         
         return DataBase(tbls)
         
+    @staticmethod
+    def byfunction( tbls, f ):
+        
+        hs = [ f(t) for t in tbls ]
+        shs = set(hs)
+        
+        tbls = [    sum( [ t for _h, t in zip( hs, tbls ) if _h == h ],
+                           Table([], h) )
+                 for h in shs ]
+        
+        return DataBase(tbls)
+        
     def keys( self ):
         
         return self.tables.keys()

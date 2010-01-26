@@ -143,12 +143,26 @@ def _print( v, cols ):
     if type(v) == types.TupleType :
         return ' '.join([ _print(vi, cols[2][i]) for i, vi in enumerate(v) ])
     else :
+        j = cols[1].get( '__just__', 'left' )
+        if callable(j):
+            j = j(v)
+        
+        if j == 'right' :
+            return v.rjust(cols[1]['__width__'])
+        elif j == 'center' :
+            return v.center(cols[1]['__width__'])
+            
         return v.ljust(cols[1]['__width__'])
 
 def eprint( v, cols ):
     
     for vi in v :
         print _print( vi, cols )
+        
+def eformat( v, cols ):
+    
+    return '\r\n'.join( [ _print( vi, cols ) for vi in v ] )
+    
 
 def ifdict( di ):
     
@@ -180,7 +194,30 @@ def easyprint( data, cols = None ):
     return
 
 
-
+def easyformat( data, cols = None ):
+    
+    if type(data) == types.DictType :
+        data = ifdict(data)
+    
+    # get the cols if not fixed
+    if cols == None :
+        cols = getcols( data )
+    elif type(cols) == types.IntType :
+        cols = getcols( data, cols )
+    
+    #print cols
+    
+    fdata = _format( data, cols )
+    width( fdata, cols )
+    
+    cdata = _coldata( cols )
+    cdata = _format( cdata, cols )
+    
+    r = [ eformat( cdata, cols ),
+          '-'*cols[1]['__width__'],
+          eformat( fdata, cols ) ]
+    
+    return '\r\n'.join(r)
 
 
 
@@ -212,3 +249,6 @@ if __name__ == '__main__' :
     easyprint(c)
     print
     easyprint(d)
+    
+    print
+    print easyformat(d)
