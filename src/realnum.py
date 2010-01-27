@@ -175,6 +175,10 @@ class Line(object):
     def _zip( a, b ):
         return (a,b) if None not in (a,b) else None
     
+    def xzip( self, another ):
+        return self.zip( another, 
+                         lambda a,b : (a,b) if a != None or b!=None else None )
+    
     def zip( self, another, f=None ):
         
         if f == None :
@@ -289,7 +293,14 @@ class Line(object):
             
     def iscontinuous( self ):
         
-        return all( [ self.point[ns] != None for n in self.nodes[:-1] ] )
+        return all( [ self.point[n] != None for n in self.nodes[:-1] ] )
+        
+    def iscomplete( self, start, stop ):
+        
+        stop = stop or Inf
+        
+        return all( [ self.point[n] != None for n in self.nodes
+                      if n >= start and n < stop ] )
         
     def split( self ):
         
@@ -298,29 +309,47 @@ class Line(object):
                  Line([(ns,x)])
                  for ns, ne, x in self if x != None ]
         
-    def left( self ):
+    def left( self, key=None ):
         
-        if self.point[None] != None:
-            return None
+        if key == None :
         
-        r = min(self.nodes)
-        
-        if r == None :
-            raise ValueError, 'Empty Line can\'t get the left point'
-        
-        return r
+            if self.point[None] != None:
+                return None
+            
+            r = min(self.nodes)
+            
+            if r == None :
+                raise ValueError, 'Empty Line can\'t get the boundary'
+            
+            return r
     
-    def right( self ):
+        return max( [ k for k in key if k <= start ] + [None,] )
         
-        if self.point[self.nodes[-1]] != None:
-            return None
+    
+    def right( self, key=Inf ):
         
-        r = max(self.nodes)
+        if key == Inf :
         
-        if r == None :
-            raise ValueError, 'Empty Line can\'t get the left point'
+            if self.point[self.nodes[-1]] != None:
+                return None
+            
+            r = max(self.nodes)
+            
+            if r == None :
+                raise ValueError, 'Empty Line can\'t get the boundary'
+            
+            return r
         
-        return r
+        return min( [ k for k in key if k > stop ] + [Inf,] )
+        
+    def getslice( self, key ):
+        return slice( self.left(key), self.right(key) )
+        
+    def before ( self, key ):
+        return max( [ k for k in key if k <= start ] + [None,] )
+        
+    def after( self, key ):
+        return min( [ k for k in key if k >= stop ] + [Inf,] )
     
     def __len__( self ):
         
@@ -366,6 +395,26 @@ class Line(object):
     def countsegment( self ):
         
         return len( [ n for n in self.nodes if self.point[n]!=None ] )
+        
+    def tolist( self ):
+        
+        z = [ (k, v) for k, v in self.point.items() if k != None or v != None ]
+        z.sort(key = lambda x : x[0])
+        
+        return z
+    
+    def todict( self ):
+        
+        z = [ (k, v) for k, v in self.point.items() if k != None or v != None ]
+        
+        return dict(z)
+        
+    def isempty( self ):
+        
+        if len(self.nodes) == 1 and self.point[None] == None :
+            return True
+        
+        return False
 
 
 
