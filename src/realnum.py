@@ -29,6 +29,18 @@ class Infinity(object):
 Inf = Infinity()
 
 
+
+class F(object):
+    
+    def __init__( self, factors ):
+        
+        self.factors = factors
+        
+    def __quadrature__( self ):
+        
+        return F( [ float(fa)/(i+1) for i, fa in enumerate(self.factors) ] )
+
+
 class Line(object):
     
     def __init__( self, sttdict={None:None} ):
@@ -116,6 +128,9 @@ class Line(object):
         if ( seg == [] or seg[0] != start ) and before != None :
             r = [(start, self.point[before]),]+r
         
+        if stop != Inf :
+            r = r + [ (stop, None), ]
+        
         return Line(dict(r))
     
     def __setitem__( self, key, value ):
@@ -157,14 +172,13 @@ class Line(object):
         return self.point != another.point
     
     @staticmethod
-    def _add( a, b ):
-        if a == None:
-            return None
-        if b == None :
-            return a
-        return a+b
+    def _zip( a, b ):
+        return (a,b) if None not in (a,b) else None
     
-    def addx( self, another ):
+    def zip( self, another, f=None ):
+        
+        if f == None :
+            f = self._zip
         
         start = min(self.nodes)
         stop = max(self.nodes)
@@ -185,7 +199,7 @@ class Line(object):
         nodes_a = [ max([ _p for _p in another.nodes if _p <= p ])
                     for p in nodes ]
         
-        value = [ ( n, self._add( self.point[ns], another.point[na] )
+        value = [ ( n, f( self.point[ns], another.point[na] )
                   ) for n, ns, na in zip( nodes, nodes_s, nodes_a )]
         
         filter = set([ _v[0] for v, _v in zip( value, value[1:])
@@ -195,21 +209,163 @@ class Line(object):
         
         return Line(value)
     
-    def addv( self, another ):
+    def map( self, vf, kf=None ):
         
-        r = [ (k, self._add(v, another) ) for k, v in self.point.items() ]
+        if kf == None :
+            kf = lambda x : x
+        
+        if vf == None :
+            vf = lambda x : x
+        
+        r = [ ( kf(k), None if v == None else vf(v) )
+              for k, v in self.point.items() ]
         
         return dict(r)
     
-    def subx( self, another ):
-        pass
+    @staticmethod
+    def _add( a, b ):
+        if a == None:
+            return None
+        if b == None :
+            return a
+        return a+b
+    
+    @staticmethod
+    def _sub( a, b ):
+        if a == None :
+            return None
+        if b == None :
+            return a
+        return a-b
+    
+    @staticmethod
+    def _stripby( a, b ):
+        return None if a == None or b == None else a
+    
+    @staticmethod
+    def _update( a, b ):
+        return b if b != None else a
+    
+    @staticmethod
+    def _merge( a, b ):
+        return b if a == None else a
+    
+    @staticmethod
+    def _diff( a, b ):
+        return a if a != b else None
     
     def __add__( self, another ):
         
         if type( another ) == Line :
-            return self.addx( another )
+            return self.zip( another, self._add )
         
-        return self.addv( another )
+        return self.map( None, lambda x: x+another )
+        
+    def __sub__( self, another ):
+        
+        if type( another ) == Line :
+            return self.zip( another, self._sub )
+        
+        return self.map( None, lambda x: x-another )
+        
+    def update( self, another ):
+        return self.zip( another, self._update )
+        
+    def stripby( self, another ):
+        return self.zip( another, self._stripby )
+    
+    def merge( self, another ):
+        return self.zip( another, self._merge )
+    
+    def diff( self, another ):
+        return self.zip( another, self._diff )
+        
+    def __iter__( self ):
+        
+        for ns, ne in zip( self.nodes, self.nodes[1:]+[None,] ) :
+            if self.point[ns] == None :
+                continue
+            yield ns, ne, self.point[ns]
+            
+    def iscontinuous( self ):
+        
+        return all( [ self.point[ns] != None for n in self.nodes[:-1] ] )
+        
+    def split( self ):
+        
+        return [ Line([(ns,x),(ne,None)])
+                    if ne != None else
+                 Line([(ns,x)])
+                 for ns, ne, x in self if x != None ]
+        
+    def left( self ):
+        
+        if self.point[None] != None:
+            return None
+        
+        r = min(self.nodes)
+        
+        if r == None :
+            raise ValueError, 'Empty Line can\'t get the left point'
+        
+        return r
+    
+    def right( self ):
+        
+        if self.point[self.nodes[-1]] != None:
+            return None
+        
+        r = max(self.nodes)
+        
+        if r == None :
+            raise ValueError, 'Empty Line can\'t get the left point'
+        
+        return r
+    
+    def __len__( self ):
+        
+        if self.point[None] != None or self.point[self.nodes[-1]] != None :
+            return None
+        
+        return reduce( lambda x, y : x+y ,
+                       [ ne - ns for ns, ne, x in self if x != None  ] )
+    
+    @staticmethod
+    def _q( a, b, precision ):
+        
+        r = a
+        while ( r < b ):
+            yield r
+            r += precision
+    
+    @staticmethod
+    def _quadrature( v, a, b, precision=0.1 ):
+        
+        q = getattr( v, '__quadrature__', None )
+        if q != None :
+            return q(b) - q(a)
+        
+        if callable(v) :
+            
+            s = [ v(i)*precision for i in Line._q( a, b, precision ) ]
+            
+            return reduce( lambda x, y : x+y , s )
+        
+        return v*(b-a)
+    
+    def quadrature( self, precision=0.1 ):
+        
+        if self.point[None] != None or self.point[self.nodes[-1]] != None :
+            return None
+        
+        return reduce( lambda x, y : x+y ,
+                       [ self._quadrature( x, ns, ne, precision )
+                         for ns, ne, x in self if x != None  ]
+                     )
+    
+    def countsegment( self ):
+        
+        return len( [ n for n in self.nodes if self.point[n]!=None ] )
 
 
 
@@ -296,5 +452,17 @@ if __name__ == '__main__' :
        |----:----|----:----|----:----|---------------->
        0    5   10   15   20   25   30
     '''
+    
+    A = Line( {0:5,10:15,20:10} )
+    B = Line( {5:10,15:20,25:15} )
+    
+    print 'A+B :', A+B
+    print 'A-B :', A-B
+    
+    print 'A.countsegment() :', A.countsegment()
+    print 'A.stripby(B) :', A.stripby(B)
+    print 'A.diff(A+B) :', A.diff(A+B)
+    print 'B.merge(A) :', B.merge(A)
+    print 'A[0:25].quadrature() :', A[0:25].quadrature()
     
     
