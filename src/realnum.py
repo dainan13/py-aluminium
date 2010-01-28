@@ -342,7 +342,7 @@ class Line(object):
         
         return min( [ k for k in key if k > stop ] + [Inf,] )
         
-    def getslice( self, key ):
+    def getseg( self, key ):
         return slice( self.left(key), self.right(key) )
         
     def before ( self, key ):
@@ -415,6 +415,10 @@ class Line(object):
             return True
         
         return False
+    
+    def values( self ):
+        
+        return [ self.point[n] for n in self.nodes if self.point[n] != None ]
 
 
 
