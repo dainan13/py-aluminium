@@ -1,3 +1,5 @@
+#!/usr/bin/env python2.6
+# coding: utf-8
 
 import types
 
@@ -131,10 +133,23 @@ def _width( v, cols ):
     
     return cols[1]['__width__']
     
+def _colwidth( cols ):
+    
+    
+    cols[1]['__width__'] = max( cols[1].get('__width__'),
+                                len(cols[0]),
+                                sum( [ _colwidth(c)+1  for c in cols[2] ] ) -1,
+                           )
+    
+    return cols[1]['__width__']
+
 def width( v, cols ):
+    
+    _colwidth(cols)
     
     for vi in v :
         _width( vi, cols )
+    
     
     return
 

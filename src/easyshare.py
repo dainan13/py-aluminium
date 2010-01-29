@@ -11,7 +11,7 @@ import hashlib
 
 class Share( property ):
     
-    def __init__( self, maxsize=10240 ):
+    def __init__( self, _v=None, maxsize=10240 ):
         
         class ShareStructure ( ctypes.Structure ):
             _fields_ = [("len",  ctypes.c_long  ),
@@ -24,14 +24,15 @@ class Share( property ):
         
         self.sharespace = RawValue( ShareStructure, 1 )
         
-        self.value = None
+        self.value = _v
         
         property.__init__( self, self.value_getter , self.value_setter )
     
     def on_sharereload( self, newvalue ):
-        return
+        return newvalue
     
-    def value_getter( self ):
+    
+    def value_getter( self, host ):
         
         if self.md5 != self.sharespace.md5 :
             
@@ -41,14 +42,13 @@ class Share( property ):
             
             if len(j) == l and hashlib.md5(j).hexdigest() == m :
                 
-                self._value = json.loads( j, encoding='utf-8' )
+                self._value = self.on_sharereload(
+                                    json.loads( j, encoding='utf-8' ) )
                 self.md5 = m
-                
-                self.on_sharereload( self._value )
                 
         return self._value
     
-    def value_setter( self, value ):
+    def value_setter( self, host, value ):
         
         j = json.dumps( value, encoding='utf-8' )
         self.md5 = hashlib.md5(j).hexdigest()
@@ -56,11 +56,17 @@ class Share( property ):
         self.sharespace.len = l
         self.sharespace.md5 = self.md5
         self.sharespace.json = j
-        self._value = value
+        self._value = self.on_sharereload( value )
         
         return
     
-    value = property( value_getter, value_setter )
+    def _value_getter( self ):
+        return self.value_getter( self )
+        
+    def _value_setter( self, value ):
+        return self.value_setter( self, value )
+    
+    value = property( _value_getter, _value_setter )
 
 
 
