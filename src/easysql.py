@@ -670,19 +670,6 @@ class Tablet( object ) :
 
 
 
-class ListWithHashKey(list):
-    
-    def __init__( self, l, hashseed ):
-        
-        self.hashkey = hash(hashseed)
-        
-        super( ListWithHashKey, self ).__init__(l)
-        
-        return
-    
-    def __hash__( self ):
-        
-        return self.hashkey
 
 
 
@@ -758,7 +745,7 @@ class Table ( object ) :
         
         self.connpool = SQLConnectionPool()
         self.tablets = tablets
-        self.hashtablets = {'':ListWithHashKey(self.tablets, '')}
+        self.hashtablets = {'':Tuple(self.tablets)}
         
         self.splitter = lambda x : ['',]
         
@@ -776,10 +763,7 @@ class Table ( object ) :
         
         self.hashtablets = dict(
                              [ ( hs,
-                                 ListWithHashKey( [ t for t, ha in h
-                                                      if ha == hs ],
-                                                  hs
-                                                )
+                                 Tuple( [ t for t, ha in h if ha == hs ] )
                                ) for hs in hset ]
                            )
         
