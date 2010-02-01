@@ -745,7 +745,7 @@ class Table ( object ) :
         
         self.connpool = SQLConnectionPool()
         self.tablets = tablets
-        self.hashtablets = {'':Tuple(self.tablets)}
+        self.hashtablets = {'':tuple(self.tablets)}
         
         self.splitter = lambda x : ['',]
         
@@ -763,7 +763,7 @@ class Table ( object ) :
         
         self.hashtablets = dict(
                              [ ( hs,
-                                 Tuple( [ t for t, ha in h if ha == hs ] )
+                                 tuple( [ t for t, ha in h if ha == hs ] )
                                ) for hs in hset ]
                            )
         
