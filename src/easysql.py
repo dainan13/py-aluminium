@@ -991,6 +991,9 @@ class Table ( object ) :
         return successed number
         '''
         
+        if rows == [] :
+            return 0
+        
         n, lastid = self._write( rows )
         
         return n
@@ -1292,6 +1295,26 @@ def maketables( host, port, user, passwd, db, tablename=None ):
     
     return [ Table( [t,], t.name ) for t in tablets ]
 
+
+def getdbnames( host, port, user, passwd ):
+    '''
+    SHOW TALBES
+    DESCRIBE
+    SHOW GRANTS
+    '''
+    
+    p = SQLConnectionPool()
+    
+    #conn_args = ( host, port, user, passwd )
+    
+    conn = MySQLdb.Connection( host=host, port=port, user=user, passwd=passwd )
+    
+    dbnames = p._read( conn, "SHOW DATABASES" )
+    
+    dbnames = [ t[0] for t in dbnames ]
+    
+    return dbnames
+    
 
 class ENUM_INT( object ):
     
