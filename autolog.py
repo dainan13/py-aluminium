@@ -10,10 +10,16 @@ class AutoLog():
         
         self.logger = logger
         
-        self.laste = None
-        self.S = []
+        self.assigmentlog = []
         
         self.info = []
+        
+        self.scene_history = []
+        self.scene = []
+        
+        self.stack = []
+        self.path = []
+        self.direction = True
         
         return
     
@@ -27,36 +33,41 @@ class AutoLog():
         
         sys.setprofile( None )
         
-        self.info.append( (self.laste,self.S) )
-        
-        self.info = self.info[1:]
-        
-        self.logger( self.info )
+        self.logger( ( tuple( self.path ), tuple( self.scene ) ) )
         
         return
     
     def profile( self, frame, event, args ):
         
-        if ( event == 'return' or event == 'c_return' ) \
-           and args == None and sys.exc_type != None :
+        if event in ( 'call', 'c_call' ) :
+            self.scene = []
+            self.direction = True
             
-            if sys.exc_value is self.laste :
-                self.S.append( ( frame.f_code.co_name,
-                                 frame.f_code.co_filename,
-                                 frame.f_lineno,
+            self.stack.append( frame.f_code.co_name )
+            
+            return self.profile
+        
+        if event in ( 'return', 'c_return' ) :
+            
+            if len( self.stack ) == 0 :
+                return self.profile
+            
+            if self.direction == True :
+                self.path.append( ( tuple( self.stack ), sys.exc_value ) )
+                self.direction = False
+                
+            if sys.exc_value is not self.path[-1][1] :
+                self.path.append( ( tuple( self.stack ), sys.exc_value ) )
+                self.scene = []
+                
+            self.stack.pop(-1)
+            
+            self.scene.append( ( ( frame.f_code.co_name,
+                                   frame.f_code.co_filename,
+                                   frame.f_lineno,
+                                 ),
                                  frame.f_locals.copy(),
-                             ) )
-            
-            else :
-                self.info.append( (self.laste, self.S) )
-                self.laste = sys.exc_value
-                self.S = [( frame.f_code.co_name,
-                            frame.f_code.co_filename,
-                            frame.f_lineno,
-                            frame.f_locals.copy(),
-                         ),]
-            
-            print 
+                               ) )
             
         return self.profile
 
