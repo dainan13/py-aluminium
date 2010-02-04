@@ -3,6 +3,15 @@ import easydecorator
 import traceback
 import sys
 
+@easydecorator.decorator_builder(0)
+def safe( old, *args, **kwargs ):
+    
+    try :
+        return old( *args, **kwargs )
+    except :
+        traceback.print_exc()
+    
+    return
 
 class AutoLog():
     
@@ -19,45 +28,62 @@ class AutoLog():
         
         self.stack = []
         self.path = []
-        self.direction = True
+        self.direction = False
         
         return
     
     def __enter__( self ):
         
-        sys.setprofile( self.profile )
+        self.direction = False
+        self.path = []
+        sys.settrace( self.trace )
         
         return self
     
     def __exit__( self, exc_type, exc_value, traceback ):
         
-        sys.setprofile( None )
+        sys.settrace( None )
         
         self.logger( ( tuple( self.path ), tuple( self.scene ) ) )
         
         return
     
-    def profile( self, frame, event, args ):
+    @safe()
+    def trace( self, frame, event, args ):
         
         if event in ( 'call', 'c_call' ) :
+            
+            print '>', frame.f_code.co_name
+            
             self.scene = []
             self.direction = True
             
             self.stack.append( frame.f_code.co_name )
             
-            return self.profile
+            print '    @ stack added', self.stack
+            
+            return self.trace
         
         if event in ( 'return', 'c_return' ) :
             
+            print '<', frame.f_code.co_name
+            
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            
+            print '    @ sys.exc_type', sys.exc_type
+            
             if len( self.stack ) == 0 :
-                return self.profile
+                print '    @ no stack'
+                return self.trace
             
             if self.direction == True :
-                self.path.append( ( tuple( self.stack ), sys.exc_value ) )
+                self.path.append( ( tuple( self.stack ), exc_value ) )
                 self.direction = False
                 
-            if sys.exc_value is not self.path[-1][1] :
-                self.path.append( ( tuple( self.stack ), sys.exc_value ) )
+                print '    @ stack direction returned', self.path
+                
+            if exc_value is not self.path[-1][1] :
+                self.path.append( ( tuple( self.stack ), exc_value ) )
                 self.scene = []
                 
             self.stack.pop(-1)
@@ -69,9 +95,7 @@ class AutoLog():
                                  frame.f_locals.copy(),
                                ) )
             
-        return self.profile
-
-
+        return self.trace
 
 
 
