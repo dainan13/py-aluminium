@@ -2,45 +2,66 @@
 
 import signal
 import pyev
+import socket
 
-def sig_cb(watcher, events):
-    print("got SIGINT")
-    # optional - stop all watchers
-    if watcher.data:
-        print("stopping watchers: {0}".format(watcher.data))
-        for w in watcher.data:
-            w.stop()
-    # unloop all nested loop
-    print("stopping the loop: {0}".format(watcher.loop))
-    watcher.loop.unloop()
-
-def timer_cb(watcher, events):
-    watcher.data += 1
-    print("timer.data: {0}".format(watcher.data))
-    print("timer.loop.count(): {0}".format(watcher.loop.count()))
-    print("timer.loop.now(): {0}".format(watcher.loop.now()))
-
-def main():
-    # use the default event loop unless you have special needs
-    # I disable signalfd here cause it seems to be borked on my kernel version
-    loop = pyev.default_loop(pyev.EVFLAG_NOSIGFD)
-    # initialise and start a repeating timer
-    timer = pyev.Timer(0, 2, loop, timer_cb, 0)
-    timer.start()
-    # initialise and start a Signal watcher
-    sig = pyev.Signal(signal.SIGINT, loop, sig_cb)
-    sig.data = [timer, sig] # optional
-    sig.start()
-    # now wait for events to arrive
-    loop.loop()
-
-class Session( object ):
-    pass
-
-class Deamon( object ):
+class ev_chat( object ):
     
-    def __init__( self, ):
-        pass
+    def __init__( self, channel, termin ):
+        
+        self._s = channel
+        self.d = ''
+        self.set_terminator(termin)
+        
+        return
+    
+    def set_terminator( self, terminator ):
+        
+        self.__terminator = terminator
+        
+        return
+    
+    def sendback( self, ):
+        
+        return
+    
+    def work( self, d ):
+        
+        print '>', self.d
+        
+        return
+    
+    def readable( self, watcher, events ):
+        
+        r = self._s.recv(1024)
+        
+        if r == '' :
+            self._s.close()
+            self.io.stop()
+            
+            return
+        
+        self.d += r
+        
+        d = self.d.split(self.__terminator,1)
+        
+        if len(d) == 2 :
+            self.work(d[0])
+            self.d = d[1]
+        else :
+            self.d = d[0]
+        
+        return
+
+class dispatcher( object ):
+    
+    def __init__( self, addr = None ):
+        
+        if addr != None :
+            self.create_socket( socket.AF_INET, socket.SOCK_STREAM )
+            self.bind(addr)
+            self.listen(5)
+            
+        return
     
     def create_socket( self, family, type ):
         self._s = socket.socket( family, type )
@@ -48,33 +69,41 @@ class Deamon( object ):
     def bind( self, address ):
         self._s.bind( address )
     
-    def listen( self, port ):
-        self._s.listen( port )
+    def listen( self, backlog ):
+        self._s.listen( backlog )
     
-    def loop( self, ):
+    def loop( self ):
         
-        loop = pyev.default_loop(pyev.EVFLAG_NOSIGFD)
+        self._loop = pyev.default_loop(pyev.EVFLAG_NOSIGFD)
         
         # "OkOO|O:__init__", kwlist,
         # &fd, &events,
         # &loop, &callback, &data))
         
-        io = pyev.IO(self._s, pyev.EV_READ, loop, self.handle_accept, ())
+        self._listener = pyev.Io( self._s, pyev.EV_READ, self._loop, self.handle_accept, None )
+        self._listener.start()
+        
+        self._loop.loop()
+        
+        return
+    
+    def handle_accept( self, watcher, events ):
+        
+        channel, addr = self._s.accept()
+        
+        s = ev_chat( channel, '\n' )
+        
+        io = pyev.Io( channel, pyev.EV_READ, self._loop, s.readable, self )
+        
+        s.io = io
+        
         io.start()
         
-        loop.loop()
-        
-        return
-    
-    def handle_accept( self ):
-        
-        channel = self._s.accept()
-        
-        io = pyev.IO(self._s, pyev.EV_READ, loop, self.readable, channel)
-        
-    def readable( self ):
-        
-        return
     
 if __name__ == "__main__":
-    main()
+    
+    deamon = dispatcher( ('',7777) )
+    
+    deamon.loop()
+    
+    
