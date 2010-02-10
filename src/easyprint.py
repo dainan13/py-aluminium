@@ -137,8 +137,8 @@ def _colwidth( cols ):
     
     
     cols[1]['__width__'] = max( cols[1].get('__width__'),
-                                len(cols[0]),
                                 sum( [ _colwidth(c)+1  for c in cols[2] ] ) -1,
+                                *[ len(l) for l in cols[0].splitlines()]
                            )
     
     return cols[1]['__width__']
