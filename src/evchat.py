@@ -3,6 +3,22 @@
 import signal
 import pyev
 import socket
+import sys
+import inspect
+
+
+import traceback
+
+
+def safe( old ):
+    
+    def new( *args, **kwargs ):
+        try:
+            return old(*args, **kwargs)
+        except :
+            traceback.print_exc()
+            
+    return new
 
 class ev_chat( object ):
     
@@ -20,7 +36,9 @@ class ev_chat( object ):
         
         return
     
-    def sendback( self, ):
+    def sendback( self, data ):
+        
+        self._s.sendall(data)
         
         return
     
@@ -30,13 +48,15 @@ class ev_chat( object ):
         
         return
     
+    @safe
     def readable( self, watcher, events ):
         
-        r = self._s.recv(1024)
-        
-        if r == '' :
+        try :
+            r = self._s.recv(1024)
+        except :
             self._s.close()
-            self.io.stop()
+            self._io = None
+            self.stop()
             
             return
         
@@ -54,12 +74,16 @@ class ev_chat( object ):
 
 class dispatcher( object ):
     
-    def __init__( self, addr = None ):
+    def __init__( self, addr, work=ev_chat, terminator='\r\n' ):
         
-        if addr != None :
-            self.create_socket( socket.AF_INET, socket.SOCK_STREAM )
-            self.bind(addr)
-            self.listen(5)
+        self.chat = work if inspect.isclass(work) else ev_chat
+        self.bindwork = work if self.chat!=work else None
+        
+        self.create_socket( socket.AF_INET, socket.SOCK_STREAM )
+        self.bind(addr)
+        self.listen(5)
+        
+        self.terminator = terminator
             
         return
     
@@ -80,25 +104,37 @@ class dispatcher( object ):
         # &fd, &events,
         # &loop, &callback, &data))
         
-        self._listener = pyev.Io( self._s, pyev.EV_READ, self._loop, self.handle_accept, None )
+        self._listener = pyev.Io( self._s, pyev.EV_READ, self._loop, self.handle_accept )
         self._listener.start()
+        
+        self._signal = pyev.Signal( signal.SIGINT, self._loop, self.signal )
+        self._signal.start()
         
         self._loop.loop()
         
         return
     
+    @safe
     def handle_accept( self, watcher, events ):
         
         channel, addr = self._s.accept()
         
-        s = ev_chat( channel, '\n' )
+        s = self.chat( channel, self.terminator )
         
-        io = pyev.Io( channel, pyev.EV_READ, self._loop, s.readable, self )
+        io = pyev.Io( channel, pyev.EV_READ, self._loop, s.readable )
         
-        s.io = io
+        s._io = io
+        
+        if self.bindwork != None:
+            self.work = self.bindwork
         
         io.start()
         
+    def signal( self, watcher, events ):
+        
+        watcher.loop.unloop()
+    
+    
     
 if __name__ == "__main__":
     
@@ -106,4 +142,5 @@ if __name__ == "__main__":
     
     deamon.loop()
     
+    print
     
