@@ -1044,7 +1044,8 @@ class Table ( object ) :
         single, keys, cond, condx, offset, limit, order = \
                                                        self._sliceparser( slc )
         
-        n, rst = self._read( cond, condx, keys, limit, offset, order )
+        n, rst = self._read( cond, condx, keys, 
+                             limit if single == False else 1, offset, order )
         
         if single == False :
             return rst
