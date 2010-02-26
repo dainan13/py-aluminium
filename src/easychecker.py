@@ -436,7 +436,10 @@ class Checker(object):
         
         if type(x) != type(0):
             x = len(x)
-            orignalx = str(orignalx) + "'s length"
+            orignalx = ( str(orignalx) \
+                            if type(orignalx) != types.UnicodeType \
+                            else orignalx 
+                       ) + "'s length"
         
         if not op( x, y ) :
             
