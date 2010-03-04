@@ -2,8 +2,28 @@
 # coding: utf-8
 
 import types
+import unicodedata
 
 from pprint import pprint
+
+def safestr( a ):
+    
+    if type(a) == types.UnicodeType :
+        return a
+    
+    return unicode( str(a), 'utf-8', 'replace' ).replace('\ufffd','\u00b7')
+    
+def safelen( a ):
+    
+    if type(a) == types.StringType :
+        return len(a)
+    
+    if type(a) == types.UnicodeType :
+        return sum( [ 2 if unicodedata.east_asian_width(c).startswith('W') else 1 
+                      for c in a ])
+    
+    raise Exception, a
+    
 
 
 def _namescore( name ):
@@ -101,7 +121,7 @@ def _xzip( matrix ):
 def _format( v, cols ):
     
     if cols == None or cols[2] == () :
-        return str(v).splitlines()
+        return safestr(v).splitlines()
         
     if type(v) not in ( types.ListType, types.TupleType ) :
         v = [v,]
@@ -127,9 +147,9 @@ def _width( v, cols ):
         r = sum( [ _width( vi, cols[2][i] ) for i, vi in enumerate(v) ] )
         r += len(v)-1
     else :
-        r = len(v)
+        r = safelen(v)
     
-    cols[1]['__width__'] = max( cols[1].get('__width__',len(cols[0])), r )
+    cols[1]['__width__'] = max( cols[1].get('__width__',safelen(cols[0])), r )
     
     return cols[1]['__width__']
     
@@ -138,7 +158,7 @@ def _colwidth( cols ):
     
     cols[1]['__width__'] = max( cols[1].get('__width__'),
                                 sum( [ _colwidth(c)+1  for c in cols[2] ] ) -1,
-                                *[ len(l) for l in cols[0].splitlines()]
+                                *[ safelen(l) for l in cols[0].splitlines()]
                            )
     
     return cols[1]['__width__']
@@ -162,12 +182,19 @@ def _print( v, cols ):
         if callable(j):
             j = j(v)
         
+        #if j == 'right' :
+        #    return v.rjust(cols[1]['__width__'])
+        #elif j == 'center' :
+        #    return v.center(cols[1]['__width__'])
+        #    
+        #return v.ljust(cols[1]['__width__'])
         if j == 'right' :
-            return v.rjust(cols[1]['__width__'])
+            return ' '*(cols[1]['__width__'] - safelen(v))+v
         elif j == 'center' :
-            return v.center(cols[1]['__width__'])
-            
-        return v.ljust(cols[1]['__width__'])
+            n = (cols[1]['__width__'] - safelen(v))/2
+            m = cols[1]['__width__'] - n
+            return ' '*m+v+' '*n
+        return v + ( ' '*(cols[1]['__width__'] - safelen(v)) )
 
 def eprint( v, cols ):
     

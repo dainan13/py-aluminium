@@ -4,6 +4,7 @@
 import sys
 import operator
 import re
+import types
 
 from simpleparse import generator
 from mx.TextTools import TextTools
@@ -156,15 +157,15 @@ class Checker(object):
         
         childs = [ self._build_exprsub( code, c[3] ) for c in childs ]
         
-        types = [ ['pair',] if type(c) == type(()) else getattr( c, 'type', [] )
-                  for c in childs ]
+        _types = [ ['pair',] if type(c) == type(()) else getattr( c, 'type', [] )
+                   for c in childs ]
         
-        types = [ 'tag' if 'tag' in t else 'pair' if 'pair' in t else None
-                  for t in types ]
+        _types = [ 'tag' if 'tag' in t else 'pair' if 'pair' in t else None
+                   for t in _types ]
 
-        tags = [ c for t, c in zip( types, childs ) if t == 'tag' ]
-        pairs = [ c for t, c in zip( types, childs ) if t == 'pair' ]
-        items = [ c for t, c in zip( types, childs ) if t == None ]
+        tags = [ c for t, c in zip( _types, childs ) if t == 'tag' ]
+        pairs = [ c for t, c in zip( _types, childs ) if t == 'pair' ]
+        items = [ c for t, c in zip( _types, childs ) if t == None ]
         
         return self._makechecker_funchkr( checkername,
                                           checker, tags, pairs, items )
