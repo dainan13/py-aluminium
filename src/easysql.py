@@ -110,6 +110,14 @@ class Expression( Raw ):
         self._raw = '(' + self._raw + '/' + sqlstr(another)+ ')'
         return self
     
+    def rename( self, newname ):
+        
+        e = Expression( self._raw + ' AS `' + newname+'`' )
+        
+        e._colname = newname
+        
+        return e
+    
 expr = Expression
     
     
@@ -215,16 +223,29 @@ class SQLFunction( object ):
         
         raw = self.fname+'('+args+')'
         
-        return Expression(r)
+        return Expression(raw)
 
 func = SQLFunction
 
 
+SUM = SQLFunction('SUM')
+HEX = SQLFunction('HEX')
+COUNT = SQLFunction('COUNT')
+IF = SQLFunction('IF')
 
 
 
+class SQLOption( object ):
+    
+    def __init__( self, optname ):
+        self.optname = optname
+        
+
+OPT_NO_CACHE = SQLOption('SQL_NO_CACHE')
 
 
+
+SQLOptType = SQLOption
 
 
 class NoArg( object ):
@@ -478,18 +499,23 @@ class Tablet( object ) :
     
     def _select( self, connpool,
                  cond=None, condx=[], cols=None, limit=None, offset=None,
-                 order=None ):
+                 order=None, opts=[] ):
         '''
         return ( result rows, result )
         '''
         
         cond = self._buildrow(cond) if cond else None
         
-        sql = self._select_sql( cond, condx, cols, limit, offset, order )
+        sql = self._select_sql( 
+                    cond, condx, cols, limit, offset, order,
+                    nocache = (True if 'SQL_NO_CACHE' in opts else None)
+              )
         
         rst = connpool.read( self.conn_args , sql )
         
         cols = cols or self.defaultcols
+        
+        cols = [ getattr(c,'_colname',c) for c in cols ]
         
         rst = [ dict(zip(cols,row)) for row in rst ]
         
@@ -498,7 +524,7 @@ class Tablet( object ) :
     def _select_sql( self,
                      cond=None, condx=[], cols=None,
                      limit=None, offset=None,
-                     order=None, vset=None ):
+                     order=None, vset=None, nocache=None ):
         '''
         SELECT
             [ALL | DISTINCT | DISTINCTROW ]
@@ -530,7 +556,11 @@ class Tablet( object ) :
             
             'SELECT',
             'DISTINCT' if vset else '',
-            ','.join([ '`%s`' % (str(c),) for c in cols ]),
+            'SQL_NO_CACHE' if nocache else '',
+            ','.join([ '%s' % ( ('`'+str(c)+'`') \
+                                if type(c) != SQLExprType else \
+                                sqlstr(c), \
+                              ) for c in cols ]),
             'FROM `%s`' % self.name ,
             'WHERE' if cond or condx!=[] else '',
                 ' AND '.join( [ '`%s`=%s' % i for i in cond.items() ] ) \
@@ -713,7 +743,10 @@ class Table ( object ) :
         slc = [ s if type(s) in ArrayTypes else [s,] for s in slc ]
         slc = sum( slc, [] )
         
-        cols  = [ s for s in slc if type(s) in types.StringTypes ]
+        opts = set([ s.optname for s in slc if type(s) == SQLOptType ])
+        
+        cols  = [ s for s in slc if ( type(s) in types.StringTypes ) or \
+                                    ( type(s) in (SQLThisType, SQLExprType) ) ]
         cond  = [ s for s in slc if type(s) == types.DictType ]
         condx = [ s for s in slc if type(s) == SQLCondType ]
         
@@ -722,7 +755,7 @@ class Table ( object ) :
         #print 'sql> cond:', cond, condx
         #print 'sql> offset|limit:', offset, limit
         #print 'sql> order:', order
-        return single, cols, cond, condx, offset, limit, order
+        return single, cols, cond, condx, offset, limit, order, opts
     
     @staticmethod
     def _slice( slc, single ):
@@ -860,7 +893,7 @@ class Table ( object ) :
 
     
     def _read( self, cond, condx=[],
-                     cols=None, limit=None, offset=None, order=None ):
+                     cols=None, limit=None, offset=None, order=None, opts=[] ):
         
         if type( cond ) in ArrayTypes :
             cond = dict(sum([ c.items() for c in cond ], []))
@@ -874,7 +907,7 @@ class Table ( object ) :
         for tbl in tbls : # read lazy
             n, r = self._gettablets(tbl)._select( self.connpool,
                                                   cond, condx, cols, tlimit,
-                                                  None, order
+                                                  None, order, opts
                                                 )
             nx += n
             rst = rst + r
@@ -1041,11 +1074,12 @@ class Table ( object ) :
         table[{'ID':1}]
         '''
         
-        single, keys, cond, condx, offset, limit, order = \
+        single, keys, cond, condx, offset, limit, order, opts= \
                                                        self._sliceparser( slc )
         
         n, rst = self._read( cond, condx, keys, 
-                             limit if single == False else 1, offset, order )
+                             limit if single == False else 1, 
+                             offset, order, opts )
         
         if single == False :
             return rst
@@ -1089,7 +1123,7 @@ class Table ( object ) :
         table[{'ID':1}] = {'A':1}
         '''
         
-        single, keys, cond, condx, offset, limit, order = \
+        single, keys, cond, condx, offset, limit, order, opts = \
                                                        self._sliceparser( slc )
         
         if type( cond ) in ArrayTypes :
@@ -1104,7 +1138,7 @@ class Table ( object ) :
             raise TypeError, \
                       ( 'value must at least one to set', value, condk )
             
-        n, x = self._set( row, cond, condx, limit )
+        n, x = self._set( row, cond, condx, limit if single == False else 1 )
         
         if single == True and n == 0 :
             raise NotFoundError, 'not found'
@@ -1171,7 +1205,7 @@ class Table ( object ) :
         del table[{'attr1':1},::]
         '''
         
-        single, cols, cond, condx, offset, limit, order = \
+        single, cols, cond, condx, offset, limit, order, opts = \
                                                        self._sliceparser( slc )
         
         n, x = self._delete( cond, condx, limit )
