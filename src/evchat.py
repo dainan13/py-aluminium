@@ -47,28 +47,42 @@ class ev_chat( object ):
         print '>', self.d
         
         return
+
+    def stop( self ):
+	pass
     
     @safe
     def readable( self, watcher, events ):
-        
+
         try :
             r = self._s.recv(1024)
+
         except :
             self._s.close()
             self._io = None
             self.stop()
             
             return
+
+
+	if '' == r or None is r:
+	    self._s.close()
+            self._io = None
+            self.stop()
+
+	    return
         
         self.d += r
         
-        d = self.d.split(self.__terminator,1)
-        
-        if len(d) == 2 :
-            self.work(d[0])
-            self.d = d[1]
-        else :
-            self.d = d[0]
+        while True:
+            d = self.d.split(self.__terminator,1)
+            
+            if len(d) == 2 :
+                self.work(d[0])
+                self.d = d[1]
+            else :
+                self.d = d[0]
+                break
         
         return
 
