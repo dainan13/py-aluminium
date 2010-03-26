@@ -124,7 +124,7 @@ expr = Expression
 class This( Raw ):
     
     def __init__( self, colname ):
-        super( This, self ).__init__('`'+colname+'`')
+        super( This, self ).__init__('`'+str(colname)+'`')
         
     def __add__ ( self, another ):
         
@@ -684,9 +684,9 @@ class Tablet( object ) :
             'IGNORE' if ignore else '',
             '`%s`' % self.name ,
             'SET',
-                ','.join( [ '`%s`=%s' % i for i in row.items() ] ),
+                ','.join( [ '`%s`=%s' % ( str(k), v ) for k, v in row.items() ] ),
             'WHERE' if cond or condx!=[] else '',
-                ' AND '.join( [ '`%s`=%s' % i for i in cond.items() ] ) \
+                ' AND '.join( [ '`%s`=%s' % ( str(k), v ) for k, v in cond.items() ] ) \
                                                                 if cond else '',
                 'AND' if cond and condx !=[] else '',
                 ' AND '.join( [ i._tosql() for i in condx ] ),
