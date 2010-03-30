@@ -31,13 +31,23 @@ def sqlstr( v ):
     if hasattr(v, '_tosql'):
         return v._tosql()
     
-    if v in types.StringTypes :
+    if type(v) in types.StringTypes :
         return '"'+MySQLdb.escape_string(v)+'"'
     else :
         return "'"+MySQLdb.escape_string(str(v))+"'"
 
 
-
+def sqlstr_typed( v ):
+    
+    if hasattr(v, '_tosql'):
+        return v._tosql()
+    
+    if type(v) in types.StringTypes :
+        return '"'+MySQLdb.escape_string(v)+'"'
+    elif type(v) in ( types.IntType, types.LongType ):
+        return str(v)
+    else :
+        return "'"+MySQLdb.escape_string(str(v))+"'"
 
 
 
@@ -85,6 +95,10 @@ class Condition( Raw ):
         return Expression( 'IF(' + self._raw + ',' \
                                  + sqlstr(vals[0]) + ',' \
                                  + sqlstr(vals[1]) + ')' )
+    
+    def expr( self ):
+        
+        return Expression( '('+self._raw+')')
 
 cond = Condition
 
@@ -110,6 +124,40 @@ class Expression( Raw ):
         self._raw = '(' + self._raw + '/' + sqlstr(another)+ ')'
         return self
     
+    def __eq__( self, another ):
+        
+        print 'type(another)>', type(another)
+        
+        if type(another) != Expression and \
+           another in ( Null, Default ) or type(another) in ( Null, Default ):
+            return Condition( self._raw + ' IS ' + sqlstr(another) )
+        
+        return Condition( self._raw + '=' + sqlstr(another) )
+        
+    def __ne__( self, another ):
+        
+        if type(another) != Expression and \
+           another in ( Null, Default ) or type(another) in ( Null, Default ):
+            return Condition( self._raw + ' IS NOT ' + sqlstr(another) )
+        
+        return Condition( self._raw + '!=' + sqlstr(another) )
+    
+    def __gt__( self, another ):
+        
+        return Condition( self._raw + '>' + sqlstr(another) )
+    
+    def __ge__( self, another ):
+        
+        return Condition( self._raw + '>=' + sqlstr(another) )
+    
+    def __lt__( self, another ):
+        
+        return Condition( self._raw + '<' + sqlstr(another) )
+    
+    def __le__( self, another ):
+        
+        return Condition( self._raw + '<=' + sqlstr(another) )
+    
     def rename( self, newname ):
         
         e = Expression( self._raw + ' AS `' + newname+'`' )
@@ -117,6 +165,52 @@ class Expression( Raw ):
         e._colname = newname
         
         return e
+    
+    def asvar( self, varname ):
+        
+        e = Expression( '(@'+str(varname)+':='+self._raw+')' )
+        
+        return e
+    
+    def __getitem__( self, slc ):
+        
+        if type(slc) != types.SliceType :
+            raise TypeError, 'type error '+str(slc)+' must slicetype'
+        
+        start = slc.start
+        stop = slc.stop
+        
+        if start != None and end == None :
+            if type(start) in ( types.IntType, types.LongType ) :
+                start = str( start+1 )
+            else :
+                start = sqlstr( start ) + 1
+            return Expression( 'SUBSTRING('+self._raw+ (', %s )' % (start,)) )
+        
+        if start == None and end != None :
+            return Expression( 'LEFT('+self._raw+ (', %s )' % (end,)) )
+            
+        raise Exception
+    
+    def lsubby( self, delim, cnt=1 ):
+        
+        if cnt in ( types.IntType , types.LongType ) :
+            cnt = str(cnt)
+        else :
+            cnt = sqlstr(cnt)
+        
+        return Expression( 'SUBSTRING_INDEX(' + \
+                                self._raw + ',\'' + str(delim) + '\',' + cnt + ')' )
+    
+    def rsubby( self, delim, cnt=1 ):
+        
+        if cnt in ( types.IntType , types.LongType ) :
+            cnt = str(cnt)
+        else :
+            cnt = sqlstr(cnt)
+        
+        return Expression( 'SUBSTRING_INDEX(' + \
+                                self._raw + ',\'' + str(delim) + '\',-' + cnt + ')')
     
 expr = Expression
     
@@ -144,14 +238,16 @@ class This( Raw ):
     
     def __eq__( self, another ):
         
-        if another in ( Null, Default ) or type(another) in ( Null, Default ):
+        if type(another) != Expression and \
+           another in ( Null, Default ) or type(another) in ( Null, Default ):
             return Condition( self._raw + ' IS ' + sqlstr(another) )
         
         return Condition( self._raw + '=' + sqlstr(another) )
         
     def __ne__( self, another ):
         
-        if another in ( Null, Default ) or type(another) in ( Null, Default ):
+        if type(another) != Expression and \
+           another in ( Null, Default ) or type(another) in ( Null, Default ):
             return Condition( self._raw + ' IS NOT ' + sqlstr(another) )
         
         return Condition( self._raw + '!=' + sqlstr(another) )
@@ -172,10 +268,37 @@ class This( Raw ):
         
         return Condition( self._raw + '<=' + sqlstr(another) )
         
+    def len( self ):
+        
+        return Expression('LENGTH('+self._raw+')')
+    
+    def __getitem__( self, slc ):
+        
+        if type(slc) != types.SliceType :
+            raise TypeError, 'type error '+str(slc)+' must slicetype'
+        
+        start = slc.start
+        stop = slc.stop
+        
+        if start != None and stop == None :
+            if type(start) in (types.IntType, types.LongType) :
+                start = str( start+1 )
+            else :
+                start = sqlstr( start ) + 1
+            return Expression( 'SUBSTRING('+self._raw+ (', %s )' % (start,)) )
+        
+        if start == None and stop != None :
+            return Expression( 'LEFT('+self._raw+ (', %s )' % (stop,)) )
+            
+        raise Exception, ( 'start stop type error'+str([start,stop]) )
+    
     def startswith( self, another ):
         
         if type(another) == types.StringType :
             raise TypeError, 'this.startswith argment must be string'
+        
+        if another == '' :
+            return Condition('1')
         
         _raw =   self._raw + '>=' + sqlstr(another) \
                + ' AND ' \
@@ -186,7 +309,7 @@ class This( Raw ):
     def endswith( self, another ):
         
         if type(another) == types.StringType :
-            raise TypeError, 'this.startswith argment must be string'
+            raise TypeError, 'this.endswith argment must be string'
         
         _raw = self._raw + " LIKE '%" + another + "'"
         
@@ -195,19 +318,65 @@ class This( Raw ):
     def hassub( self, another ):
         
         if type(another) == types.StringType :
-            raise TypeError, 'this.startswith argment must be string'
+            raise TypeError, 'this hassub argment must be string'
         
         _raw = self._raw + " LIKE '%" + another + "%'"
         
         return Condition(_raw)
     
+    def rename( self, newname ):
+        
+        e = Expression( self._raw + ' AS `' + newname+'`' )
+        
+        e._colname = newname
+        
+        return e
+    
+    def lsubby( self, delim, cnt=1 ):
+        
+        if cnt in ( types.IntType , types.LongType ) :
+            cnt = str(cnt)
+        else :
+            cnt = sqlstr(cnt)
+        
+        return Expression( 'SUBSTRING_INDEX(' + \
+                                self._raw + ',\'' + str(delim) + '\',' + cnt + ')' )
+    
+    def rsubby( self, delim, cnt=1 ):
+        
+        if cnt in ( types.IntType , types.LongType ) :
+            cnt = str(cnt)
+        else :
+            cnt = sqlstr(cnt)
+        
+        return Expression( 'SUBSTRING_INDEX(' + \
+                                self._raw + ',\'' + str(delim) + '\',-' + cnt + ')')
+    
+class ValuedVar(object):
+    def __init__( self, varname, value ):
+        self._varname = varname
+        self._value = value;
+    
+class Var( This ):
+    def __init__( self, varname ):
+        self._varname = varname
+        super( This, self ).__init__('@'+str(varname))
+    
+    def _colname( self ):
+        return self._raw
+    
+    def setvalue( self, value ):
+        return ValuedVar( self._varname, value )
+    
 this = This
+var = Var
 
 
 SQLThisType = This
+SQLVarType  = Var
 SQLCondType = Condition
 SQLExprType = Expression
-
+SQLPreSQLTypes = (ValuedVar,)
 
 
 
@@ -232,6 +401,7 @@ SUM = SQLFunction('SUM')
 HEX = SQLFunction('HEX')
 COUNT = SQLFunction('COUNT')
 IF = SQLFunction('IF')
+MAX = SQLFunction('MAX')
 
 
 
@@ -242,10 +412,25 @@ class SQLOption( object ):
         
 
 OPT_NO_CACHE = SQLOption('SQL_NO_CACHE')
-
+OPT_CALC_FOUND_ROWS = SQLOption('SQL_CALC_FOUND_ROWS')
 
 
 SQLOptType = SQLOption
+
+
+class Group( Raw ):
+    
+    def __init__( self, colname ):
+        
+        if type(colname) == SQLExprType :
+            super( Group, self ).__init__( sqlstr(colname) )
+        elif type(colname) in types.StringTypes :
+            super( Group, self ).__init__( '`'+str(colname)+'`' )
+
+
+group = Group
+
+SQLGroupType = Group
 
 
 class NoArg( object ):
@@ -377,14 +562,18 @@ class SQLConnectionPool( object ):
         
         return affect, lastid, info
     
-    def read( self, conn_args, sql ):
+    def read( self, conn_args, sql, presql=None ):
         
+        if presql != None :
+            print 'pre>', repr(presql)
         print 'sql>', repr(sql)
         
         conn = self._get( conn_args )
         rconn = None
         
         try :
+            if presql != None :
+                self._write( conn, presql )
             r = self._read( conn, sql )
             rconn = conn
         finally :
@@ -499,7 +688,7 @@ class Tablet( object ) :
     
     def _select( self, connpool,
                  cond=None, condx=[], cols=None, limit=None, offset=None,
-                 order=None, opts=[] ):
+                 group=None, order=None, opts=[], uvars=[] ):
         '''
         return ( result rows, result )
         '''
@@ -507,11 +696,14 @@ class Tablet( object ) :
         cond = self._buildrow(cond) if cond else None
         
         sql = self._select_sql( 
-                    cond, condx, cols, limit, offset, order,
-                    nocache = (True if 'SQL_NO_CACHE' in opts else None)
+                    cond, condx, cols, limit, offset, group, order,
+                    nocache = (True if 'SQL_NO_CACHE' in opts else None),
+                    calc_rows = (True if 'SQL_CALC_FOUND_ROWS' in opts else None)
               )
         
-        rst = connpool.read( self.conn_args , sql )
+        presql = self._set_sql( uvars ) if uvars != [] else None
+        
+        rst = connpool.read( self.conn_args , sql, presql )
         
         cols = cols or self.defaultcols
         
@@ -519,12 +711,16 @@ class Tablet( object ) :
         
         rst = [ dict(zip(cols,row)) for row in rst ]
         
-        return len(rst), rst
+        rst2 = connpool.read( self.conn_args , 'SELECT FOUND_ROWS()') \
+                if 'SQL_CALC_FOUND_ROWS' in opts else None
+        
+        return len(rst), rst, rst2, None # the forth argument is uvars' results
     
     def _select_sql( self,
                      cond=None, condx=[], cols=None,
                      limit=None, offset=None,
-                     order=None, vset=None, nocache=None ):
+                     group=None, order=None, vset=None, nocache=None,
+                     calc_rows=None ):
         '''
         SELECT
             [ALL | DISTINCT | DISTINCTROW ]
@@ -556,6 +752,7 @@ class Tablet( object ) :
             
             'SELECT',
             'DISTINCT' if vset else '',
+            'SQL_CALC_FOUND_ROWS' if calc_rows else '',
             'SQL_NO_CACHE' if nocache else '',
             ','.join([ '%s' % ( ('`'+str(c)+'`') \
                                 if type(c) != SQLExprType else \
@@ -567,6 +764,8 @@ class Tablet( object ) :
                                                                 if cond else '',
                 'AND' if cond and condx !=[] else '',
                 ' AND '.join( [ i._tosql() for i in condx ] ),
+            'GROUP BY' if group else '',
+                ','.join( ['%s' % sqlstr(g) for g in group ] ) if group else '',
             'ORDER BY' if order else '',
                 ','.join( [ '`%s` DESC' % o[1:] if o.startswith('~') else \
                             ( '`%s`' % o )
@@ -577,7 +776,27 @@ class Tablet( object ) :
         ] )
         
         return sql
+    
+    def _set_sql( self, uvars ):
+        """
+        SET variable_assignment [, variable_assignment] ...
         
+        variable_assignment:
+              user_var_name = expr
+            | [GLOBAL | SESSION] system_var_name = expr
+            | @@[global. | session.]system_var_name = expr
+        """
+        
+        sql = ' '.join( [
+            
+            'SET',
+            ','.join( [ '@%s=%s' % ( str(v._varname), sqlstr_typed(v._value) ) 
+                        for v in uvars ])
+            
+        ] )
+        
+        return sql
+    
     def _delete( self, connpool, cond=None, condx=[], limit=None ):
         '''
         return ( affect rows, None )
@@ -719,7 +938,7 @@ class Table ( object ) :
     @staticmethod
     def _sliceparser( slc ):
         '''
-        table[ col, ..., cond,... , offset:limit:order ]
+        table[ preset, opts, col, ..., cond,... , offset:limit:order ]
         '''
         
         #print slc
@@ -730,23 +949,30 @@ class Table ( object ) :
         if type(slc[-1]) == types.SliceType :
             single = False
             offset = slc[-1].start
+            offset = [offset, ] if offset != None and offset not in ArrayTypes else offset
             limit = slc[-1].stop
             order = slc[-1].step
-            order = order if order in ArrayTypes or order==None else [order,]
+            order = [] if order == None else ( order if type(order) in ArrayTypes else [order,] )
+            group = [ g for g in order if type(g) == SQLGroupType ]
+            order = [ o for o in order if type(o) != SQLGroupType ]
+            group = None if group == [] else group
+            order = None if order == [] else order
             slc = slc[:-1]
         else :
             single = True
             offset = None
             limit = None
             order = None
+            group = None
         
         slc = [ s if type(s) in ArrayTypes else [s,] for s in slc ]
         slc = sum( slc, [] )
         
         opts = set([ s.optname for s in slc if type(s) == SQLOptType ])
+        pres = [ s for s in slc if type(s) in SQLPreSQLTypes ]
         
         cols  = [ s for s in slc if ( type(s) in types.StringTypes ) or \
-                                    ( type(s) in (SQLThisType, SQLExprType) ) ]
+                                    ( type(s) in (SQLThisType, SQLExprType, SQLVarType) ) ]
         cond  = [ s for s in slc if type(s) == types.DictType ]
         condx = [ s for s in slc if type(s) == SQLCondType ]
         
@@ -755,7 +981,8 @@ class Table ( object ) :
         #print 'sql> cond:', cond, condx
         #print 'sql> offset|limit:', offset, limit
         #print 'sql> order:', order
-        return single, cols, cond, condx, offset, limit, order, opts
+        #print 'sql> group:', group
+        return single, cols, cond, condx, offset, limit, group, order, opts, pres
     
     @staticmethod
     def _slice( slc, single ):
@@ -893,7 +1120,8 @@ class Table ( object ) :
 
     
     def _read( self, cond, condx=[],
-                     cols=None, limit=None, offset=None, order=None, opts=[] ):
+                     cols=None, limit=None, offset=None, 
+                     group=None, order=None, opts=[], pres=[] ):
         
         if type( cond ) in ArrayTypes :
             cond = dict(sum([ c.items() for c in cond ], []))
@@ -904,17 +1132,85 @@ class Table ( object ) :
         tlimit = limit
         rst = []
         nx = 0
+        
+        if offset != None :
+            
+            
+            ioffset = [ o for o in offset if type(o) in ( types.IntType, types.LongType ) ]
+            if len(ioffset) == 0 :
+                ioffset = None
+            elif len(ioffset) != 1 :
+                raise Exception, 'int type offset must only 1 argument :'+repr(ioffset)
+            else :
+                ioffset = ioffset[0]
+            
+            toffset = [ o for o in offset if type(o) == types.DictType ]
+            if len(toffset) == 0 :
+                toffset = None
+            elif len(toffset) != 1 :
+                raise Exception, 'table type offset must only 1 argument :'+repr(toffset)
+            else :
+                toffset = toffset[0]
+                
+                toffset = self._encoderow(toffset)
+                toffset = self._splitter(toffset)
+                
+                toffset = [ i for o in toffset for i,t in enumerate(tbls)
+                                    if o == t ]
+                
+                if len(toffset) != 1 :
+                    raise PrimaryKeyError, 'can\'t find the offset subtable'
+                
+                tbls = tbls[ toffset[0]: ]
+            
+        else :
+            ioffset = None
+            toffset = None
+        
+        #if type(offset) not in ( types.IntType, types.LongType ) :
+        #    
+        #    t_offset = self._splitter( offset )
+        #    t_offset = [ i for o in t_offset for i,t in enumerate(tbls)
+        #                        if o == t ]
+        #    if len(t_offset) != 1 :
+        #        raise PrimaryKeyError, 'can\'t find the offset subtable'
+        #    
+        #    tbls = tbls[ t_offset[0]: ]
+        #    
+        #    offset = None
+            
+        
+        offset = ioffset
+        offset = None if offset == 0 else offset
+        
+        
+        ocalc = ('SQL_CALC_FOUND_ROWS' in opts )
+        
         for tbl in tbls : # read lazy
-            n, r = self._gettablets(tbl)._select( self.connpool,
-                                                  cond, condx, cols, tlimit,
-                                                  None, order, opts
-                                                )
+            
+            if offset != None and not tbl is tbls[-1]:
+                xopts = opts | set(['SQL_CALC_FOUND_ROWS'])
+            else :
+                xopts = opts
+            
+            
+            n, r, f, v = \
+                self._gettablets(tbl)._select( self.connpool,
+                                               cond, condx, cols, tlimit,
+                                               offset, group, order, 
+                                               xopts, pres, # pres = uvars
+                                             )
+            
+            if offset != None :
+                offset = offset - f
+                offset = None if offset <= 0 else offset
+            
             nx += n
             rst = rst + r
             tlimit = ( tlimit - n ) if tlimit != None else tlimit
             if tlimit <= 0 :
                 break
-        
+            
         
         rst = [ self._decoderow(r) for r in rst ]
         
@@ -1074,12 +1370,12 @@ class Table ( object ) :
         table[{'ID':1}]
         '''
         
-        single, keys, cond, condx, offset, limit, order, opts= \
+        single, keys, cond, condx, offset, limit, group, order, opts, pres= \
                                                        self._sliceparser( slc )
         
         n, rst = self._read( cond, condx, keys, 
                              limit if single == False else 1, 
-                             offset, order, opts )
+                             offset, group, order, opts, pres )
         
         if single == False :
             return rst
@@ -1123,7 +1419,7 @@ class Table ( object ) :
         table[{'ID':1}] = {'A':1}
         '''
         
-        single, keys, cond, condx, offset, limit, order, opts = \
+        single, keys, cond, condx, offset, limit, group, order, opts, pres = \
                                                        self._sliceparser( slc )
         
         if type( cond ) in ArrayTypes :
@@ -1205,7 +1501,7 @@ class Table ( object ) :
         del table[{'attr1':1},::]
         '''
         
-        single, cols, cond, condx, offset, limit, order, opts = \
+        single, cols, cond, condx, offset, limit, group, order, opts, pres = \
                                                        self._sliceparser( slc )
         
         n, x = self._delete( cond, condx, limit )
