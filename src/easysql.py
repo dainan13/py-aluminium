@@ -6,6 +6,19 @@ import json
 
 import MySQLdb
 
+import sys
+import logging
+
+esqllog = logging.getLogger("esql")
+esqllog.setLevel( logging.DEBUG )
+esqllog.addHandler( logging.StreamHandler( ) )
+
+
+def setlogger ( newlog ):
+    global esqllog
+    esqllog = newlog
+    return
+
 
 class EasySqlException( Exception ):
     """
@@ -126,7 +139,6 @@ class Expression( Raw ):
     
     def __eq__( self, another ):
         
-        print 'type(another)>', type(another)
         
         if type(another) != Expression and \
            another in ( Null, Default ) or type(another) in ( Null, Default ):
@@ -558,15 +570,13 @@ class SQLConnectionPool( object ):
         
         conn.commit()
         
-        #print 'ali>', affect, lastid, info
-        
         return affect, lastid, info
     
     def read( self, conn_args, sql, presql=None ):
         
         if presql != None :
-            print 'pre>', repr(presql)
-        print 'sql>', repr(sql)
+            esqllog.debug( 'pre> '+ repr(presql) )
+        esqllog.debug( 'sql> '+ repr(sql) )
         
         conn = self._get( conn_args )
         rconn = None
@@ -578,12 +588,14 @@ class SQLConnectionPool( object ):
             rconn = conn
         finally :
             self._put( conn_args, rconn )
+            if rconn == None :
+                esqllog.debug('conn> FAILED'+'%s:%d,%s:%s,%s'%list(conn_args))
         
         return r
     
     def write( self, conn_args, sql ):
         
-        print 'sql>', repr(sql)
+        esqllog.debug( 'sql> '+ repr(sql) )
         
         conn = self._get( conn_args )
         rconn = None
@@ -593,6 +605,8 @@ class SQLConnectionPool( object ):
             rconn = conn
         finally :
             self._put( conn_args, rconn )
+            if rconn == None :
+                esqllog.debug('conn> FAILED'+'%s:%d,%s:%s,%s'%list(conn_args))
             
         return r
     
@@ -941,8 +955,6 @@ class Table ( object ) :
         table[ preset, opts, col, ..., cond,... , offset:limit:order ]
         '''
         
-        #print slc
-        
         if type( slc ) not in ArrayTypes :
             slc = [slc,]
         
@@ -1167,18 +1179,7 @@ class Table ( object ) :
             ioffset = None
             toffset = None
         
-        #if type(offset) not in ( types.IntType, types.LongType ) :
-        #    
-        #    t_offset = self._splitter( offset )
-        #    t_offset = [ i for o in t_offset for i,t in enumerate(tbls)
-        #                        if o == t ]
-        #    if len(t_offset) != 1 :
-        #        raise PrimaryKeyError, 'can\'t find the offset subtable'
-        #    
-        #    tbls = tbls[ t_offset[0]: ]
-        #    
-        #    offset = None
-            
+        
         
         offset = ioffset
         offset = None if offset == 0 else offset
@@ -1709,12 +1710,10 @@ class BOOL_BIN( object ):
     
     @staticmethod
     def en(x):
-        #print 'bb.en>',x
         return (chr(1) if x == True else chr(0),)
         
     @staticmethod
     def de(x):
-        #print 'bb.de>',x
         return (x == chr(1),)
         
 class DATETIME_SQL( object ):
