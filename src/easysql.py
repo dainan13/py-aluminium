@@ -589,7 +589,7 @@ class SQLConnectionPool( object ):
         finally :
             self._put( conn_args, rconn )
             if rconn == None :
-                esqllog.debug('conn> FAILED'+'%s:%d,%s:%s,%s'%list(conn_args))
+                esqllog.debug('conn> FAILED'+'%s:%d,%s:%s,%s' % tuple(conn_args))
         
         return r
     
@@ -606,7 +606,7 @@ class SQLConnectionPool( object ):
         finally :
             self._put( conn_args, rconn )
             if rconn == None :
-                esqllog.debug('conn> FAILED'+'%s:%d,%s:%s,%s'%list(conn_args))
+                esqllog.debug('conn> FAILED'+'%s:%d,%s:%s,%s' % tuple(conn_args))
             
         return r
     
