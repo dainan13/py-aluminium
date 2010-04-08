@@ -75,9 +75,19 @@ class SimpleChatDeamon( asyncore.dispatcher ):
         
         asyncore.dispatcher.__init__( self )
         
-        self.create_socket( socket.AF_INET, socket.SOCK_STREAM )
-        self.bind( addr )
-        self.listen(5)
+        ok = False
+        try:
+            self.create_socket( socket.AF_INET, socket.SOCK_STREAM )
+            self.bind( addr )
+
+            self.listen(5)
+
+            ok = True
+
+        finally:
+            if not ok:
+                self.close()
+            
         
         self.dowork = work
         self.terminator = terminator
