@@ -306,8 +306,11 @@ class This( Raw ):
     
     def startswith( self, another ):
         
-        if type(another) == types.StringType :
+        if type(another) not in types.StringTypes :
             raise TypeError, 'this.startswith argment must be string'
+        
+        if type(another) == types.UnicodeType :
+            another = another.encode('utf-8')
         
         if another == '' :
             return Condition('1')
@@ -320,8 +323,11 @@ class This( Raw ):
         
     def endswith( self, another ):
         
-        if type(another) == types.StringType :
+        if type(another) not in types.StringTypes :
             raise TypeError, 'this.endswith argment must be string'
+        
+        if type(another) == types.UnicodeType :
+            another = another.encode('utf-8')
         
         _raw = self._raw + " LIKE '%" + another + "'"
         
@@ -329,8 +335,11 @@ class This( Raw ):
     
     def hassub( self, another ):
         
-        if type(another) == types.StringType :
+        if type(another) not in types.StringTypes :
             raise TypeError, 'this hassub argment must be string'
+        
+        if type(another) == types.UnicodeType :
+            another = another.encode('utf-8')
         
         _raw = self._raw + " LIKE '%" + another + "%'"
         
