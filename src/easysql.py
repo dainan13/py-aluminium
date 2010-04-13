@@ -9,6 +9,8 @@ import MySQLdb
 import sys
 import logging
 
+import datetime
+
 esqllog = logging.getLogger("esql")
 esqllog.setLevel( logging.DEBUG )
 esqllog.addHandler( logging.StreamHandler( ) )
@@ -43,6 +45,9 @@ def sqlstr( v ):
     
     if hasattr(v, '_tosql'):
         return v._tosql()
+    
+    if type(v) == datetime.datetime :
+        return v.strftime('"%Y-%m-%d %H:%M:%S"')
     
     if type(v) in types.StringTypes :
         return '"'+MySQLdb.escape_string(v)+'"'
@@ -1442,7 +1447,7 @@ class Table ( object ) :
         
         if row == {} :
             raise TypeError, \
-                      ( 'value must at least one to set', value, condk )
+                      ( 'value must at least one to set' )
             
         n, x = self._set( row, cond, condx, limit if single == False else 1 )
         
@@ -1724,6 +1729,16 @@ class BOOL_BIN( object ):
     @staticmethod
     def de(x):
         return (x == chr(1),)
+        
+class BOOL_NULL( object ):
+    
+    @staticmethod
+    def en(x):
+        return (chr(1) if x == True else null,)
+        
+    @staticmethod
+    def de(x):
+        return (x != None,)
         
 class DATETIME_SQL( object ):
     
