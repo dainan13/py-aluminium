@@ -121,7 +121,7 @@ class Table( object ):
     
     def todict( self ):
         
-        return [ dict( zip(self.columns.keys(), r) ) for r in values ]
+        return [ dict( zip(self._c, r) ) for r in self.values ]
     
     def __getitem__( self, rows ):
         '''
