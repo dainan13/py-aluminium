@@ -1033,13 +1033,43 @@ class Table ( object ) :
         self.tablets = tablets
         self.hashtablets = {'':tuple(self.tablets)}
         
-        self.splitter = lambda x : ['',]
+        self._x_splitter = lambda x : [('',None,None),]
         
         return
+    
+    @property
+    def splitter( self ):
+        return self._x_splitter
         
+    @splitter.setter
+    def splitter( self, v ):
+        self._x_splitter = lambda x : [ (r,None,None) for r in v(x) ]
+    
+    @splitter.deleter
+    def splitter( self ):
+        self._x_splitter = lambda x : [('',None,None),]
+        
+    @property
+    def splitter_ex( self ):
+        return self._x_splitter
+        
+    @splitter_ex.setter
+    def splitter_ex( self, v ):
+        self._x_splitter = v
+        
+    @splitter_ex.deleter
+    def splitter_ex( self ):
+        self._x_splitter = lambda x : [('',None,None),]
+    
     def _splitter( self, row ):
         
-        return [ self.hashtablets[h] for h in self.splitter(row) ]
+        return [ self.hashtablets[h]
+                 for h, mrcnd, id in self.splitter(row) ]
+    
+    def _splitter_ex( self, row ):
+        
+        return [ ( self.hashtablets[h], mrcnd, id )
+                 for h, mrcnd, id in self.splitter(row) ]
     
     def _hashtablets( self, hasher ):
         
@@ -1153,7 +1183,7 @@ class Table ( object ) :
             cond = dict(sum([ c.items() for c in cond ], []))
         
         cond = self._encoderow(cond) if cond else cond
-        tbls = self._splitter(cond) # todo : set to all tablets if cond is none
+        tbls = self._splitter_ex(cond) # todo : set to all tablets if cond is none
         
         tlimit = limit
         rst = []
@@ -1179,10 +1209,10 @@ class Table ( object ) :
                 toffset = toffset[0]
                 
                 toffset = self._encoderow(toffset)
-                toffset = self._splitter(toffset)
+                toffset = self._splitter_ex(toffset)
                 
-                toffset = [ i for o in toffset for i,t in enumerate(tbls)
-                                    if o == t ]
+                toffset = [ i for o in toffset for i, t in enumerate(tbls)
+                                    if o[0] == t[0] and o[2] == t[2] ]
                 
                 if len(toffset) != 1 :
                     raise PrimaryKeyError, 'can\'t find the offset subtable'
@@ -1201,13 +1231,15 @@ class Table ( object ) :
         
         ocalc = ('SQL_CALC_FOUND_ROWS' in opts )
         
-        for tbl in tbls : # read lazy
+        for tbl, mrcnd, id in tbls : # read lazy
             
             if offset != None and not tbl is tbls[-1]:
                 xopts = opts | set(['SQL_CALC_FOUND_ROWS'])
             else :
                 xopts = opts
             
+            if mrcnd != None and mrcnd != [] :
+                condx += mrcnd
             
             n, r, f, v = \
                 self._gettablets(tbl)._select( self.connpool,

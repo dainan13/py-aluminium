@@ -165,7 +165,9 @@ class Line(object):
         
         return self.__repr__()
         
-    def __eq__( self ):
+    def __eq__( self, another ):
+        if type(another) != Line :
+            return False
         return self.point == another.point
     
     def __ne__( self, another ):
@@ -396,6 +398,16 @@ class Line(object):
         
         return len( [ n for n in self.nodes if self.point[n]!=None ] )
         
+    def value_and_segid( self, key ):
+        
+        before = [ k for k in self.nodes if k <= key ]+[None,]
+        
+        segid = len(before)
+        
+        before = max( before )
+        
+        return self.point[before], segid
+        
     def tolist( self ):
         
         z = [ (k, v) for k, v in self.point.items() if k != None or v != None ]
@@ -420,7 +432,10 @@ class Line(object):
         
         return [ self.point[n] for n in self.nodes if self.point[n] != None ]
 
-
+    def values_and_segid( self ):
+        
+        return [ ( self.point[n], i+1 ) for i, n in enumerate(self.nodes)
+                 if self.point[n] != None ]
 
 
 
