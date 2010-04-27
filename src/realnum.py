@@ -398,15 +398,6 @@ class Line(object):
         
         return len( [ n for n in self.nodes if self.point[n]!=None ] )
         
-    def value_and_segid( self, key ):
-        
-        before = [ k for k in self.nodes if k <= key ]+[None,]
-        
-        segid = len(before)
-        
-        before = max( before )
-        
-        return self.point[before], segid
         
     def tolist( self ):
         
@@ -431,10 +422,20 @@ class Line(object):
     def values( self ):
         
         return [ self.point[n] for n in self.nodes if self.point[n] != None ]
-
-    def values_and_segid( self ):
+    
+    def get_with_segid( self, key ):
         
-        return [ ( self.point[n], i+1 ) for i, n in enumerate(self.nodes)
+        before = [ k for k in self.nodes if k <= key ]+[None,]
+        
+        segid = len([ 1 for k in before if self.point[k] != None ])
+        
+        before = max( before )
+        
+        return self.point[before], segid if segid != 0 else None
+    
+    def values_and_segids( self ):
+        
+        return [ ( self.point[n], i ) for i, n in enumerate(self.nodes)
                  if self.point[n] != None ]
 
 
