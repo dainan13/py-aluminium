@@ -11,6 +11,8 @@ import logging
 
 import datetime
 
+import time
+
 esqllog = logging.getLogger("esql")
 esqllog.setLevel( logging.DEBUG )
 esqllog.addHandler( logging.StreamHandler( ) )
@@ -595,6 +597,8 @@ class SQLConnectionPool( object ):
         conn = self._get( conn_args )
         rconn = None
         
+        starttime = time.time()
+        
         try :
             if presql != None :
                 self._write( conn, presql )
@@ -602,8 +606,10 @@ class SQLConnectionPool( object ):
             rconn = conn
         finally :
             self._put( conn_args, rconn )
+            endtime = time.time()
             if rconn == None :
-                esqllog.debug('conn> FAILED'+'%s:%d,%s:%s,%s' % tuple(conn_args))
+                esqllog.error('conn> FAILED'+'%s:%d,%s:%s,%s' % tuple(conn_args))
+            esqllog.debug( 'time> %.2f' % ( (endtime - starttime), ) )
         
         return r
     
@@ -614,13 +620,17 @@ class SQLConnectionPool( object ):
         conn = self._get( conn_args )
         rconn = None
         
+        starttime = time.time()
+        
         try :
             r = self._write( conn, sql )
             rconn = conn
         finally :
             self._put( conn_args, rconn )
+            endtime = time.time()
             if rconn == None :
-                esqllog.debug('conn> FAILED'+'%s:%d,%s:%s,%s' % tuple(conn_args))
+                esqllog.error('conn> FAILED'+'%s:%d,%s:%s,%s' % tuple(conn_args))
+            esqllog.debug( 'time> %.2f' % ( (endtime - starttime), ) )
             
         return r
     
@@ -633,7 +643,8 @@ class SQLConnectionPool( object ):
             conn = \
             MySQLdb.Connection(
                 host=conn_args[0], port=conn_args[1], db=conn_args[4],
-                user=conn_args[2], passwd=conn_args[3]
+                user=conn_args[2], passwd=conn_args[3],
+                connect_timeout = 5,
             )
         
         return conn
