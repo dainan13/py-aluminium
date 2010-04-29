@@ -42,6 +42,8 @@ class NotFoundError(EasySqlException):
 class TypeError(EasySqlException, TypeError ):
     pass
 
+class ConnectionError(EasySqlException):
+    pass
 
 def sqlstr( v ):
     
@@ -640,12 +642,15 @@ class SQLConnectionPool( object ):
         
         if x == None :
             
-            conn = \
-            MySQLdb.Connection(
-                host=conn_args[0], port=conn_args[1], db=conn_args[4],
-                user=conn_args[2], passwd=conn_args[3],
-                connect_timeout = 5,
-            )
+            try :
+                conn = \
+                    MySQLdb.Connection(
+                        host=conn_args[0], port=conn_args[1], db=conn_args[4],
+                        user=conn_args[2], passwd=conn_args[3],
+                        connect_timeout = 5,
+                    )
+            except OperationalError, e :
+                raise ConnectionError, e.args
         
         return conn
     
@@ -1046,6 +1051,8 @@ class Table ( object ) :
         
         self._x_splitter = lambda x : [('',None,None),]
         
+        self.retrytimes = 3
+        
         return
     
     @property
@@ -1156,8 +1163,16 @@ class Table ( object ) :
         tblrows = [ ( tbl, [ r for r, t in zip(rows,tbls) if t == tbl ] )
                     for tbl in set(tbls) ]
         
-        rsts = [ self._gettablets(tbl)._insert( self.connpool, rows, ondup )
-                 for tbl, rows in tblrows ]
+        for excpt in ([ConnectionError]*(self.retrytimes-1)+[None,]) :
+            
+            try : 
+                rsts = [ self._gettablets(tbl)._insert( 
+                                            self.connpool, rows, ondup )
+                         for tbl, rows in tblrows ]
+            except excpt as e :
+                continue
+            
+            break
         
         n, lastids = zip(*rsts)
         n = sum(n)
@@ -1177,8 +1192,15 @@ class Table ( object ) :
         tblrows = [ ( tbl, [ r for r, t in zip(rows,tbls) if t == tbl ] )
                     for tbl in set(tbls) ]
         
-        rsts = [ self._gettablets(tbl)._replace( self.connpool, rows )
-                 for tbl, rows in tblrows ]
+        for excpt in ([ConnectionError]*(self.retrytimes-1)+[None,]) :
+            
+            try :
+                rsts = [ self._gettablets(tbl)._replace( self.connpool, rows )
+                         for tbl, rows in tblrows ]
+            except excpt as e :
+                continue
+            
+            break
         
         n, lastids = zip(*rsts)
         n = sum(n)
@@ -1252,12 +1274,19 @@ class Table ( object ) :
             if mrcnd != None and mrcnd != [] :
                 condx += mrcnd
             
-            n, r, f, v = \
-                self._gettablets(tbl)._select( self.connpool,
-                                               cond, condx, cols, tlimit,
-                                               offset, group, order, 
-                                               xopts, pres, # pres = uvars
-                                             )
+            for excpt in ([ConnectionError]*(self.retrytimes-1)+[None,]) :
+                try :
+                    n, r, f, v = \
+                        self._gettablets(tbl)._select( 
+                                                self.connpool,
+                                                cond, condx, cols, tlimit,
+                                                offset, group, order, 
+                                                xopts, pres, # pres = uvars
+                                              )
+                except excpt as e :
+                    continue
+                
+                break
             
             if offset != None :
                 offset = offset - f
@@ -1287,8 +1316,14 @@ class Table ( object ) :
         tlimit = limit
         nx = 0
         for tbl in tbls :
-            n, r = self._gettablets(tbl)._update( self.connpool,
+            for excpt in ([ConnectionError]*(self.retrytimes-1)+[None,]) :
+                try :
+                    n, r = self._gettablets(tbl)._update( self.connpool,
                                                   row, cond, condx, tlimit )
+                except excpt as e :
+                    continue
+                
+                break
             nx += n
             tlimit = ( tlimit - n ) if tlimit != None else tlimit
             if tlimit <= 0 :
@@ -1307,8 +1342,14 @@ class Table ( object ) :
         tlimit = limit
         nx = 0
         for tbl in tbls : # read lazy
-            n, r = self._gettablets(tbl)._delete( self.connpool,
+            for excpt in ([ConnectionError]*(self.retrytimes-1)+[None,]) :
+                try :
+                    n, r = self._gettablets(tbl)._delete( self.connpool,
                                                   cond, condx, tlimit )
+                except excpt as e :
+                    continue
+                
+                break
             nx += n
             tlimit = ( tlimit - n ) if tlimit != None else tlimit
             if tlimit <= 0 :
