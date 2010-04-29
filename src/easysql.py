@@ -631,7 +631,7 @@ class SQLConnectionPool( object ):
             self._put( conn_args, rconn )
             endtime = time.time()
             if rconn == None :
-                esqllog.error('conn> FAILED'+'%s:%d,%s:%s,%s' % tuple(conn_args))
+                esqllog.error('conn> ERROR'+'%s:%d,%s:%s,%s' % tuple(conn_args))
             esqllog.debug( 'time> %.2f' % ( (endtime - starttime), ) )
             
         return r
@@ -650,6 +650,7 @@ class SQLConnectionPool( object ):
                         connect_timeout = 5,
                     )
             except OperationalError, e :
+                esqllog.error('conn> FAILED'+'%s:%d,%s:%s,%s' % tuple(conn_args))
                 raise ConnectionError, e.args
         
         return conn
