@@ -614,7 +614,7 @@ class SQLConnectionPool( object ):
             self._put( conn_args, rconn )
             endtime = time.time()
             if rconn == None :
-                esqllog.error('conn> FAILED'+'%s:%d,%s:%s,%s' % tuple(conn_args))
+                esqllog.error('conn> ERROR'+'%s:%d,%s:%s,%s' % tuple(conn_args))
             esqllog.debug( 'time> %.2f' % ( (endtime - starttime), ) )
         
         return r
