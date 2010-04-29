@@ -653,7 +653,7 @@ class SQLConnectionPool( object ):
                         user=conn_args[2], passwd=conn_args[3],
                         connect_timeout = self.default_timeout,
                     )
-            except OperationalError, e :
+            except MySQLdb.OperationalError, e :
                 esqllog.error('conn> FAILED'+'%s:%d,%s:%s,%s' % tuple(conn_args))
                 self.connectionfailed += 1
                 raise ConnectionError, e.args
