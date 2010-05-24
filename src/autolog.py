@@ -2,6 +2,9 @@
 
 import easydecorator
 import traceback
+import cProfile
+import pstats
+import cStringIO
 import sys
 
 
@@ -70,6 +73,17 @@ def autolog( old, logger, *args, **kwargs ):
         return old(*args, **kwargs)
 
 
+@easydecorator.decorator_builder(1)
+def fastprofile( old, logger, *args, **kwargs ):
+    
+    plog = cStringIO.StringIO()
+    p = cProfile.Profile()
+    
+    try :
+        return p.runcall( old , *args, **kwargs )
+    finally :
+        pstats.Stats(p,stream=plog).strip_dirs().sort_stats(-1).print_stats()
+        logger( plog.getvalue() )
 
 
 
@@ -93,5 +107,22 @@ if __name__ == '__main__':
         
         return
     
+    @fastprofile(pprint)
+    def bar( a, b ):
+        
+        return [ ( ax, bx ) for ax in a for bx in b ]
+    
+    #plog = cStringIO.StringIO()
+    #p = cProfile.Profile()
+    #p.runcall(bar,[1,2,3,4,5,],[6,7,8,9,0])
+    #pstats.Stats(p,stream=plog).strip_dirs().sort_stats(-1).print_stats()
+    #print
+    #print '-= Profiling Result =-'
+    #print plog.getvalue()
+    
+    bar([1,2,3,4,5,],[6,7,8,9,0])
+    
     foo([Exception,TypeError,ValueError,AttributeError])
     foo([Exception,TypeError])
+    
+    
