@@ -193,6 +193,12 @@ class Expression( Raw ):
         
         return e
     
+    def asbinary( self ):
+        
+        e = Expression( 'BINARY' + self._raw )
+        
+        return e
+    
     def __getitem__( self, slc ):
         
         if type(slc) != types.SliceType :
