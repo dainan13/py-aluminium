@@ -438,6 +438,7 @@ HEX = SQLFunction('HEX')
 COUNT = SQLFunction('COUNT')
 IF = SQLFunction('IF')
 MAX = SQLFunction('MAX')
+MIN = SQLFunction('MIN')
 
 
 
