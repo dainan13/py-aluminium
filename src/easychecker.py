@@ -435,7 +435,7 @@ class Checker(object):
         
         orignalx = x
         
-        if type(x) != type(0):
+        if type(x) not in ( types.IntType, types.LongType, types.FloatType ):
             x = len(x)
             orignalx = ( str(orignalx) \
                             if type(orignalx) != types.UnicodeType \
