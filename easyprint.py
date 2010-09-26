@@ -282,38 +282,53 @@ valuem = "<td rowspan=%d, colspan=%d>%s</td>"
 
 def easyhtmltable( data ):
     
-    #y = [ mktable([_x]) for _x in x ]
-    #ks = list(set( k[i+1] for _y in y for k, v in _y for i in range(len(k)) ))
-    
     tbv = mktable( data )
     
     ks = list(set( k for k, pth, v in tbv ) )
     
     ks.sort()
     
-    kcs = [ ( k, sum( 1 for _k in ks if _k[len(k)] == k and _k != k ) ) 
+    kcs = [ ( k, sum( 1 for _k in ks 
+                        if len(_k) > len(k) and _k[:len(k)] == k ) ) 
             for k in ks ]
     
+    #        key end  cols
     kcs = [ ( k, c==0, max(c,1) ) for k, c in kcs ]
     
     colsum = sum( 1 for k, e, c in kcs if e )
     
-    #cols = reduce( lambda x, y : x+[x[-1]+y], c for k, e, c in kcs, [0] )
-    #cols = zip(cols[:-1],cols[1:])
-    
-    #kcs = [ for i, (k, e, c) in kcs ]
-    
     rowmax = max( len(k) for k in ks )
     
-    tbs_k = [ [ (r, c, k) for k, e, c in kcs if len(k) == r ] 
+    print kcs
+    tbs_k = [ [ ( rowmax-len(k)+1 if e else 1 , c, k[-1] ) 
+                for k, e, c in kcs if len(k) == r+1 ] 
               for r in range(rowmax) ]
     
-    
-    tbs_k = [ [ headerm % kx for kx in kcs ] for r in tbs_k ]
+    tbs_k = [ [ headerm % kx for kx in r ] for r in tbs_k ]
     tbs_k = [ "\r\n".join(["<tr>"]+r+["</tr>"]) for r in tbs_k ]
     tbs_k = "\r\n".join(tbs_k)
     
-    tbs_v = [ for i ]
+    print tbs_k
+    
+    prs = set( p for k, p, a in tbv )
+    prs = set( p[:i+1] for p in prs for i in range(len(p)) )
+    
+    print tbv
+    rows = list(prs)
+    rows.sort()
+    
+    prs = [ ( p, sum( 1 for _p in prs 
+                        if len(_p) > len(p) and _p[:len(p)] == p ) )
+            for p in prs ]
+    
+    prs = [ ( p, r==0, max( r, 1 ) ) for p, r in prs ]
+    
+    rows = [ p for p, _p in zip( rows, rows[1:]+[[None]] ) if p != _p[:len(p)] ]
+    rows = [ [ r[i:] for i in range(len(r)) if sum(r[i:]) == 0 ] for r in rows ]
+    
+    print rows
+    
+    tbs_v = [ [ ( k, p, v ) for k, p, v in tbv if p in rs ] for rs in rows ]
     
     return
 
@@ -350,3 +365,11 @@ if __name__ == '__main__' :
     
     print
     print easyformat(d)
+    
+    
+    a2 = [ {'A':'1','B':'2','C':'3'},
+           {'A':'4','B':[{'Ba':'5','Bb':'6'},{'Ba':'7',}]},
+         ]
+         
+    print easyhtmltable(a2)
+    
