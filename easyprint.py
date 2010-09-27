@@ -322,7 +322,8 @@ def easyhtmltable( data ):
                         if len(_p) > len(p) and _p[:len(p)] == p ) )
             for p in prs ]
     
-    prs = [ ( p, r==0, max( r, 1 ) ) for p, r in prs ]
+    #prs = [ ( p, r==0, max( r, 1 ) ) for p, r in prs ]
+    prs = dict( ( p, max( r, 1 ) ) for p, r in prs )
     
     rowg = [ i for i, ( p, _p ) in enumerate( zip( rows, rows[1:]+[[None]] ) ) 
                if p != _p[:len(p)] ]
@@ -330,7 +331,14 @@ def easyhtmltable( data ):
     
     print rows
     
-    tbs_v = [ [ ( k, p, v ) for k, p, v in tbv if p in rs ] for rs in rows ]
+    tbs_v = [ dict( ( k, (prs[p], v) ) for k, p, v in tbv if p in rs ) 
+              for rs in rows ]
+    
+    print tbs_v
+    
+    tbs_v = [ [ vrow.get(k,[1,'']) for k, ep, cols in kcs 
+                if k in vrow or ( len(k) >= len(rs[0]) and ep ) 
+              ] for rs, vrow in zip(rows,tbs_v) ]
         
     print tbs_v
     
