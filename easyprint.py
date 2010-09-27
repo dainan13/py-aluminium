@@ -317,18 +317,22 @@ def easyhtmltable( data ):
     rows = list(prs)
     rows.sort()
     
+    
     prs = [ ( p, sum( 1 for _p in prs 
                         if len(_p) > len(p) and _p[:len(p)] == p ) )
             for p in prs ]
     
     prs = [ ( p, r==0, max( r, 1 ) ) for p, r in prs ]
     
-    rows = [ p for p, _p in zip( rows, rows[1:]+[[None]] ) if p != _p[:len(p)] ]
-    rows = [ [ r[i:] for i in range(len(r)) if sum(r[i:]) == 0 ] for r in rows ]
+    rowg = [ i for i, ( p, _p ) in enumerate( zip( rows, rows[1:]+[[None]] ) ) 
+               if p != _p[:len(p)] ]
+    rows = [ rows[s+1:e+1] for s,e in zip( [-1] + rowg[:-1], rowg ) ]
     
     print rows
     
     tbs_v = [ [ ( k, p, v ) for k, p, v in tbv if p in rs ] for rs in rows ]
+        
+    print tbs_v
     
     return
 
