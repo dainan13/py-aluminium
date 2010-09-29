@@ -336,7 +336,7 @@ def easyhtmltable( data ):
     
     print tbs_v
     
-    tbs_v = [ [ ( vrow.get(k,(1,'')), cols ) for k, ep, cols in kcs 
+    tbs_v = [ [ ( vrow.get(k,(len(rs[-1])-len(k)+1,'')), cols ) for k, ep, cols in kcs 
                 if k in vrow or ( len(k) >= len(rs[0]) and ep and \
                                         all( ( tuple(k[:ik+1]) not in vrow ) 
                                              for ik in range(len(k)) ) )
@@ -383,8 +383,8 @@ if __name__ == '__main__' :
     print easyformat(d)
     print
     
-    a2 = [ {'A':'1','B':'2','C':'3'},
-           {'A':'4','B':[{'Ba':'5','Bb':'6'},{'Ba':'7',}]},
+    a2 = [ {'A':'1','B':'2','C':'3','D':'3.5'},
+           {'A':'4','B':[{'Ba':'5','Bb':'6'},{'Ba':'7',}],'D':'7.5'},
          ]
          
     print easyhtmltable(a2)
