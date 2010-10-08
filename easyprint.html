@@ -1,31 +1,124 @@
 <html>
-<body>
-<table border="1" >
+
+<style type="text/css">
+<!-->
+body {
+	font: normal 11px auto "Trebuchet MS", Verdana, Arial, Helvetica, sans-serif;
+	color: #4f6b72;
+	background: #E6EAE9;
+}
+
+a {
+	color: #c75f3e;
+}
+
+#mytable {
+	padding: 0;
+	margin: 0;
+}
+
+caption {
+	padding: 0 0 5px 0;
+	width: 700px;	 
+	font: italic 11px "Trebuchet MS", Verdana, Arial, Helvetica, sans-serif;
+	text-align: right;
+}
+
+th {
+	font: bold 11px "Trebuchet MS", Verdana, Arial, Helvetica, sans-serif;
+	color: #4f6b72;
+	border-right: 1px solid #C1DAD7;
+	border-bottom: 1px solid #C1DAD7;
+	border-top: 1px solid #C1DAD7;
+	letter-spacing: 2px;
+	text-align: left;
+	padding: 6px 6px 6px 12px;
+	background: #CAE8EA;
+    width: 30px;
+}
+
+th.nobg {
+	border-top: 0;
+	border-left: 0;
+	border-right: 1px solid #C1DAD7;
+	background: none;
+}
+
+td {
+	border-right: 1px solid #C1DAD7;
+	border-bottom: 1px solid #C1DAD7;
+	background: #fff;
+	padding: 6px 6px 6px 12px;
+	color: #4f6b72;
+}
+
+
+td.alt {
+	background: #F5FAFA;
+	color: #797268;
+}
+
+th.spec {
+	border-left: 1px solid #C1DAD7;
+	border-top: 0;
+	background: #fff;
+	font: bold 10px "Trebuchet MS", Verdana, Arial, Helvetica, sans-serif;
+}
+
+th.specalt {
+	border-left: 1px solid #C1DAD7;
+	border-top: 0;
+	background: #f5fafa url(images/bullet2.gif) no-repeat;
+	font: bold 10px "Trebuchet MS", Verdana, Arial, Helvetica, sans-serif;
+	color: #797268;
+}
+-->
+</style>
+
+<body style="margin:0px; padding:0px;">
+<table id="mytable" cellspacing="0" style="margin:0px; padding:0px;" >
 <tbody>
 
 <tr>
-<th rowspan=2, colspan=1>A</th>
-<th rowspan=1, colspan=2>B</th>
-<th rowspan=2, colspan=1>C</th>
+<th rowspan=2, colspan=1, scope="col", abbr="A">A</th>
+<th rowspan=1, colspan=2, scope="col", abbr="B">B</th>
+<th rowspan=2, colspan=1, scope="col", abbr="C">C</th>
+<th rowspan=2, colspan=1, scope="col", abbr="D", style="width: 200px">D</th>
 </tr>
 <tr>
-<th rowspan=1, colspan=1>Ba</th>
-<th rowspan=1, colspan=1>Bb</th>
+<th rowspan=1, colspan=1, scope="col", abbr="Ba">Ba</th>
+<th rowspan=1, colspan=1, scope="col", abbr="Bb">Bb</th>
 </tr>
 <tr>
-<td rowspan=1, colspan=1>1</td>
+<td scope="row", class="spec", rowspan=1, colspan=1>1</td>
 <td rowspan=1, colspan=2>2</td>
 <td rowspan=1, colspan=1>3</td>
+<td rowspan=1, colspan=1 style="height: 100%; _position: relative; margin: 0 auto; padding: 1px 1px 1px 1px;">
+    <div style="width: 35%; height: 100%; background-color: #B1D632; position: relative; display:table;">
+        <div style="_position: absolute; _top: 50%; vertical-align:middle; display:table-cell;">
+            <div style="_position: relative; width: 100%; height: 100%; _top: -50%;">35%</div>
+        </div>
+    </div>
+    <!--<span style="position: absolute; text-align: center; height: 100%; top: 2px; overflow: hidden">35%</span>-->
+</td>
 </tr>
 <tr>
-<td rowspan=2, colspan=1>4</td>
-<td rowspan=1, colspan=1>5</td>
-<td rowspan=1, colspan=1>6</td>
-<td rowspan=2, colspan=1></td>
+<td class="alt", rowspan=2, colspan=1>4</td>
+<td class="alt", rowspan=1, colspan=1>5</td>
+<td class="alt", rowspan=1, colspan=1>6</td>
+<td class="alt", rowspan=2, colspan=1>&nbsp;</td>
+<td class="alt", rowspan=2, colspan=1 style="height: 100%; _position: relative; margin: 0 auto; padding: 1px 1px 1px 1px;">
+    <div style="width: 75%; height: 100%; background-color: #B1D632; position: relative; display:table;">
+        <div style="_position: absolute; _top: 50%; vertical-align:middle; display:table-cell;">
+            <div style="_position: relative; width: 100%; height: 100%; _top: -50%;">75%</div>
+        </div>
+    </div>
+    <!--<span style="position: absolute; text-align: center; height: 100%; top: 2px; overflow: hidden; vertical-align: middle;">75%</span>-->
+</td>
 </tr>
 <tr>
-<td rowspan=1, colspan=1>7</td>
-<td rowspan=1, colspan=1></td>
+<td class="alt", rowspan=1, colspan=1>7</td>
+<td class="alt", rowspan=1, colspan=1>&nbsp;</td>
 </tr>
 
 
