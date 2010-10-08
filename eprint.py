@@ -1,11 +1,32 @@
 
 import types
 
+class Node( object ):
+    
+    def __init__( self, *contains, **styles ):
+        
+        self.contains = contains
+        self.styles = styles
+        
+        return
+        
+    def _print_console_( self ):
+        
+        r = [ n._print_console() if hasattr( n, '_print_console_' )
+                                                else str(n) for n in contains ]
+        
+        return r
+        
+    def _print_html_( self, ):
+        
+        return
+
+
 class EasyPrinter( object ):
     
-    typetrans = {}
+    covert = {}
     
-    def __init__( ):
+    def __init__( self, ):
         
         return
         
@@ -21,16 +42,18 @@ class EasyPrinter( object ):
         
         return
         
-    def _parse_inner( self, data, rk=(), pth=(), strick=False, ):
+    def _parse_inner( self, data, rk=(), pth=(), strick=False, covert={} ):
         
-        ta = type(a)
+        cvrt = covert.get( rk, lambda x : x )
         
-        if ta == types.Intype
+        data = cvrt(data)
         
-        if type(a) == type({}):
-            a = [a]
+        cvrt = covert.get( type(data), None ) or \
+                    self.covert.get( type(data), str )
         
-        if type(a) != type([]):
+        data = cvrt(data)
+        
+        if type(data) not in ( types.ListType, types.Tuple ):
             return [( rk, pth, a ),]
         
         a = [ self._parse_inner( v, tuple(list(rk)+[k]), tuple(list(pth)+[i]) )
