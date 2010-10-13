@@ -76,7 +76,7 @@ class ColorString(object) :
         
         P = self.foreground.zip( self.background, f = lambda x, y : ( x, y ) )
         
-        print self.foreground, self.background, P
+        #print self.foreground, self.background, P
         
         return ''.join( self.colorsign(f,b) + self.s[s:e].encode('utf-8') 
                         for s, e, (f, b) in P )
@@ -90,56 +90,41 @@ class ColorString(object) :
         
         s = self.s.join( a.s for a in iterstr )
         lentable = reduce( lambda x, y: x+[x[-1]+y,x[-1]+y+self.displaylen], 
-                           (a.displaylen for a in iterstr), [0] )
+                           (a.displaylen for a in iterstr), [0] )[:-1]
+        
+        xiterstr = [ aa for a in iterstr for aa in [a,self] ][:-1]
         
         fg = [ realnum.Line( [ ( k+lt if k !=None else None, v ) 
                                for k, v in a.foreground.tolist() ] ) 
-               for lt, a in zip( lentable, iterstr ) ]
-        fg = reduce( lambda x, y: x+y, fg, realnum.Line() )
+               for lt, a in zip( lentable, xiterstr ) ]
+        fg = reduce( lambda x, y: x.merge(y), fg, realnum.Line() )
         
         bg = [ realnum.Line( [ ( k+lt if k !=None else None, v ) 
                                for k, v in a.background.tolist() ] ) 
-               for lt, a in zip( lentable, iterstr ) ]
-        bg = reduce( lambda x, y: x+y, bg, realnum.Line() )
+               for lt, a in zip( lentable, xiterstr ) ]
+        bg = reduce( lambda x, y: x.merge(y), bg, realnum.Line() )
         
-        print fg, bg
+        #print fg, bg
         return ColorString( s, fg=fg, bg=bg )
-
-#print type( ColorString('A')+ColorString('B') )
-a = ColorString('ABCDEFGHIJKLMNOPQRSTUVWSYZ')
-a.fgcolor( 200, e=10 )
-a.bgcolor( 150, s=5, e=15 )
-print a
-
-print ColorString('|',bg=150).join(['A','B','C'])
-
-def displaylength( s, ascode=None ):
-    
-    s = unicode(s) if ascode == None else s.decode(ascode)
-    
-    x = [ i.split('m',1) for i in s.split("\033[") ]
         
-    return sum( 2 if unicodedata.east_asian_width(c).startswith('W') else 1 
-                  for l in zip(x)[1] for c in l if c not in "\r\n\b" )
-    
-def color( s, zone=None, color=None, bgcolor=None, mode="cover" ):
-    """
-    mode => cover, back
-    """
-    
-    x = [ i.split('m',1) for i in self.split("\033[") ]
-    c, s = zip(x)
-    c = [ tuple( int(j) for j in i.split(';') ) for i in c ]
-    l = [ sum( 2 if unicodedata.east_asian_width(c).startswith('W') else 1 
-               for c in l )
-          for l in s ]
-    
-    
-    #if mode == "cover" :
+    def __add__( self, another ):
         
-    
-    return
-    
+        another = ColorString(another) \
+                            if another.__class__ != ColorString else another
+        
+        s = self.s + another.s
+        
+        fg = self.foreground.merge( 
+                realnum.Line( [ ( k+self.displaylen if k !=None else None, v ) 
+                                for k, v in another.foreground.tolist() ] ) 
+             )
+             
+        bg = self.background.merge( 
+                realnum.Line( [ ( k+self.displaylen if k !=None else None, v ) 
+                                for k, v in another.background.tolist() ] ) 
+             )
+        
+        return ColorString( s, fg=fg, bg=bg )
 
 
 
@@ -167,9 +152,12 @@ class Node( object ):
         
         return 1
         
-    def _console_print_( self, w, h, c ):
+    def _console_print_( self, w, h ):
         
-        return [' '*w,]*h
+        #fg = styles.get('color', None)
+        bg = styles.get('background-color', None)
+        
+        return [ ColorString(' '*w, bg=bg ) for i in range(h) ]
         
     def _html_print_( self ):
         
@@ -192,7 +180,8 @@ class Text( Node ):
             return len(a)
         
         if type(a) == types.UnicodeType :
-            return sum( [ 2 if unicodedata.east_asian_width(c).startswith('W') else 1 
+            return sum( [ 2 if unicodedata.east_asian_width(c).startswith('W') \
+                            else 1 
                           for c in a ])
         
     def _console_length_( self ):
@@ -203,37 +192,93 @@ class Text( Node ):
         
         return len( self.text )
         
-    def _console_print_( self, w, h, c ):
+    def _console_print_( self, w, h, styles ):
         
-        return [ l[:w].ljust(w,' ') for l in self.texts[:h] ]
+        styles = styles.copy()
+        styles.update(self.styles)
+        
+        v_alias = styles.get('vertical-align','top')
+        if v_alias = 'top' :
+            r = self.texts[:h] + ['']*max( h - len(self.texts), 0 )
+        elif v_alias = 'bottom' :
+            r = ['']*max( h - len(self.texts), 0 ) + self.texts[:h]
+        elif v_alias = 'middle' :
+            bt = ['']*max( (h - len(self.texts))/2, 0 )
+            bb = ['']*max( h - bt - len(self.texts), 0 )
+            r = bt + self.texts[:h]
             
-    def _html_print_( self ):
+        align = styles.get('align','left')
+        if alias = 'left' :
+            align = lambda s : ljust( s, w, ' ' )
+        elif alias = 'right' :
+            align = lambda s : rjust( s, w, ' ' )
+        elif alias = 'center' :
+            align = lambda s : center( s, w, ' ' )
         
-        return '<br>'.join([ saxutils.escape(l) for l in self.texts ])
+        fg = styles.get('color', None)
+        bg = styles.get('background-color', None)
+        
+        r = [ ColorString( align(l[:w]), fg=fg, bg=bg ) for l in in r ]
+        
+        return r
+        
+    def _html_print_( self, r, c, styles ):
+        
+        r = '<br>'.join([ saxutils.escape(l) for l in self.texts ])
+        
+        return '', '', r
     
 
 class Bar( Node ):
     
-    def __init__( self, number, *contains, **styles ):
+    htmlclass = 'ep_Bar'
+    
+    def __init__( self, number, contain='', **styles ):
         
         self.number = number if number < 1 else 1
-        super( Bar, self ).__init__( *contains, **style )
+        self.contain = AutoNode(contain)
+        super( Bar, self ).__init__( **styles )
         
     def _console_length_( self ):
         
-        return super( Bar, self )._console_length_() + 2
+        return self.contain._console_length_() + 2
         
     def _console_height_( self ):
         
-        return super( Bar, self )._console_height_()
+        return self.contain._console_height_()
         
-    def _print_console_( self, w, h, c ):
+    def _console_print_( self, w, h, styles ):
         
-        return 
+        styles = styles.copy()
+        styles.update(self.styles)
         
-    def _html_print_( self ):
+        r = [ ( ColorString(' ') + l + ColorString(' ') )
+              for l in self.contain._console_print_( w, h, styles ) ]
         
-        return
+        for l in r :
+            
+            l.bgcolor( styles.get('barcolor',237),
+                       s=0,
+                       e=int(l.displaylen*self.number),
+                       mode='back',
+                     ) 
+        
+        return r
+        
+        
+    def _html_print_( self, r, c, styles ):
+        
+        _class, _styles, _to_print = self.contain._html_print_( r, c, styles )
+        
+        if _styles :
+            _styles = 'style="%s"' % (_styles,)
+        
+        r = '<div style="width: %s%%"><div><div%s>' % \
+                (int(self.number*100),_styles,)
+        
+        r = r + _to_print + </div></div></div>
+        
+        return htmlclass, '', r
         
 
 class EasyPrinter( object ):
@@ -280,3 +325,15 @@ class EasyPrinter( object ):
         
         
         return
+        
+        
+if __name__ == '__main__' :
+    
+    a = ColorString('ABCDEFGHIJKLMNOPQRSTUVWSYZ')
+    a.fgcolor( 200, e=10 )
+    a.bgcolor( 150, s=5, e=15 )
+    print a
+
+    print ColorString('|',bg=237).join(['A','B','C'])
+    print ColorString('hello',bg=90)+' world '+ColorString('!',fg=90)
+
