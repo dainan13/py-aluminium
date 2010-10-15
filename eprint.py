@@ -137,10 +137,14 @@ def AutoNode( d ):
 
 class Node( object ):
     
-    def __init__( self, *contains, **styles ):
+    def __init__( self, *contains, nclses=[], styles = {}, nid=None,**_styles ):
         
         self.contains = [ AutoNode(c) for c in contains ]
-        self.styles = styles
+        
+        self.styles = stylescopy()
+        self.styles.update(_styles)
+        self.nclses = nclses
+        self.nid = nid
         
         return
         
@@ -152,16 +156,38 @@ class Node( object ):
         
         return 1
         
-    def _console_print_( self, w, h ):
+    def _find_styles( self, stylesheet ):
         
+        styles = {}
+        
+        for c in self.nclses :
+            styles.update( stylesheet.get(c,{}) )
+        
+        styles.update(self.styles)
+        
+        return styles
+        
+    def _console_print_( self, w, h, stylesheet ):
+        
+        styles = self._find_styles(stylesheet)
         #fg = styles.get('color', None)
         bg = styles.get('background-color', None)
         
         return [ ColorString(' '*w, bg=bg ) for i in range(h) ]
         
-    def _html_print_( self ):
+    def _html_print_( self, pname='div' ):
         
-        return "<div />"
+        st = '' if st == {} else \
+                 ( 'style="' + ';'.join( '%s: %v' self.styles.items() ) + '"' )
+        nid = 'id="%s"' % ( str(nid), ) if self.nid != None else '' 
+        return '<%s %s %s />' % (pname,st,nid)
+        #e = "</%s>" % (pname,)
+        
+    def add_node_cls( self, cls ):
+        
+        self.nclses += [cls]
+        
+        return
 
 
 class Text( Node ):
@@ -222,22 +248,25 @@ class Text( Node ):
         
         return r
         
-    def _html_print_( self, r, c, styles ):
+    def _html_print_( self, pname='div' ):
         
         r = '<br>'.join([ saxutils.escape(l) for l in self.texts ])
         
-        return '', '', r
+        st = '' if st == {} else \
+                 ( 'style="' + ';'.join( '%s: %v' self.styles.items() ) + '"' )
+        nid = 'id="%s"' % ( str(nid), ) if self.nid != None else '' 
+        
+        return '<%s %s %s>%s</%s>' % (pname,st,nid,r,pname)
     
 
 class Bar( Node ):
-    
-    htmlclass = 'ep_Bar'
     
     def __init__( self, number, contain='', **styles ):
         
         self.number = number if number < 1 else 1
         self.contain = AutoNode(contain)
         super( Bar, self ).__init__( **styles )
+        self.add_node_cls('epBar')
         
     def _console_length_( self ):
         
@@ -265,10 +294,9 @@ class Bar( Node ):
         
         return r
         
+    def _html_print_( self, pname='div' ):
         
-    def _html_print_( self, r, c, styles ):
-        
-        _class, _styles, _to_print = self.contain._html_print_( r, c, styles )
+        r = self.contain._html_print_( 'div' )
         
         if _styles :
             _styles = 'style="%s"' % (_styles,)
@@ -278,8 +306,30 @@ class Bar( Node ):
         
         r = r + _to_print + </div></div></div>
         
-        return htmlclass, '', r
+        return self.nid, self.nclses,  , r
         
+        st = '' if st == {} else \
+                 ( 'style="' + ';'.join( '%s: %v' self.styles.items() ) + '"' )
+        nid = 'id="%s"' % ( str(nid), ) if self.nid != None else '' 
+        
+        return """\
+<%s %s %s>
+<div style="width: %s%%">
+<div>
+%s
+</div>
+</div>
+</%s>""" % (pname,st,nid,int(self.number*100),r,pname)
+        
+class Table( Node ):
+    
+    def __init__( self, number, contain='', **styles ):
+        
+        self.number = number if number < 1 else 1
+        self.contain = AutoNode(contain)
+        super( Bar, self ).__init__( **styles )
+        self.add_node_cls('epTable')
+
 
 class EasyPrinter( object ):
     
