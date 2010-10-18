@@ -137,7 +137,8 @@ def AutoNode( d ):
 
 class Node( object ):
     
-    def __init__( self, *contains, nclses=[], styles = {}, nid=None,**_styles ):
+    def __init__( self, nclses=[], styles = {}, nid=None,
+                        *contains, **_styles ):
         
         self.contains = [ AutoNode(c) for c in contains ]
         
@@ -178,7 +179,7 @@ class Node( object ):
     def _html_print_( self, pname='div' ):
         
         st = '' if st == {} else \
-                 ( 'style="' + ';'.join( '%s: %v' self.styles.items() ) + '"' )
+                 ( 'style="' + ';'.join( ('%s: %v' % x) for x in self.styles.items() ) + '"' )
         nid = 'id="%s"' % ( str(nid), ) if self.nid != None else '' 
         return '<%s %s %s />' % (pname,st,nid)
         #e = "</%s>" % (pname,)
@@ -225,27 +226,27 @@ class Text( Node ):
         styles = self._find_styles(stylesheet)
         
         v_alias = styles.get('vertical-align','top')
-        if v_alias = 'top' :
+        if v_alias == 'top' :
             r = self.texts[:h] + ['']*max( h - len(self.texts), 0 )
-        elif v_alias = 'bottom' :
+        elif v_alias == 'bottom' :
             r = ['']*max( h - len(self.texts), 0 ) + self.texts[:h]
-        elif v_alias = 'middle' :
+        elif v_alias == 'middle' :
             bt = ['']*max( (h - len(self.texts))/2, 0 )
             bb = ['']*max( h - bt - len(self.texts), 0 )
             r = bt + self.texts[:h]
             
         align = styles.get('align','left')
-        if alias = 'left' :
+        if alias == 'left' :
             align = lambda s : ljust( s, w, ' ' )
-        elif alias = 'right' :
+        elif alias == 'right' :
             align = lambda s : rjust( s, w, ' ' )
-        elif alias = 'center' :
+        elif alias == 'center' :
             align = lambda s : center( s, w, ' ' )
         
         fg = styles.get('color', None)
         bg = styles.get('background-color', None)
         
-        r = [ ColorString( align(l[:w]), fg=fg, bg=bg ) for l in in r ]
+        r = [ ColorString( align(l[:w]), fg=fg, bg=bg ) for l in r ]
         
         return r
         
@@ -254,7 +255,7 @@ class Text( Node ):
         r = '<br>'.join([ saxutils.escape(l) for l in self.texts ])
         
         st = '' if st == {} else \
-                 ( 'style="' + ';'.join( '%s: %v' self.styles.items() ) + '"' )
+                 ( 'style="' + ';'.join( ('%s: %v' % x) for x in self.styles.items() ) + '"' )
         nid = 'id="%s"' % ( str(nid), ) if self.nid != None else '' 
         
         return '<%s %s %s>%s</%s>' % (pname,st,nid,r,pname)
@@ -300,18 +301,8 @@ class Bar( Node ):
         
         r = self.contain._html_print_( 'div' )
         
-        if _styles :
-            _styles = 'style="%s"' % (_styles,)
-        
-        r = '<div style="width: %s%%"><div><div%s>' % \
-                (int(self.number*100),_styles,)
-        
-        r = r + _to_print + </div></div></div>
-        
-        return self.nid, self.nclses,  , r
-        
         st = '' if st == {} else \
-                 ( 'style="' + ';'.join( '%s: %v' self.styles.items() ) + '"' )
+                 ( 'style="' + ';'.join( ('%s: %v' % x) for x in self.styles.items() ) + '"' )
         nid = 'id="%s"' % ( str(nid), ) if self.nid != None else '' 
         
         return """\
@@ -347,6 +338,15 @@ class Table( Node ):
         return
         
     def _html_print_( self, ):
+        
+        #
+        # +-------+---------------+-------------+
+        # |       |       X       |             |
+        # |   X   +-------+-------+      X      |
+        # |       |   X   |   X   |             |
+        # +-------+-------+-------+-------------+
+        #
+        #
         
         return
 
@@ -397,7 +397,20 @@ class EasyPrinter( object ):
         ks = list(set( k for k, pth, v in tbv ) )
         ks.sort()
         
+        kcs = [ ( k, sum( 1 for _k in ks 
+                            if len(_k) > len(k) and _k[:len(k)] == k ) ) 
+                for k in ks ]
         
+        #        key end  cols
+        kcs = [ ( k, c==0, max(c,1) ) for k, c in kcs ]
+            
+        colsum = sum( 1 for k, e, c in kcs if e )
+        
+        rowmax = max( len(k) for k in ks )
+        
+        tbs_k = [ [ ( rowmax-len(k)+1 if e else 1 , c, k[-1] ) 
+                    for k, e, c in kcs if len(k) == r+1 ] 
+                  for r in range(rowmax) ]
         
         return
         
