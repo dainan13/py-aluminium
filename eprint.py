@@ -218,10 +218,11 @@ class Text( Node ):
         
         return len( self.text )
         
-    def _console_print_( self, w, h, styles ):
+    def _console_print_( self, w, h, stylesheet ):
         
-        styles = styles.copy()
-        styles.update(self.styles)
+        #styles = styles.copy()
+        #styles.update(self.styles)
+        styles = self._find_styles(stylesheet)
         
         v_alias = styles.get('vertical-align','top')
         if v_alias = 'top' :
@@ -276,10 +277,11 @@ class Bar( Node ):
         
         return self.contain._console_height_()
         
-    def _console_print_( self, w, h, styles ):
+    def _console_print_( self, w, h, stylesheet ):
         
-        styles = styles.copy()
-        styles.update(self.styles)
+        #styles = styles.copy()
+        #styles.update(self.styles)
+        styles = self._find_styles(stylesheet)
         
         r = [ ( ColorString(' ') + l + ColorString(' ') )
               for l in self.contain._console_print_( w, h, styles ) ]
@@ -321,14 +323,32 @@ class Bar( Node ):
 </div>
 </%s>""" % (pname,st,nid,int(self.number*100),r,pname)
         
+
 class Table( Node ):
     
-    def __init__( self, number, contain='', **styles ):
+    def __init__( self, contains=[], headers=[], **styles ):
         
         self.number = number if number < 1 else 1
-        self.contain = AutoNode(contain)
+        self.contains = contains
+        self.headers = headers
         super( Bar, self ).__init__( **styles )
         self.add_node_cls('epTable')
+        
+    def _console_length_( self ):
+        
+        return
+        
+    def _console_height_( self ):
+        
+        return
+        
+    def _console_print_( self, w=None, h=None, stylesheet=None ):
+        
+        return
+        
+    def _html_print_( self, ):
+        
+        return
 
 
 class EasyPrinter( object ):
@@ -363,14 +383,19 @@ class EasyPrinter( object ):
         data = cvrt(data)
         
         if type(data) not in ( types.ListType, types.Tuple ):
-            return [( rk, pth, a ),]
+            return [( rk, pth, AutoNode(a) ),]
         
         a = [ self._parse_inner( v, tuple(list(rk)+[k]), tuple(list(pth)+[i]) )
               for i, _a in enumerate(a) for k, v in _a.items() ]
         
         return sum( a, [] )
         
-    def _parse( self, data ):
+    def _parse( self, data, covert={} ):
+        
+        tbv = self._parse_inner( data, covert={} )
+        
+        ks = list(set( k for k, pth, v in tbv ) )
+        ks.sort()
         
         
         
