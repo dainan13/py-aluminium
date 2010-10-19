@@ -13,16 +13,6 @@ import datetime
 
 import time
 
-esqllog = logging.getLogger("esql")
-esqllog.setLevel( logging.DEBUG )
-esqllog.addHandler( logging.StreamHandler( ) )
-
-
-def setlogger ( newlog ):
-    global esqllog
-    esqllog = newlog
-    return
-
 
 class EasySqlException( Exception ):
     """
@@ -603,10 +593,6 @@ class SQLConnectionPool( object ):
     
     def read( self, conn_args, sql, presql=None ):
         
-        if presql != None :
-            esqllog.debug( 'pre> '+ repr(presql) )
-        esqllog.debug( 'sql> '+ repr(sql) )
-        
         conn = self._get( conn_args )
         rconn = None
         
@@ -620,15 +606,14 @@ class SQLConnectionPool( object ):
         finally :
             self._put( conn_args, rconn )
             endtime = time.time()
-            if rconn == None :
-                esqllog.error('conn> ERROR'+'%s:%d,%s:%s,%s' % tuple(conn_args))
-            esqllog.debug( 'time> %.2f' % ( (endtime - starttime), ) )
+            self.mytraceback( tuple(conn_args), 
+                              ';'.join( ( presql, sql ) ) \
+                                                  if presql != None else sql ,
+                              0 if rconn == None else endtime - starttime )
         
         return r
     
     def write( self, conn_args, sql ):
-        
-        esqllog.debug( 'sql> '+ repr(sql) )
         
         conn = self._get( conn_args )
         rconn = None
@@ -641,13 +626,12 @@ class SQLConnectionPool( object ):
         finally :
             self._put( conn_args, rconn )
             endtime = time.time()
-            if rconn == None :
-                esqllog.error('conn> ERROR'+'%s:%d,%s:%s,%s' % tuple(conn_args))
-            esqllog.debug( 'time> %.2f' % ( (endtime - starttime), ) )
+            self.mytraceback( tuple(conn_args), sql, \
+                              0 if rconn == None else endtime - starttime )
             
         return r
     
-    def _get( self, conn_args ):
+    def _get( self, conn_args, sql == None ):
         
         x = self.conns.get( conn_args, None )
         
@@ -661,7 +645,7 @@ class SQLConnectionPool( object ):
                         connect_timeout = self.default_timeout,
                     )
             except MySQLdb.OperationalError, e :
-                esqllog.error('conn> FAILED'+'%s:%d,%s:%s,%s' % tuple(conn_args))
+                self.mytraceback( tuple(conn_args), sql, 0 )
                 self.connectionfailed += 1
                 raise ConnectionError, e.args
         
@@ -675,7 +659,10 @@ class SQLConnectionPool( object ):
             self.conns[conn_args] = None
             
         return
-    
+        
+    def mytraceback( self, conn, sql, time ):
+        
+        return
 
 class Tablet( object ) :
     '''
@@ -1903,8 +1890,8 @@ if __name__ == '__main__' :
     #del t[::{'a':1}]
     #t.removes({'a':1})
     
-    t = maketables( '127.0.0.1', 3306, 'S3ADMIN', 'vll9ver5t@l1',
-                    'HybridS3Admin', 'AdminUser' )[0]
+    t = maketables( '127.0.0.1', 3306, 'user', 'password',
+                    'DBName', 'tablename' )[0]
     
     a =  { 'Account':'admin9',
            'md5Password':'0',
