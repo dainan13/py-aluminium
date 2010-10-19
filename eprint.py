@@ -348,6 +348,8 @@ class Table( Node ):
         #
         #
         
+        collens = [ for ]
+        
         return
 
 
@@ -390,12 +392,31 @@ class EasyPrinter( object ):
         
         return sum( a, [] )
         
-    def _parse( self, data, covert={} ):
+    def _parse( self, data, covert={}, format={} ):
+        '''
+        convert :
         
-        tbv = self._parse_inner( data, covert={} )
+        format :
+        ( A, (A2,A1) ) : None
+        ( C, ) : under(A, )
+        ( D, ) : inner(B, )
+        
+        +---------+---------+
+        |    A    |    B    |
+        +----+----+---------+
+        | A2 | A1 |    D    |
+        +---------+---------+
+        |    C    |         |
+        +---------+---------+
+        
+        '''
+        
+        tbv = self._parse_inner( data, covert=covert )
         
         ks = list(set( k for k, pth, v in tbv ) )
         ks.sort()
+        
+        
         
         kcs = [ ( k, sum( 1 for _k in ks 
                             if len(_k) > len(k) and _k[:len(k)] == k ) ) 
@@ -424,4 +445,7 @@ if __name__ == '__main__' :
 
     print ColorString('|',bg=237).join(['A','B','C'])
     print ColorString('hello',bg=90)+' world '+ColorString('!',fg=90)
+    
+    print u'\u2714'
+    print u'\u28ff'
 
