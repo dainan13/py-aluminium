@@ -631,7 +631,7 @@ class SQLConnectionPool( object ):
             
         return r
     
-    def _get( self, conn_args, sql == None ):
+    def _get( self, conn_args, sql = None ):
         
         x = self.conns.get( conn_args, None )
         
