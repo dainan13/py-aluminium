@@ -322,6 +322,8 @@ class Table( Node ):
         self.number = number if number < 1 else 1
         self.contains = contains
         self.headers = headers
+        self.x_max = max( (x+l) for x, y, l, h, n in contains )
+        self.y_max = max( (y+h) for x, y, l, h, n in contains )
         super( Bar, self ).__init__( **styles )
         self.add_node_cls('epTable')
         
@@ -335,7 +337,58 @@ class Table( Node ):
         
     def _console_print_( self, w=None, h=None, stylesheet=None ):
         
+        styles = self._find_styles(stylesheet)
+        
+        lenmatrix = [ ( x, y, l, h, n._console_length_(), n._console_height_() )
+                      for x, y, l, h, n in self.contains ]
+        
+        directx = [ max( cl for x, y, l, h, cl, ch in lenmatrix if l == 1 and x == _x ) 
+                    for _x in range(self.x_max) ]
+        
+        directy = [ max( ch for x, y, l, h, cl, ch in lenmatrix if h == 1 and y == _y ) 
+                    for _y in range(self.y_max) ]
+        
+        indirectx = [ zip( range(x,x+l), self._adjust( cl-l+1, l, directx[x:x+l] ) )
+                      for x, y, l, h, cl, ch in lenmatrix if l != 1 ]
+        
+        indirecty = [ zip( range(y,y+h), self._adjust( ch, h, directx[y:y+h] ) )
+                      for x, y, l, h, cl, ch in lenmatrix if h != 1 ]
+        
+        indirectx = sum(indirectx)
+        indirecty = sum(indirecty)
+        
+        maxx = [ max([ v for x, v in indirectx if x == _x ] + [directx[x]]) 
+                 for _x in range(self.x_max) ]
+        
+        maxy = [ max([ v for y, v in indirecty if y == _y ] + [directy[y]]) 
+                 for _y in range(self.y_max) ]
+        
+        
+        tp = [ ( x, y, l, h, n._console_print_( sum(maxx[x:x+l]) , 
+                                                sum(maxy[y:y+h]) , 
+                                                stylesheet ) ) 
+               for x, y, l, h, n in self.contains
+             ]
+        
         return
+        
+    @staticmethod
+    def _adjust( d, ds, n ):
+        
+        avg = (d+ds-1) / ds ;
+        
+        m = [ x if x > avg else 0 for x in n ]
+        
+        a = d - sum(m)
+        
+        z = sum( 1 if x == 0 else 0 for x in m )
+        
+        if z == 0 or a < 0 :
+            return n
+        
+        p = [a/z]*(z-1) + [a%z]
+        
+        return [ x if x > avg else (x+p.pop()) for x in n ]
         
     def _html_print_( self, ):
         
@@ -348,7 +401,7 @@ class Table( Node ):
         #
         #
         
-        collens = [ for ]
+
         
         return
 
@@ -416,22 +469,28 @@ class EasyPrinter( object ):
         ks = list(set( k for k, pth, v in tbv ) )
         ks.sort()
         
-        
-        
         kcs = [ ( k, sum( 1 for _k in ks 
                             if len(_k) > len(k) and _k[:len(k)] == k ) ) 
                 for k in ks ]
         
         #        key end  cols
         kcs = [ ( k, c==0, max(c,1) ) for k, c in kcs ]
-            
-        colsum = sum( 1 for k, e, c in kcs if e )
+        
+        colnum = [ ( k, 0 if e else 1 ) for k, e, c in kcs ]
+        colnum = reduce( lambda x, y : x+[x[-1]+y], colnum, [0] )
+        
+        colnum, colsum = colnum[:-1], colnum[-1]
+        #colsum = sum( 1 for k, e, c in kcs if e )
         
         rowmax = max( len(k) for k in ks )
         
-        tbs_k = [ [ ( rowmax-len(k)+1 if e else 1 , c, k[-1] ) 
-                    for k, e, c in kcs if len(k) == r+1 ] 
-                  for r in range(rowmax) ]
+        #tbs_k = [ [ ( rowmax-len(k)+1 if e else 1 , c, k[-1] ) 
+        #            for k, e, c in kcs if len(k) == r+1 ] 
+        #          for r in range(rowmax) ]
+        
+        # x, y, cols, rows, node
+        t = [ ( x, len(k)-1, c, rowmax-len(k)+1, Text(k[-1]) ) 
+              for ( k, e, c ), x in zip( kcs, colnum )  ]
         
         return
         
