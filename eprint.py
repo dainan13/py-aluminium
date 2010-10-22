@@ -142,7 +142,7 @@ class Node( object ):
         
         self.contains = [ AutoNode(c) for c in contains ]
         
-        self.styles = stylescopy()
+        self.styles = styles.copy()
         self.styles.update(_styles)
         self.nclses = nclses
         self.nid = nid
@@ -195,8 +195,9 @@ class Text( Node ):
     
     def __init__( self, text, **styles ):
         
+        super( Text, self ).__init__( **styles )
+        
         self.texts = text.splitlines()
-        super( Text, self ).__init__( **style )
         
         return
         
@@ -213,11 +214,11 @@ class Text( Node ):
         
     def _console_length_( self ):
         
-        return max( [ _onelinelen(l) for l in self.texts ] )
+        return max( [ self._onelinelen(l) for l in self.texts ] )
             
     def _console_height_( self ):
         
-        return len( self.text )
+        return len( self.texts )
         
     def _console_print_( self, w, h, stylesheet ):
         
@@ -225,23 +226,23 @@ class Text( Node ):
         #styles.update(self.styles)
         styles = self._find_styles(stylesheet)
         
-        v_alias = styles.get('vertical-align','top')
-        if v_alias == 'top' :
+        v_align = styles.get('vertical-align','top')
+        if v_align == 'top' :
             r = self.texts[:h] + ['']*max( h - len(self.texts), 0 )
-        elif v_alias == 'bottom' :
+        elif v_align == 'bottom' :
             r = ['']*max( h - len(self.texts), 0 ) + self.texts[:h]
-        elif v_alias == 'middle' :
+        elif v_align == 'middle' :
             bt = ['']*max( (h - len(self.texts))/2, 0 )
             bb = ['']*max( h - bt - len(self.texts), 0 )
             r = bt + self.texts[:h]
             
         align = styles.get('align','left')
-        if alias == 'left' :
-            align = lambda s : ljust( s, w, ' ' )
-        elif alias == 'right' :
-            align = lambda s : rjust( s, w, ' ' )
-        elif alias == 'center' :
-            align = lambda s : center( s, w, ' ' )
+        if align == 'left' :
+            align = lambda s : s.ljust( w, ' ' )
+        elif align == 'right' :
+            align = lambda s : s.rjust( w, ' ' )
+        elif align == 'center' :
+            align = lambda s : s.center( w, ' ' )
         
         fg = styles.get('color', None)
         bg = styles.get('background-color', None)
@@ -265,9 +266,10 @@ class Bar( Node ):
     
     def __init__( self, number, contain='', **styles ):
         
+        super( Bar, self ).__init__( **styles )
+        
         self.number = number if number < 1 else 1
         self.contain = AutoNode(contain)
-        super( Bar, self ).__init__( **styles )
         self.add_node_cls('epBar')
         
     def _console_length_( self ):
@@ -319,12 +321,13 @@ class Table( Node ):
     
     def __init__( self, contains=[], headers=[], **styles ):
         
-        self.number = number if number < 1 else 1
+        #self.number = number if number < 1 else 1
+        super( Table, self ).__init__( **styles )
+        
         self.contains = contains
         self.headers = headers
         self.x_max = max( (x+l) for x, y, l, h, n in contains )
         self.y_max = max( (y+h) for x, y, l, h, n in contains )
-        super( Bar, self ).__init__( **styles )
         self.add_node_cls('epTable')
         
     def _console_length_( self ):
@@ -335,7 +338,7 @@ class Table( Node ):
         
         return
         
-    def _console_print_( self, w=None, h=None, stylesheet=None ):
+    def _console_print_( self, w=None, h=None, stylesheet={} ):
         
         styles = self._find_styles(stylesheet)
         
@@ -354,8 +357,8 @@ class Table( Node ):
         indirecty = [ zip( range(y,y+h), self._adjust( ch, h, directx[y:y+h] ) )
                       for x, y, l, h, cl, ch in lenmatrix if h != 1 ]
         
-        indirectx = sum(indirectx)
-        indirecty = sum(indirecty)
+        indirectx = sum(indirectx,[])
+        indirecty = sum(indirecty,[])
         
         maxx = [ max([ v for x, v in indirectx if x == _x ] + [directx[x]]) 
                  for _x in range(self.x_max) ]
@@ -369,8 +372,29 @@ class Table( Node ):
                                                 stylesheet ) ) 
                for x, y, l, h, n in self.contains
              ]
+            
+        tp = [ [ ( x, y+i, l, h, c[sum(maxy[y:y+i]):][:maxy[i]] ) for i in range(l) ] 
+               for x, y, l, h, c in tp ]
         
-        return
+        tp = sum(tp,[])
+        
+        rows = [ [ ( x, c ) for x, y, l, h, c in tp if y == _y ] for _y in range(self.y_max) ]
+        
+        #print 
+        
+        for row in rows :
+            row.sort( key = lambda r : r[0] )
+            #for l in row :
+            #    print l
+        
+        rows = [ [ c for x, c in row ] for row in rows ]
+        
+        lines = [ ColorString(': ') \
+                    + ColorString(' | ',bg=237).join(l) \
+                    + ColorString(' :') 
+                  for row in rows for l in zip(*row) ]
+        
+        return lines
         
     @staticmethod
     def _adjust( d, ds, n ):
@@ -437,11 +461,11 @@ class EasyPrinter( object ):
         
         data = cvrt(data)
         
-        if type(data) not in ( types.ListType, types.Tuple ):
-            return [( rk, pth, AutoNode(a) ),]
+        if type(data) not in ( types.ListType, types.TupleType ):
+            return [( rk, pth, AutoNode(data) ),]
         
         a = [ self._parse_inner( v, tuple(list(rk)+[k]), tuple(list(pth)+[i]) )
-              for i, _a in enumerate(a) for k, v in _a.items() ]
+              for i, _a in enumerate(data) for k, v in _a.items() ]
         
         return sum( a, [] )
         
@@ -476,7 +500,7 @@ class EasyPrinter( object ):
         #        key end  cols
         kcs = [ ( k, c==0, max(c,1) ) for k, c in kcs ]
         
-        colnum = [ ( k, 0 if e else 1 ) for k, e, c in kcs ]
+        colnum = [ ( 1 if e else 0 ) for k, e, c in kcs ]
         colnum = reduce( lambda x, y : x+[x[-1]+y], colnum, [0] )
         
         colnum, colsum = colnum[:-1], colnum[-1]
@@ -491,6 +515,12 @@ class EasyPrinter( object ):
         # x, y, cols, rows, node
         t = [ ( x, len(k)-1, c, rowmax-len(k)+1, Text(k[-1]) ) 
               for ( k, e, c ), x in zip( kcs, colnum )  ]
+        
+        tbl = Table( contains = t )
+        r = tbl._console_print_()
+        
+        for l in r :
+            print l
         
         return
         
@@ -507,4 +537,17 @@ if __name__ == '__main__' :
     
     print u'\u2714'
     print u'\u28ff'
+    
+    print
+    print
+    print
+    
+    d = [ { 'colA' : 'A.1.alpha\r\nA.1.beta' ,
+            'colB' : 'B.1.alpha\r\nB.1.beta\r\nB.1.gamma\r\nB.1.delta' },
+          { 'colA' : 'A.2.alpha\r\nA.2.beta' ,
+            'colB' : [{'B.2.alpha':'z','B.1':'qew' }] },
+        ]
+    
+    ep = EasyPrinter()
+    ep._parse(d)
 
