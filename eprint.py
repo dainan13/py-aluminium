@@ -338,47 +338,155 @@ class Table( Node ):
         
         return
         
+    @staticmethod
+    def _adjust_span( wholesize, span, nsize, bordersize ):
+        
+        truesize = wholesize - ( span - 1 ) * bordersize
+        
+        divsize = truesize - sum(nsize)
+        
+        if divsize <= 0 :
+            return nsize
+            
+        psize = [divsize/span]*(span-1) + [divsize%span]
+        
+        return [ _p+_n for _p, _n in zip( psize, nsize ) ]
+    
+    @staticmethod
+    def _adjust( contains, segmax, bordersize ):
+        
+        print contains
+        
+        directseg = [ max( size for seg, span, size in contains
+                                if span == 1 and seg == s
+                      ) for s in range(segmax) ]
+        
+        indirectseg = [ zip( range( seg, seg+span ),
+                             Table._adjust_span( size, span, 
+                                        directseg[seg:seg+span], bordersize )
+                        ) for seg, span, size in contains if span != 0 ]
+        
+        indirectseg = sum( indirectseg, [] )
+        
+        return [ max( [ size for seg, size in indirectseg if seg == s ] + \
+                      [directseg[s]] 
+                 ) for s in range(segmax) ]
+    
     def _console_print_( self, w=None, h=None, stylesheet={} ):
+        
+        print 'max>', self.x_max, self.y_max
+        print 'contains>', self.contains
+        
+        #
+        #      2
+        #      |
+        #  0 --+-- 1
+        #      |
+        #      3
+        #
+        #  0000 0001 0010 0011  0100  0101  0110  0111
+        #   0    1     2    3     4     5     6     7
+        #
+        #                               |    |      |
+        #       [x]   [x]  ---   [x]  --+    +--   -+-
+        #
+        #  1000 1001 1010 1011  1100  1101  1110  1111
+        #   8    9    10   11    12    13    14    15
+        #
+        #                         |     |    |      |
+        #  [x]  --+   +--  -+-    |   --+    +--   -+-
+        #         |   |     |     |     |    |      |
+        #
+        
         
         styles = self._find_styles(stylesheet)
         
-        lenmatrix = [ ( x, y, l, h, n._console_length_(), n._console_height_() )
-                      for x, y, l, h, n in self.contains ]
+        #border = styles.get('borderchars',[' ']*11)
+        border = styles.get('borderchars',[ ColorString( hex(i)[2], bg = 237 ) for i in range(16) ] )
+        #border_len = [ ColorString.displaylength() for b in border ]
+        bx = 1 if border[3] else None
+        by = 1 if border[12] else None
         
-        directx = [ max( cl for x, y, l, h, cl, ch in lenmatrix if l == 1 and x == _x ) 
-                    for _x in range(self.x_max) ]
+        maxx = self._adjust( [ ( x, l, n._console_length_() )
+                               for x, y, l, h, n in self.contains ],
+                             self.x_max, bx )
+        maxy = self._adjust( [ ( y, h, n._console_height_() )
+                               for x, y, l, h, n in self.contains ],
+                             self.y_max, by )
         
-        directy = [ max( ch for x, y, l, h, cl, ch in lenmatrix if h == 1 and y == _y ) 
-                    for _y in range(self.y_max) ]
-        
-        indirectx = [ zip( range(x,x+l), self._adjust( cl-l+1, l, directx[x:x+l] ) )
-                      for x, y, l, h, cl, ch in lenmatrix if l != 1 ]
-        
-        indirecty = [ zip( range(y,y+h), self._adjust( ch, h, directx[y:y+h] ) )
-                      for x, y, l, h, cl, ch in lenmatrix if h != 1 ]
-        
-        indirectx = sum(indirectx,[])
-        indirecty = sum(indirecty,[])
-        
-        maxx = [ max([ v for x, v in indirectx if x == _x ] + [directx[x]]) 
-                 for _x in range(self.x_max) ]
-        
-        maxy = [ max([ v for y, v in indirecty if y == _y ] + [directy[y]]) 
-                 for _y in range(self.y_max) ]
-        
-        
-        tp = [ ( x, y, l, h, n._console_print_( sum(maxx[x:x+l]) , 
-                                                sum(maxy[y:y+h]) , 
+        tc = [ ( x, y, l, h, n._console_print_( sum(maxx[x:x+l])+(l-1)*bx , 
+                                                sum(maxy[y:y+h])+(h-1)*by , 
                                                 stylesheet ) ) 
                for x, y, l, h, n in self.contains
              ]
+        
+        #print 'tp', tp
+        
+        
+        #
+        # +------------+---------+   <---------- tb[0]
+        # |            |         |   <-- tp[0]
+        # +------------+---------+   <---------- tb[1]
+        # |                      |   <-- tp[1]
+        # +----------------------+   <---------- tb[2]
+        #
+        
+        tb = [ [ ( x, y+i, c[sum(maxy[y:y+i-1])+i*by:][:by] ) for i in range(1,h) ] 
+               for x, y, l, h, c in tc ]
+        
+        tb = sum(tb,[])
+        
+        tb = dict( ((x,y),v) for x, y, v in tb )
+        
+        #       (3)
+        # (10) ------ (9)
+        #   |          |
+        #   |          | (12)
+        #   |          |
+        #  (6) ------ (7)
+        
+        tbz = [ [ ( x, y, 10 ), ( x+l, y, 9 ), ( x, y+h, 6 ), ( x+l, y+h, 7 ) ] + \
+                [ ( _x, y+i, 12 ) for _x in [x, x+l] for i in range( 1, h ) ] + \
+                [ ( x+i, _y, 3 ) for _y in [y, y+h] for i in range( 1, l ) ]
+                for x, y, l, h, c in tc ]
+        
+        tbz = sum(tbz,[])
+        
+        tbzv = {}
+        
+        for x, y, v in tbz :
+            tbzv[(x,y)] = tbzv.get((x,y),0) & v 
+        
+        tbz = [ ( x, y, v )
+                for ( x, y ), v in tbzv.items() ]
+        
+        tbz = [ [ ( x, v ) for x, y, v in tbz if y == _y ] 
+                for _y in range(self.y_max+1) ]
+        
+        for row in tbz :
+            row.sort( key = lambda r : r[0] )
             
-        tp = [ [ ( x, y+i, l, h, c[sum(maxy[y:y+i]):][:maxy[i]] ) for i in range(l) ] 
-               for x, y, l, h, c in tp ]
+        print tb
+            
+        tb = [ ( [ tb.get( (x,y), [border[3].join( '' for i in range( maxx[x]+1 ) ) ] )[0] 
+                   for x, v in row[:-1]
+                 ],
+                 [ border[v] for x, v in row ],
+               ) for y, row in enumerate(tbz) ]
+        
+        tb = [ sum( ( list(r) for r in zip(zrow[:-1],row) ), [] )+[zrow[-1],] 
+               for row, zrow in tb ]
+        tb = [ [ColorString('').join(row)] for row in tb ]
+        
+        
+        
+        tp = [ [ ( x, y+i, l, h, c[sum(maxy[y:y+i])+i*by:][:maxy[i]] ) for i in range(h) ]
+               for x, y, l, h, c in tc ]
         
         tp = sum(tp,[])
         
-        rows = [ [ ( x, c ) for x, y, l, h, c in tp if y == _y ] for _y in range(self.y_max) ]
+        rows = [ [ ( x, c ) for x, y, l, h, c in tp if y == _y ] 
+                 for _y in range(self.y_max) ]
         
         #print 
         
@@ -387,32 +495,17 @@ class Table( Node ):
             #for l in row :
             #    print l
         
-        rows = [ [ c for x, c in row ] for row in rows ]
+        rows = [ zip(*row)[1] for row in rows ]
         
-        lines = [ ColorString(': ') \
-                    + ColorString(' | ',bg=237).join(l) \
-                    + ColorString(' :') 
-                  for row in rows for l in zip(*row) ]
+        print rows
+        
+        lines = [ [ border[12] + border[12].join(l) + border[12]
+                  for l in zip(*row) ] 
+                for row in rows  ]
+        
+        lines = sum( sum( ( list(r) for r in zip( tb[:-1], lines ) ), [] ), [] ) + tb[-1]
         
         return lines
-        
-    @staticmethod
-    def _adjust( d, ds, n ):
-        
-        avg = (d+ds-1) / ds ;
-        
-        m = [ x if x > avg else 0 for x in n ]
-        
-        a = d - sum(m)
-        
-        z = sum( 1 if x == 0 else 0 for x in m )
-        
-        if z == 0 or a < 0 :
-            return n
-        
-        p = [a/z]*(z-1) + [a%z]
-        
-        return [ x if x > avg else (x+p.pop()) for x in n ]
         
     def _html_print_( self, ):
         
@@ -482,7 +575,7 @@ class EasyPrinter( object ):
         |    A    |    B    |
         +----+----+---------+
         | A2 | A1 |    D    |
-        +---------+---------+
+        +----+----+---------+
         |    C    |         |
         +---------+---------+
         
@@ -513,7 +606,7 @@ class EasyPrinter( object ):
         #          for r in range(rowmax) ]
         
         # x, y, cols, rows, node
-        t = [ ( x, len(k)-1, c, rowmax-len(k)+1, Text(k[-1]) ) 
+        t = [ ( x, len(k)-1, c, rowmax-len(k)+1 if e else 1, Text(k[-1]) ) 
               for ( k, e, c ), x in zip( kcs, colnum )  ]
         
         tbl = Table( contains = t )
@@ -537,7 +630,10 @@ if __name__ == '__main__' :
     
     print u'\u2714'
     print u'\u28ff'
+    print u'\u2423\u2420\u2422'
+    print u'\u204B'
     
+    print 
     print
     print
     print
