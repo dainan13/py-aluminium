@@ -355,8 +355,6 @@ class Table( Node ):
     @staticmethod
     def _adjust( contains, segmax, bordersize ):
         
-        print contains
-        
         directseg = [ max( size for seg, span, size in contains
                                 if span == 1 and seg == s
                       ) for s in range(segmax) ]
@@ -371,6 +369,27 @@ class Table( Node ):
         return [ max( [ size for seg, size in indirectseg if seg == s ] + \
                       [directseg[s]] 
                  ) for s in range(segmax) ]
+    
+    @staticmethod
+    def _reducebykey( f, sequence, initial ):
+        
+        d = {}
+        
+        for k, v in sequence :
+            d[k] = f( d.get(k, initial), v )
+        
+        return d.items()
+    
+    @staticmethod
+    def _zip_and_plain( *seqs ):
+        
+        m = max( len(s) for s in seqs )
+        
+        for i in range(m):
+            for s in seqs :
+                if i < len(s) :
+                    yield s[i]
+            
     
     def _console_print_( self, w=None, h=None, stylesheet={} ):
         
@@ -398,30 +417,32 @@ class Table( Node ):
         #         |   |     |     |     |    |      |
         #
         
-        
         styles = self._find_styles(stylesheet)
         
-        #border = styles.get('borderchars',[' ']*11)
-        border = styles.get('borderchars',[ ColorString( hex(i)[2], bg = 237 ) for i in range(16) ] )
+        #border = styles.get( 'borderchars', [ hex(i)[2] for i in range(16) ] )
+        border = styles.get( 'borderchars', ' xx-x+++x+++|+++' )
+        border_fgc, border_bgc = styles.get( 'bordercolor', (None,None) )
         #border_len = [ ColorString.displaylength() for b in border ]
-        bx = 1 if border[3] else None
-        by = 1 if border[12] else None
+        border_width = 1 if border[3] else 0
+        border_heigth = 1 if border[12] else 0
         
-        maxx = self._adjust( [ ( x, l, n._console_length_() )
-                               for x, y, l, h, n in self.contains ],
-                             self.x_max, bx )
-        maxy = self._adjust( [ ( y, h, n._console_height_() )
-                               for x, y, l, h, n in self.contains ],
-                             self.y_max, by )
+        widths = self._adjust( [ ( x, l, n._console_length_() )
+                                 for x, y, l, h, n in self.contains ],
+                               self.x_max, bx )
+        heigths = self._adjust( [ ( y, h, n._console_height_() )
+                                  for x, y, l, h, n in self.contains ],
+                                self.y_max, by )
         
-        tc = [ ( x, y, l, h, n._console_print_( sum(maxx[x:x+l])+(l-1)*bx , 
-                                                sum(maxy[y:y+h])+(h-1)*by , 
-                                                stylesheet ) ) 
-               for x, y, l, h, n in self.contains
-             ]
+        bcstr = lambda x : ColorString(x, bg = border_bgc, fg = border_fgc )
         
-        #print 'tp', tp
+        cell_width = lambda x, l : sum( widths[x:l] ) + (l-1)*border_width
+        cell_heigth = lambda y, h : sum( heigths[y:y+h] ) + (h-1)*border_heigth
         
+        cells = [ ( x, y, l, h, n._console_print_( cell_width( x, l ), 
+                                                   cell_heigth( y, h ), 
+                                                   stylesheet ) )
+                  for x, y, l, h, n in self.contains
+                ]
         
         #
         # +------------+---------+   <---------- tb[0]
@@ -431,59 +452,52 @@ class Table( Node ):
         # +----------------------+   <---------- tb[2]
         #
         
-        tb = [ [ ( x, y+i, c[sum(maxy[y:y+i-1])+i*by:][:by] ) for i in range(1,h) ] 
-               for x, y, l, h, c in tc ]
-        
-        tb = sum(tb,[])
-        
-        tb = dict( ((x,y),v) for x, y, v in tb )
+        unborder = dict( ( ( x, y+i ), c[cell_heigth(y,i)+1:][:border_heigth] )
+                           for x, y, l, h, c in cells for i in range( 1, h ) )
         
         #       (3)
         # (10) ------ (9)
         #   |          |
         #   |          | (12)
         #   |          |
-        #  (6) ------ (7)
+        #  (6) ------ (5)
         
-        tbz = [ [ ( x, y, 10 ), ( x+l, y, 9 ), ( x, y+h, 6 ), ( x+l, y+h, 7 ) ] + \
-                [ ( _x, y+i, 12 ) for _x in [x, x+l] for i in range( 1, h ) ] + \
-                [ ( x+i, _y, 3 ) for _y in [y, y+h] for i in range( 1, l ) ]
-                for x, y, l, h, c in tc ]
+        dots = [ [ ( (x, y), 10 ), ( (x+l, y), 9 ), 
+                   ( (x, y+h), 6 ), ( (x+l, y+h), 5 ) ] + \
+                 [ ( (_x, y+i), 12 ) for _x in [ x, x+l ] 
+                                     for i in range( 1, h ) ] + \
+                 [ ( (x+i, _y), 3 ) for _y in [ y, y+h ] 
+                                    for i in range( 1, l ) ]
+                 for x, y, l, h, c in cells ]
         
-        tbz = sum(tbz,[])
+        dots = sum( dots, [] )
         
-        tbzv = {}
+        dots = self._reducebykey( lambda x, y : x | y, dots, 0 )
         
-        for x, y, v in tbz :
-            tbzv[(x,y)] = tbzv.get((x,y),0) & v 
-        
-        tbz = [ ( x, y, v )
-                for ( x, y ), v in tbzv.items() ]
-        
-        tbz = [ [ ( x, v ) for x, y, v in tbz if y == _y ] 
+        dots = [ [ ( x, v ) for ( x, y ), v in dots if y == _y ] 
                 for _y in range(self.y_max+1) ]
         
-        for row in tbz :
+        for row in dots :
             row.sort( key = lambda r : r[0] )
             
-        print tb
-            
-        tb = [ ( [ tb.get( (x,y), [border[3].join( '' for i in range( maxx[x]+1 ) ) ] )[0] 
-                   for x, v in row[:-1]
-                 ],
-                 [ border[v] for x, v in row ],
-               ) for y, row in enumerate(tbz) ]
+        grating = [ ( ( unborder.get( ( x, y ), 
+                               [ bcstr( border[3]*maxx[x] ) ]*border_heigth )
+                        for x, v in row[:-1]
+                      ),
+                      ( [bcstr(border[v])]*border_heigth for x, v in row ),
+                    ) for y, row in enumerate(dots)
+                  ]
         
-        tb = [ sum( ( list(r) for r in zip(zrow[:-1],row) ), [] )+[zrow[-1],] 
-               for row, zrow in tb ]
-        tb = [ [ColorString('').join(row)] for row in tb ]
+        grating = [ zip( *sum( self._zip_and_plain( dts, lines ), [] ) )
+                    for lines, dts in grating ]
+        
+        grating = [ [ ColorString('').join(line) for line in row ] 
+                    for row in grating ]
         
         
         
-        tp = [ [ ( x, y+i, l, h, c[sum(maxy[y:y+i])+i*by:][:maxy[i]] ) for i in range(h) ]
-               for x, y, l, h, c in tc ]
-        
-        tp = sum(tp,[])
+        grids = [ ( ( x, y+i ), c[cell_heigth(y,i+1):][:heigths[i]] )
+                  for x, y, l, h, c in tc for i in range(h) ]
         
         rows = [ [ ( x, c ) for x, y, l, h, c in tp if y == _y ] 
                  for _y in range(self.y_max) ]
@@ -496,8 +510,6 @@ class Table( Node ):
             #    print l
         
         rows = [ zip(*row)[1] for row in rows ]
-        
-        print rows
         
         lines = [ [ border[12] + border[12].join(l) + border[12]
                   for l in zip(*row) ] 
