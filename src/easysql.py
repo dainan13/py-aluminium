@@ -1720,7 +1720,7 @@ class Table ( object ) :
             
             tbl = self._splitter_ex( stunt )[0]
             
-            c, sql, positions = sqls[tbl]
+            c, sql, positions = sqls[tbl[0].name]
             
             for pos, d in zip( positions, datas ):
                 lend = pos + len(d)
