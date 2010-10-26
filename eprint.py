@@ -106,7 +106,30 @@ class ColorString(object) :
         
         #print fg, bg
         return ColorString( s, fg=fg, bg=bg )
+    
+    @staticmethod
+    def sum( iterstr ):
         
+        iterstr = [ ColorString(a) if a.__class__ != ColorString else a 
+                    for a in iterstr ]
+        
+        s = ''.join( a.s for a in iterstr )
+        
+        lentable = reduce( lambda x, y: x+[x[-1]+y], 
+                           (a.displaylen for a in iterstr), [0] )[:-1]
+        
+        fg = [ realnum.Line( [ ( k+lt if k !=None else None, v ) 
+                               for k, v in a.foreground.tolist() ] ) 
+               for lt, a in zip( lentable, iterstr ) ]
+        fg = reduce( lambda x, y: x.merge(y), fg, realnum.Line() )
+        
+        bg = [ realnum.Line( [ ( k+lt if k !=None else None, v ) 
+                               for k, v in a.background.tolist() ] ) 
+               for lt, a in zip( lentable, iterstr ) ]
+        bg = reduce( lambda x, y: x.merge(y), bg, realnum.Line() )
+        
+        return ColorString( s, fg=fg, bg=bg )
+    
     def __add__( self, another ):
         
         another = ColorString(another) \
@@ -428,10 +451,10 @@ class Table( Node ):
         
         widths = self._adjust( [ ( x, l, n._console_length_() )
                                  for x, y, l, h, n in self.contains ],
-                               self.x_max, bx )
+                               self.x_max, border_width )
         heigths = self._adjust( [ ( y, h, n._console_height_() )
                                   for x, y, l, h, n in self.contains ],
-                                self.y_max, by )
+                                self.y_max, border_heigth )
         
         bcstr = lambda x : ColorString(x, bg = border_bgc, fg = border_fgc )
         
@@ -479,43 +502,54 @@ class Table( Node ):
         
         for row in dots :
             row.sort( key = lambda r : r[0] )
-            
-        grating = [ ( ( unborder.get( ( x, y ), 
-                               [ bcstr( border[3]*maxx[x] ) ]*border_heigth )
+
+
+        grating = [ ( [ unborder.get( ( x, y ), 
+                               [ bcstr( border[3]*widths[x] ) ]*border_heigth )
                         for x, v in row[:-1]
-                      ),
-                      ( [bcstr(border[v])]*border_heigth for x, v in row ),
+                      ] + [ [''] ],
+                      [ [bcstr(border[v])]*border_heigth for x, v in row ],
                     ) for y, row in enumerate(dots)
                   ]
         
-        grating = [ zip( *sum( self._zip_and_plain( dts, lines ), [] ) )
-                    for lines, dts in grating ]
         
-        grating = [ [ ColorString('').join(line) for line in row ] 
+        
+        grating = [ zip( zip(*dts), zip(*g) ) for g, dts in grating ]
+        
+        print grating
+        
+        grating = [ [ i for r in row for i in zip(*r) ]
+                    for row in grating ]
+        
+        print grating
+        
+        grating = [ [ ColorString.sum(line) for line in row ] 
                     for row in grating ]
         
         
         
-        grids = [ ( ( x, y+i ), c[cell_heigth(y,i+1):][:heigths[i]] )
-                  for x, y, l, h, c in tc for i in range(h) ]
+        grids = [ ( ( x, y+i ), c[:cell_heigth(y,i+1)][-heigths[i]:] )
+                  for x, y, l, h, c in cells for i in range(h) ]
         
-        rows = [ [ ( x, c ) for x, y, l, h, c in tp if y == _y ] 
+        grids = [ [ ( x, c ) for (x, y), c in grids if y == _y ] 
                  for _y in range(self.y_max) ]
         
-        #print 
-        
-        for row in rows :
+        for row in grids :
             row.sort( key = lambda r : r[0] )
-            #for l in row :
-            #    print l
         
-        rows = [ zip(*row)[1] for row in rows ]
+        grids = [ zip(*row)[1] for row in grids ]
         
-        lines = [ [ border[12] + border[12].join(l) + border[12]
+        grids = [ [ bcstr(border[12]) + \
+                    bcstr(border[12]).join(l) + \
+                    bcstr(border[12])
                   for l in zip(*row) ] 
-                for row in rows  ]
+                for row in grids  ]
         
-        lines = sum( sum( ( list(r) for r in zip( tb[:-1], lines ) ), [] ), [] ) + tb[-1]
+        grids = grids + []
+        
+        #lines = sum( sum( ( list(r) for r in zip( tb[:-1], lines ) ), [] ), [] ) + tb[-1]
+        
+        lines = [ l for a, i in zip( grating, grids ) for l in (a+i) ]
         
         return lines
         
