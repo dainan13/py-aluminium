@@ -1731,7 +1731,7 @@ class Table ( object ) :
             
             #print '>>>>>>', p.raw
             
-            n, r = self._read_low( p, c, tbl )
+            n, r = self._read_low( p.raw, c, tbl )
             
             #r = [ self._decoderow(_r) for _r in r ]
             
