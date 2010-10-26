@@ -1321,7 +1321,7 @@ class Table ( object ) :
         for excpt in ([ConnectionError]*(self.retrytimes-1)+[None,]) :
             
             try :
-                n, rst, f, v = tbl._select_low( self.connpool, sql, cols )
+                n, rst = tbl._select_low( self.connpool, sql, cols )
             except excpt as e :
                 continue
             
