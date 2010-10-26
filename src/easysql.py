@@ -1714,7 +1714,7 @@ class Table ( object ) :
         sqls = [ ( tn, tc, s, reduce( lambda x, y : x+[x[-1]+y] , l, [0] )[1:] ) 
                  for tn, tc, s, l in sqls ]
         
-        sqls = dict( ( t, (tc,s,l) ) for t, s, l in sqls )
+        sqls = dict( ( tn, (tc,s,l) ) for tn, tc, s, l in sqls )
         
         def query( datas, stunt = {} ):
             
