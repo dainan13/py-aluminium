@@ -548,7 +548,8 @@ class SQLConnectionPool( object ):
     
     def __init__( self, ):
         
-        self.conns = MultiDimDict()
+        #self.conns = MultiDimDict()
+        self.conns = {}
         
         self._longlink = {True:False, False:True}
         
@@ -597,6 +598,8 @@ class SQLConnectionPool( object ):
     
     def read( self, conn_args, sql, presql=None ):
         
+        conn_args = tuple(conn_args)
+        
         conn = self._get( conn_args, False, sql )
         rconn = None
         
@@ -626,6 +629,8 @@ class SQLConnectionPool( object ):
         return r
     
     def write( self, conn_args, sql ):
+        
+        conn_args = tuple(conn_args)
         
         conn = self._get( conn_args, True, sql )
         rconn = None
