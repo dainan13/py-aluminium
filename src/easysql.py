@@ -764,6 +764,9 @@ class Tablet( object ) :
     def _select_low( self, connpool, sql, cols ):
         
         rst = connpool.read( self.conn_args , sql )
+        
+        print '>>>', rst
+        
         rst = [ dict(zip(cols,row)) for row in rst ] 
         
         return len(rst), rst
@@ -1730,7 +1733,7 @@ class Table ( object ) :
             
             n, r = self._read_low( p, c, tbl )
             
-            r = [ self._decoderow(_r) for _r in r ]
+            #r = [ self._decoderow(_r) for _r in r ]
             
             if multi :
                 return r
