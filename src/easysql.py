@@ -612,7 +612,7 @@ class SQLConnectionPool( object ):
                         self._write( conn, presql )
                     r = self._read( conn, sql )
                     rconn = conn
-                except OperationalError, e :
+                except MySQLdb.OperationalError, e :
                     if e.args[0] == 2006 :
                         conn = self._get( conn_args, False, sql )
                         starttime = time.time()
@@ -643,7 +643,7 @@ class SQLConnectionPool( object ):
                     r = self._write( conn, sql )
                     rconn = conn
                     break
-                except OperationalError, e :
+                except MySQLdb.OperationalError, e :
                     if e.args[0] == 2006 :
                         conn = self._get( conn_args, True, sql )
                         starttime = time.time()
