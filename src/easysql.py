@@ -760,6 +760,13 @@ class Tablet( object ) :
         
         return len(rst), rst, rst2, None # the forth argument is uvars' results
     
+    def _select_low( self, connpool, sql, cols ):
+        
+        rst = connpool.read( self.conn_args , sql, presql )
+        rst = [ dict(zip(cols,row)) for row in rst ] 
+        
+        return len(rst), rst
+    
     def _select_sql( self,
                      cond=None, condx=[], cols=None,
                      limit=None, offset=None,
@@ -1302,7 +1309,32 @@ class Table ( object ) :
         rst = [ self._decoderow(r) for r in rst ]
         
         return nx, rst
+    
+    def _read_low( self, sql, cols, tbls ):
         
+        #tbls = self._splitter_ex( stunt )
+        
+        #rst = []
+        #nx = 0
+        
+        for tbl, mrcnd, id in tbls : # read lazy
+            
+            for excpt in ([ConnectionError]*(self.retrytimes-1)+[None,]) :
+                try :
+                    n, rst, f, v = \
+                        self._gettablets(tbl)._select_low( 
+                                                self.connpool,
+                                                sql
+                                              )
+                except excpt as e :
+                    continue
+                
+                break
+        
+        rst = [ self._decoderow(r) for r in rst ]
+        
+        return n, rst
+    
     def _set( self, row, cond, condx=[], limit = None ):
         
         if type( cond ) in ArrayTypes :
@@ -1328,6 +1360,7 @@ class Table ( object ) :
             tlimit = ( tlimit - n ) if tlimit != None else tlimit
             if tlimit <= 0 :
                 break
+
         
         return nx, None
     
@@ -1638,6 +1671,75 @@ class Table ( object ) :
     def sum( table ):
         
         return Table( sum([ t.tablets for t in table ],[]), self.name )
+    
+    
+    @staticmethod
+    def _asquery_allcolssql( cols ):
+        
+        return ','.join([ '%s' % ( ('`'+str(c)+'`') \
+                            if type(c) != SQLExprType else \
+                            sqlstr(c), \
+                          ) for c in cols ])
+    
+    def asquery( self, sql, cols=None, multi=False ):
+        """
+        e.g.: select %(<defaultcols>)s from %(<tablename>)s where `colC` = HEX( %(datakey)-32s )
+        """
+        
+        tbls = [ ( t.name, t.defaultcols )  for t in self.tablets ]
+        
+        tbls = [ ( n,
+                   cols or t.defaultcols,
+                   { '<tablename>' : '`'+n+'`',
+                     '<defaultcols>' : self._asquery_allcolssql(cols),
+                   },
+                 ) for n, cols in tbls ]
+        
+        sd = [ x.split(')')[0].strip('()') for x in sql.split('%') ]
+        sd = [ ( tn,
+                 tc,
+                 dict( ( x, tk.get(x,"'") ) 
+                       for x in sd ),
+                 dict( ( x, tk.get(x,"%") )
+                       for x in sd ),
+               ) for tn, tc, tk in tbls 
+             ]
+        
+        sqls = [ ( tn, 
+                   tc, 
+                   ( sql % d ), 
+                   [ len(z) for z in ( sql % d2 ).split('%') ] 
+                 ) for tn, tc, d, d2 in sd ]
+               
+        sqls = [ ( tn, tc, s, reduce( lambda x : x+[x[-1]+x] , l, [0] )[1:] ) 
+                 for tn, tc, s, l in sqls ]
+        
+        sqls = dict( ( t, (tc,s,l) ) for t, s, l in sqls )
+        
+        def query( datas, stunt = {} ):
+            
+            tbl = self._splitter_ex( stunt )[0]
+            
+            c, sql, positions = sqls[tbl]
+            
+            for pos, d in zip( positions, datas ):
+                lend = pos + len(d)
+                p[pos:lend] = d
+                p[lend] = "'"
+            
+            n, r = self._read_low( self, p, c, tbls )
+            
+            r = [ self._decoderow(_r) for _r in r ]
+            
+            if multi :
+                return r
+            
+            if n != 1 :
+                raise NotFoundError, 'not found'
+            
+            return r[0]
+        
+        return
 
 
 
