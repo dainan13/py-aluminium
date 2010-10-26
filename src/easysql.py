@@ -1718,9 +1718,9 @@ class Table ( object ) :
         
         def query( datas, stunt = {} ):
             
-            tbl = self._splitter_ex( stunt )[0]
+            tbl = self._gettablets( self._splitter_ex( stunt )[0][0] )
             
-            c, sql, positions = sqls[tbl[0].name]
+            c, sql, positions = sqls[tbl.name]
             
             for pos, d in zip( positions, datas ):
                 lend = pos + len(d)
