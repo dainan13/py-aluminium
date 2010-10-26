@@ -1724,7 +1724,9 @@ class Table ( object ) :
             p = ctypes.create_string_buffer(sql)
             
             for pos, d in zip( positions, datas ):
+                print 1,len(d)
                 d = sqlstr(d)
+                print 2,len(d),d
                 lend = pos + len(d)
                 p[pos:lend] = d
                 #p[lend] = "'"
