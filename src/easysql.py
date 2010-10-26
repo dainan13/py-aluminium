@@ -1731,9 +1731,9 @@ class Table ( object ) :
                 p[pos:lend] = d
                 #p[lend] = "'"
             
-            print '>>>>>>', p.raw
+            #print '>>>>>>', p.raw
             
-            n, r = self._read_low( self, p, c, tbls )
+            n, r = self._read_low( p, c, tbls )
             
             r = [ self._decoderow(_r) for _r in r ]
             
