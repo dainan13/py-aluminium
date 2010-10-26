@@ -1711,7 +1711,7 @@ class Table ( object ) :
                    [ len(z) for z in ( sql % d2 ).split('%') ] 
                  ) for tn, tc, d, d2 in sd ]
                
-        sqls = [ ( tn, tc, s, reduce( lambda x : x+[x[-1]+x] , l, [0] )[1:] ) 
+        sqls = [ ( tn, tc, s, reduce( lambda x, y : x+[x[-1]+y] , l, [0] )[1:] ) 
                  for tn, tc, s, l in sqls ]
         
         sqls = dict( ( t, (tc,s,l) ) for t, s, l in sqls )
