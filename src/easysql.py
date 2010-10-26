@@ -763,7 +763,7 @@ class Tablet( object ) :
     
     def _select_low( self, connpool, sql, cols ):
         
-        rst = connpool.read( self.conn_args , sql, presql )
+        rst = connpool.read( self.conn_args , sql )
         rst = [ dict(zip(cols,row)) for row in rst ] 
         
         return len(rst), rst
