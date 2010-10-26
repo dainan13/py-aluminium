@@ -1739,7 +1739,7 @@ class Table ( object ) :
             
             return r[0]
         
-        return
+        return query
 
 
 
