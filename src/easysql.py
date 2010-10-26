@@ -765,8 +765,6 @@ class Tablet( object ) :
         
         rst = connpool.read( self.conn_args , sql )
         
-        print '>>>', sql, rst
-        
         rst = [ dict(zip(cols,row)) for row in rst ] 
         
         return len(rst), rst
@@ -1724,18 +1722,10 @@ class Table ( object ) :
             p = ctypes.create_string_buffer(sql)
             
             for pos, d in zip( positions, datas ):
-                print 1,len(d)
                 d = sqlstr(d)
-                print 2,len(d),d
-                lend = pos + len(d)
-                p[pos:lend] = d
-                #p[lend] = "'"
-            
-            #print '>>>>>>', p.raw
+                p[pos:pos+len(d)] = d
             
             n, r = self._read_low( p.raw, c, tbl )
-            
-            #r = [ self._decoderow(_r) for _r in r ]
             
             if multi :
                 return r
