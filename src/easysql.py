@@ -661,12 +661,12 @@ class SQLConnectionPool( object ):
     def _get( self, conn_args, wrt, sql = None ):
         
         try :
-            x = self.conns.get( conn_args, self.dq ).get( False ) \
+            conn = self.conns.get( conn_args, self.dq ).get( False ) \
                                             if self._longlink[wrt] else None
         except Queue.Empty, e :
-            x = None
+            conn = None
         
-        if x == None :
+        if conn == None :
             
             try :
                 conn = \
