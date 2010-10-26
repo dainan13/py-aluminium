@@ -765,7 +765,7 @@ class Tablet( object ) :
         
         rst = connpool.read( self.conn_args , sql )
         
-        print '>>>', rst
+        print '>>>', sql, rst
         
         rst = [ dict(zip(cols,row)) for row in rst ] 
         
