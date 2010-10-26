@@ -1311,26 +1311,21 @@ class Table ( object ) :
         
         return nx, rst
     
-    def _read_low( self, sql, cols, tbls ):
+    def _read_low( self, sql, cols, tbl ):
         
         #tbls = self._splitter_ex( stunt )
         
         #rst = []
         #nx = 0
-        
-        for tbl, mrcnd, id in tbls : # read lazy
             
-            for excpt in ([ConnectionError]*(self.retrytimes-1)+[None,]) :
-                try :
-                    n, rst, f, v = \
-                        self._gettablets(tbl)._select_low( 
-                                                self.connpool,
-                                                sql
-                                              )
-                except excpt as e :
-                    continue
-                
-                break
+        for excpt in ([ConnectionError]*(self.retrytimes-1)+[None,]) :
+            
+            try :
+                n, rst, f, v = tbl._select_low( self.connpool, sql )
+            except excpt as e :
+                continue
+            
+            break
         
         rst = [ self._decoderow(r) for r in rst ]
         
@@ -1733,7 +1728,7 @@ class Table ( object ) :
             
             #print '>>>>>>', p.raw
             
-            n, r = self._read_low( p, c, tbls )
+            n, r = self._read_low( p, c, tbl )
             
             r = [ self._decoderow(_r) for _r in r ]
             
