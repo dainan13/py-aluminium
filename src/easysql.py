@@ -1699,7 +1699,7 @@ class Table ( object ) :
         sd = [ x.split(')')[0].strip('()') for x in sql.split('%') ]
         sd = [ ( tn,
                  tc,
-                 dict( ( x, tk.get(x,"'") ) 
+                 dict( ( x, tk.get(x,"") ) 
                        for x in sd ),
                  dict( ( x, tk.get(x,"%") )
                        for x in sd ),
@@ -1726,9 +1726,12 @@ class Table ( object ) :
             p = ctypes.create_string_buffer(sql)
             
             for pos, d in zip( positions, datas ):
+                d = sqlstr(d)
                 lend = pos + len(d)
                 p[pos:lend] = d
-                p[lend] = "'"
+                #p[lend] = "'"
+            
+            print '>>>>>>', p.raw
             
             n, r = self._read_low( self, p, c, tbls )
             
