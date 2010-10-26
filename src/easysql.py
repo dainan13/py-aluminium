@@ -616,7 +616,7 @@ class SQLConnectionPool( object ):
                     else :
                         raise
         finally :
-            self._put( conn_args, rconn )
+            self._put( conn_args, False, rconn )
             endtime = time.time()
             self.mytraceback( tuple(conn_args), 
                               ';'.join( ( presql, sql ) ) \
@@ -645,7 +645,7 @@ class SQLConnectionPool( object ):
                     else :
                         raise
         finally :
-            self._put( conn_args, rconn )
+            self._put( conn_args, True, rconn )
             endtime = time.time()
             self.mytraceback( tuple(conn_args), sql, \
                               0 if rconn == None else endtime - starttime )
