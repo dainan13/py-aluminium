@@ -13,6 +13,7 @@ import datetime
 
 import time
 
+import ctypes
 
 class EasySqlException( Exception ):
     """
@@ -1721,6 +1722,8 @@ class Table ( object ) :
             tbl = self._gettablets( self._splitter_ex( stunt )[0][0] )
             
             c, sql, positions = sqls[tbl.name]
+            
+            p = ctypes.create_string_buffer(sql)
             
             for pos, d in zip( positions, datas ):
                 lend = pos + len(d)
