@@ -14,6 +14,7 @@ import datetime
 import time
 
 import ctypes
+import Queue
 
 class EasySqlException( Exception ):
     """
@@ -553,6 +554,8 @@ class SQLConnectionPool( object ):
         
         self.connectionfailed = 0
         
+        self.dq = Queue.Queue()
+        
         return
     
     def _read( self, conn, sql ):
@@ -651,7 +654,11 @@ class SQLConnectionPool( object ):
     
     def _get( self, conn_args, wrt, sql = None ):
         
-        x = self.conns.get( conn_args, None ) if self._longlink[wrt] else None
+        try :
+            x = self.conns.get( conn_args, self.dq ).get( False ) \
+                                            if self._longlink[wrt] else None
+        except Queue.Empty, e :
+            x = None
         
         if x == None :
             
@@ -671,8 +678,9 @@ class SQLConnectionPool( object ):
     
     def _put( self, conn_args, wrt, conn ):
         
-        if self._longlink[wrt] :
-            self.conns[conn_args] = conn
+        if self._longlink[wrt] and conn != None :
+            self.conns.setdefault( conn_args, Queue.Queue() )
+            self.conns[conn_args].put( conn )
             
         return
         
