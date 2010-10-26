@@ -549,7 +549,7 @@ class SQLConnectionPool( object ):
         
         self.conns = MultiDimDict()
         
-        self._longlink = False
+        self._longlink = {True:False, False:True}
         
         self.connectionfailed = 0
         
@@ -594,16 +594,24 @@ class SQLConnectionPool( object ):
     
     def read( self, conn_args, sql, presql=None ):
         
-        conn = self._get( conn_args )
+        conn = self._get( conn_args, False, sql )
         rconn = None
         
         starttime = time.time()
         
         try :
-            if presql != None :
-                self._write( conn, presql )
-            r = self._read( conn, sql )
-            rconn = conn
+            while(True):
+                try :
+                    if presql != None :
+                        self._write( conn, presql )
+                    r = self._read( conn, sql )
+                    rconn = conn
+                except OperationalError, e :
+                    if e.args[0] == 2006 :
+                        conn = self._get( conn_args, False, sql )
+                        starttime = time.time()
+                    else :
+                        raise
         finally :
             self._put( conn_args, rconn )
             endtime = time.time()
@@ -616,14 +624,23 @@ class SQLConnectionPool( object ):
     
     def write( self, conn_args, sql ):
         
-        conn = self._get( conn_args )
+        conn = self._get( conn_args, True, sql )
         rconn = None
         
         starttime = time.time()
         
         try :
-            r = self._write( conn, sql )
-            rconn = conn
+            while(True):
+                try :
+                    r = self._write( conn, sql )
+                    rconn = conn
+                    break
+                except OperationalError, e :
+                    if e.args[0] == 2006 :
+                        conn = self._get( conn_args, True, sql )
+                        starttime = time.time()
+                    else :
+                        raise
         finally :
             self._put( conn_args, rconn )
             endtime = time.time()
@@ -632,9 +649,9 @@ class SQLConnectionPool( object ):
             
         return r
     
-    def _get( self, conn_args, sql = None ):
+    def _get( self, conn_args, wrt, sql = None ):
         
-        x = self.conns.get( conn_args, None )
+        x = self.conns.get( conn_args, None ) if self._longlink[wrt] else None
         
         if x == None :
             
@@ -652,12 +669,10 @@ class SQLConnectionPool( object ):
         
         return conn
     
-    def _put( self, conn_args, conn ):
+    def _put( self, conn_args, wrt, conn ):
         
-        if self._longlink == True :
+        if self._longlink[wrt] :
             self.conns[conn_args] = conn
-        else :
-            self.conns[conn_args] = None
             
         return
         
