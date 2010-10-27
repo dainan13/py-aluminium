@@ -83,6 +83,10 @@ class ColorString(object) :
         
         #return self.s.encode('utf-8')
         
+    def __repr__( self ):
+        
+        return str(self)
+        
     def join( self, iterstr ):
         
         iterstr = [ ColorString(a) if a.__class__ != ColorString else a 
@@ -370,22 +374,61 @@ class Table( Node ):
         
         if divsize <= 0 :
             return nsize
-            
-        psize = [divsize/span]*(span-1) + [divsize%span]
         
-        return [ _p+_n for _p, _n in zip( psize, nsize ) ]
+        snsize = list(enumerate(nsize))
+        snsize.sort( key = lambda x : x[1] )
+        
+        i = 0
+        while( divsize > 0 ):
+            
+            if i == span-1 :
+                
+                d = divsize / span
+                snsize = [ ( n, p+d ) for n, p in snsize ]
+                z = divsize % span
+                snsize[:z] = [ ( n, p+1 ) for n, p in snsize[:z] ]
+                
+                divsize = 0
+                    
+            elif snsize[i][1] < snsize[i+1][1] :
+                
+                d = snsize[i+1][1] - snsize[i][1]
+                s = d*(i+1)
+                
+                if divsize >= s :
+                    
+                    snsize[:i+1] = [ ( n, p+d ) for n, p in snsize[:i+1] ]
+                    divsize -= s
+                    
+                else :
+                    
+                    d = divsize / (i+1)
+                    snsize[:i+1] = [ ( n, p+d ) for n, p in snsize[:i+1] ]
+                    z = divsize % (i+1)
+                    snsize[:z] = [ ( n, p+1 ) for n, p in snsize[:z] ]
+                
+                    divsize = 0
+                
+            else :
+                i += 1
+        
+        snsize.sort( key = lambda x : x[0] )
+        
+        return zip(*snsize)[1]
     
     @staticmethod
     def _adjust( contains, segmax, bordersize ):
         
-        directseg = [ max( size for seg, span, size in contains
-                                if span == 1 and seg == s
-                      ) for s in range(segmax) ]
+        directseg = [ [ size for seg, span, size in contains
+                             if span == 1 and seg == s
+                      ] for s in range(segmax) ]
+        
+        directseg = [ max( s or [1] ) for s in directseg ]
         
         indirectseg = [ zip( range( seg, seg+span ),
                              Table._adjust_span( size, span, 
                                         directseg[seg:seg+span], bordersize )
-                        ) for seg, span, size in contains if span != 0 ]
+                        ) for seg, span, size in contains if span != 1 ]
         
         indirectseg = sum( indirectseg, [] )
         
@@ -403,21 +446,7 @@ class Table( Node ):
         
         return d.items()
     
-    @staticmethod
-    def _zip_and_plain( *seqs ):
-        
-        m = max( len(s) for s in seqs )
-        
-        for i in range(m):
-            for s in seqs :
-                if i < len(s) :
-                    yield s[i]
-            
-    
     def _console_print_( self, w=None, h=None, stylesheet={} ):
-        
-        print 'max>', self.x_max, self.y_max
-        print 'contains>', self.contains
         
         #
         #      2
@@ -444,7 +473,7 @@ class Table( Node ):
         
         #border = styles.get( 'borderchars', [ hex(i)[2] for i in range(16) ] )
         border = styles.get( 'borderchars', ' xx-x+++x+++|+++' )
-        border_fgc, border_bgc = styles.get( 'bordercolor', (None,None) )
+        border_fgc, border_bgc = styles.get( 'bordercolor', (236,None) )
         #border_len = [ ColorString.displaylength() for b in border ]
         border_width = 1 if border[3] else 0
         border_heigth = 1 if border[12] else 0
@@ -458,7 +487,7 @@ class Table( Node ):
         
         bcstr = lambda x : ColorString(x, bg = border_bgc, fg = border_fgc )
         
-        cell_width = lambda x, l : sum( widths[x:l] ) + (l-1)*border_width
+        cell_width = lambda x, l : sum( widths[x:x+l] ) + (l-1)*border_width
         cell_heigth = lambda y, h : sum( heigths[y:y+h] ) + (h-1)*border_heigth
         
         cells = [ ( x, y, l, h, n._console_print_( cell_width( x, l ), 
@@ -516,19 +545,15 @@ class Table( Node ):
         
         grating = [ zip( zip(*dts), zip(*g) ) for g, dts in grating ]
         
-        print grating
-        
-        grating = [ [ i for r in row for i in zip(*r) ]
+        grating = [ [ [ ii for i in zip(*r) for ii in i ] for r in row ]
                     for row in grating ]
-        
-        print grating
         
         grating = [ [ ColorString.sum(line) for line in row ] 
                     for row in grating ]
         
         
         
-        grids = [ ( ( x, y+i ), c[:cell_heigth(y,i+1)][-heigths[i]:] )
+        grids = [ ( ( x, y+i ), c[cell_heigth(y,i)+border_heigth:][:heigths[i]] )
                   for x, y, l, h, c in cells for i in range(h) ]
         
         grids = [ [ ( x, c ) for (x, y), c in grids if y == _y ] 
@@ -545,7 +570,7 @@ class Table( Node ):
                   for l in zip(*row) ] 
                 for row in grids  ]
         
-        grids = grids + []
+        grids = grids + [[]]
         
         #lines = sum( sum( ( list(r) for r in zip( tb[:-1], lines ) ), [] ), [] ) + tb[-1]
         
@@ -629,7 +654,10 @@ class EasyPrinter( object ):
         
         tbv = self._parse_inner( data, covert=covert )
         
-        ks = list(set( k for k, pth, v in tbv ) )
+        print tbv
+        
+        ks = [ tuple(k[:i]) for k, pth, v in tbv for i in range(1,len(k)+1) ]
+        ks = list( set( ks ) )
         ks.sort()
         
         kcs = [ ( k, sum( 1 for _k in ks 
@@ -687,7 +715,7 @@ if __name__ == '__main__' :
     d = [ { 'colA' : 'A.1.alpha\r\nA.1.beta' ,
             'colB' : 'B.1.alpha\r\nB.1.beta\r\nB.1.gamma\r\nB.1.delta' },
           { 'colA' : 'A.2.alpha\r\nA.2.beta' ,
-            'colB' : [{'B.2.alpha':'z','B.1':'qew' }] },
+            'colB'*6 : [{'B.2.alpha':'z','B.1':'qew' }] },
         ]
     
     ep = EasyPrinter()
