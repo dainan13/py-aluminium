@@ -1728,8 +1728,8 @@ class Table ( object ) :
         decoders = zip(*cc)[2]
         
         if len(pkey) != 0 :
-            newcols += p
-            oldcols += p
+            newcols += pkey
+            oldcols += pkey
             nclens += [len(pkey)]
             decoders += [ lambda x : x ]
         
