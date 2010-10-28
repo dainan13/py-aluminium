@@ -1725,7 +1725,7 @@ class Table ( object ) :
         pkey = [ key for key in cols if key not in oldcols ]
         newcols = [ list(enkey) for enkey, dekey, decoder in cc ]
         newcols = sum( newcols, [] )
-        decoders = zip(*cc)[2]
+        decoders = list(zip(*cc)[2])
         
         if len(pkey) != 0 :
             newcols += pkey
@@ -1739,7 +1739,7 @@ class Table ( object ) :
         decoders = [ ( decoder, s, e ) 
                      for (s, e), decoder in zip( nclens, decoders ) ]
         
-        return tuple(newcols), tuple(oldcols), decoders
+        return tuple(newcols), tuple(oldcols), tuple(decoders)
     
     def asquery( self, sql, cols=None, multi=False ):
         """
