@@ -1769,7 +1769,7 @@ class Table ( object ) :
                  for tk in dinps ]
                 
         segs = [ [ len(z) for z in s.split('%') ] for s in segs ]
-        segs = [ reduce( lambda x, y : x+[x[-1]+y] , l, [0] )[1:]
+        segs = [ reduce( lambda x, y : x+[x[-1]+y] , s, [0] )[1:]
                  for s in segs
                ]
                
