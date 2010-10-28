@@ -1713,8 +1713,8 @@ class Table ( object ) :
                if set(dekey) <= set(cols)
              ]
         
-        multidekey = reduce( lambda x, y : x & y, 
-                          set(dekey) for enkey, dekey, decoder in cc )
+        multidekey = reduce( ( lambda x, y : x & y ), 
+                          ( set(dekey) for enkey, dekey, decoder in cc ) )
         
         if  multidekey != set([]):
             raise Exception, 'asquery using fastconv error'
