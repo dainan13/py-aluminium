@@ -1719,11 +1719,11 @@ class Table ( object ) :
         if  multidekey != set([]):
             raise Exception, 'asquery using fastconv error'
             
-        oldcols = [ dekey for enkey, dekey, decoder in cc ]
+        oldcols = [ list(dekey) for enkey, dekey, decoder in cc ]
         nclens = [ len(dekey) for dekey in oldcols ]
         oldcols = sum( oldcols, [] )
         pkey = [ key for key in cols if key not in newcols ]
-        newcols = [ enkey for enkey, dekey, decoder in cc ]
+        newcols = [ list(enkey) for enkey, dekey, decoder in cc ]
         newcols = sum( newcols, [] )
         decoders = zip(*cc)[2]
         
@@ -1739,7 +1739,7 @@ class Table ( object ) :
         decoders = [ ( decoder, s, e ) 
                      for (s, e), decoder in zip( nclens, decoders ) ]
         
-        return newcols, oldcols, decoders
+        return tuple(newcols), tuple(oldcols), decoders
     
     def asquery( self, sql, cols=None, multi=False ):
         """
