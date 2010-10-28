@@ -1750,22 +1750,24 @@ class Table ( object ) :
                  for t in self.tablets ]
         
         tbls = [ ( n,
-                   self._fastconv( cols ),
+                   newcols,
+                   oldcols,
                    decoders,
                    { '<tablename>' : '`'+n+'`',
                      '<cols>' : self._asquery_allcolssql(oldcols),
                    },
                  ) for n, ( newcols, oldcols, decoders ) in tbls ]
         
-        names, newcolses, oldcolses, decoderses = zip(*tbls)
+        names, newcolses, oldcolses, decoderses, dinps = zip(*tbls)
         
         sqlinputs = [ x.split(')')[0].strip('()') for x in sql.split('%') ]
-            
-        sqls = [ ( sql % dict( ( x, tk.get(x,"") ) for x in sd ) )
-                 for x in sqlinputs ]
         
-        segs = [ ( sql % dict( ( x, tk.get(x,"%") ) for x in sd ) )
-                 for x in sqlinputs ]
+        sqls = [ ( sql % dict( ( x, tk.get(x,"") ) for x in sqlinputs ) )
+                 for tk in dinps ]
+        
+        segs = [ ( sql % dict( ( x, tk.get(x,"%") ) for x in sqlinputs ) )
+                 for tk in dinps ]
+                
         segs = [ [ len(z) for z in s.split('%') ] for s in segs ]
         segs = [ reduce( lambda x, y : x+[x[-1]+y] , l, [0] )[1:]
                  for s in segs
