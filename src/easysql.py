@@ -619,6 +619,9 @@ class SQLConnectionPool( object ):
                         starttime = time.time()
                     else :
                         raise
+                except MySQLdb.ProgrammingError, e :
+                    e.args = tuple( list(e.args)+[sql,] )
+                    raise
         finally :
             self._put( conn_args, False, rconn )
             endtime = time.time()
