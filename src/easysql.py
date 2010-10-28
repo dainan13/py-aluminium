@@ -1722,7 +1722,7 @@ class Table ( object ) :
         oldcols = [ list(dekey) for enkey, dekey, decoder in cc ]
         nclens = [ len(dekey) for dekey in oldcols ]
         oldcols = sum( oldcols, [] )
-        pkey = [ key for key in cols if key not in newcols ]
+        pkey = [ key for key in cols if key not in oldcols ]
         newcols = [ list(enkey) for enkey, dekey, decoder in cc ]
         newcols = sum( newcols, [] )
         decoders = zip(*cc)[2]
