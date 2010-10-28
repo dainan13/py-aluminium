@@ -683,6 +683,14 @@ class EasyPrinter( object ):
         t = [ ( x, len(k)-1, c, rowmax-len(k)+1 if e else 1, Text(k[-1]) ) 
               for ( k, e, c ), x in zip( kcs, colnum )  ]
         
+        prs = set( p for k, p, a in tbv )
+        prs = set( p[:i+1] for p in prs for i in range(len(p)) )
+        
+        rows = list(prs)
+        rows.sort()
+        
+        
+        
         tbl = Table( contains = t )
         r = tbl._console_print_()
         
