@@ -794,7 +794,7 @@ class Tablet( object ) :
         
         rst = connpool.read( self.conn_args , sql )
         
-        rst = [ dict(zip(cols,row)) for row in rst ] 
+        #rst = [ dict(zip(cols,row)) for row in rst ] 
         
         return len(rst), rst
     
@@ -1341,23 +1341,22 @@ class Table ( object ) :
         
         return nx, rst
     
-    def _read_low( self, sql, cols, tbl ):
-        
-        #tbls = self._splitter_ex( stunt )
-        
-        #rst = []
-        #nx = 0
+    def _read_low( self, sql, cols, decoder, tbl ):
             
         for excpt in ([ConnectionError]*(self.retrytimes-1)+[None,]) :
             
             try :
-                n, rst = tbl._select_low( self.connpool, sql, cols )
+                n, rst = tbl._select_low( self.connpool, sql )
             except excpt as e :
                 continue
             
             break
         
-        rst = [ self._decoderow(r) for r in rst ]
+        rst = [ dict( zip( cols, ( x for f, s, e in decoder for x in f(*r[s:e]) ) ) )
+                for r in rst
+              ]
+        
+        #rst = [ self._decoderow(r) for r in rst ]
         
         return n, rst
     
@@ -1707,46 +1706,80 @@ class Table ( object ) :
                             sqlstr(c), \
                           ) for c in cols ])
     
-    def asquery( self, sql, cols=None, multi=False ):
-        """
-        e.g.: select %(<defaultcols>)s from %(<tablename>)s where `colC` = HEX( %(datakey)-32s )
-        """
+    def _fastconv( self, cols ):
         
-        tbls = [ ( t.name, t.defaultcols )  for t in self.tablets ]
-        
-        tbls = [ ( n,
-                   cols or t.defaultcols,
-                   { '<tablename>' : '`'+n+'`',
-                     '<defaultcols>' : self._asquery_allcolssql(cols),
-                   },
-                 ) for n, cols in tbls ]
-        
-        sd = [ x.split(')')[0].strip('()') for x in sql.split('%') ]
-        sd = [ ( tn,
-                 tc,
-                 dict( ( x, tk.get(x,"") ) 
-                       for x in sd ),
-                 dict( ( x, tk.get(x,"%") )
-                       for x in sd ),
-               ) for tn, tc, tk in tbls 
+        cc = [ ( enkey, dekey, decoder )
+               for enkey, dekey, encoder, decoder in self.colconv
+               if set(dekey) <= set(cols)
              ]
         
-        sqls = [ ( tn, 
-                   tc, 
-                   ( sql % d ), 
-                   [ len(z) for z in ( sql % d2 ).split('%') ] 
-                 ) for tn, tc, d, d2 in sd ]
-               
-        sqls = [ ( tn, tc, s, reduce( lambda x, y : x+[x[-1]+y] , l, [0] )[1:] ) 
-                 for tn, tc, s, l in sqls ]
+        multidekey = reduce( lambda x, y : x & y, 
+                          set(dekey) for enkey, dekey, decoder in cc )
         
-        sqls = dict( ( tn, (tc,s,l) ) for tn, tc, s, l in sqls )
+        if  multidekey != set([]):
+            raise Exception, 'asquery using fastconv error'
+            
+        oldcols = [ dekey for enkey, dekey, decoder in cc ]
+        nclens = [ len(dekey) for dekey in oldcols ]
+        oldcols = sum( oldcols, [] )
+        pkey = [ key for key in cols if key not in newcols ]
+        newcols = [ enkey for enkey, dekey, decoder in cc ]
+        newcols = sum( newcols, [] )
+        decoders = zip(*cc)[2]
+        
+        if len(pkey) != 0 :
+            newcols += p
+            oldcols += p
+            nclens += [len(pkey)]
+            decoders += [ lambda x : x ]
+        
+        nclens = reduce( lambda x, y : x+[x[-1]+y], nclens, [0] )
+        nclens = zip( nclens[:-1], nclens[1:] )
+        
+        decoders = [ ( decoder, s, e ) 
+                     for (s, e), decoder in zip( nclens, decoders ) ]
+        
+        return newcols, oldcols, decoders
+    
+    def asquery( self, sql, cols=None, multi=False ):
+        """
+        e.g.: select %(<cols>)s from %(<tablename>)s where `colC` = HEX( %(datakey)-32s )
+        """
+        
+        tbls = [ ( t.name, self._fastconv( cols or t.defaultcols ) )  
+                 for t in self.tablets ]
+        
+        tbls = [ ( n,
+                   self._fastconv( cols ),
+                   decoders,
+                   { '<tablename>' : '`'+n+'`',
+                     '<cols>' : self._asquery_allcolssql(oldcols),
+                   },
+                 ) for n, ( newcols, oldcols, decoders ) in tbls ]
+        
+        names, newcolses, oldcolses, decoderses = zip(*tbls)
+        
+        sqlinputs = [ x.split(')')[0].strip('()') for x in sql.split('%') ]
+            
+        sqls = [ ( sql % dict( ( x, tk.get(x,"") ) for x in sd ) )
+                 for x in sqlinputs ]
+        
+        segs = [ ( sql % dict( ( x, tk.get(x,"%") ) for x in sd ) )
+                 for x in sqlinputs ]
+        segs = [ [ len(z) for z in s.split('%') ] for s in segs ]
+        segs = [ reduce( lambda x, y : x+[x[-1]+y] , l, [0] )[1:]
+                 for s in segs
+               ]
+               
+        pps = zip( newcolses, decoderses, sqls, segs )
+        
+        sqls = dict( zip( sqls, pps ) )
         
         def query( datas, stunt = {} ):
             
             tbl = self._gettablets( self._splitter_ex( stunt )[0][0] )
             
-            c, sql, positions = sqls[tbl.name]
+            cols, dec, sql, positions = sqls[tbl.name]
             
             p = ctypes.create_string_buffer(sql)
             
@@ -1754,7 +1787,7 @@ class Table ( object ) :
                 d = sqlstr(d)
                 p[pos:pos+len(d)] = d
             
-            n, r = self._read_low( p.raw, c, tbl )
+            n, r = self._read_low( p.raw, cols, dec, tbl )
             
             if multi :
                 return r
