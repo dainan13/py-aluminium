@@ -790,7 +790,7 @@ class Tablet( object ) :
         
         return len(rst), rst, rst2, None # the forth argument is uvars' results
     
-    def _select_low( self, connpool, sql, cols ):
+    def _select_low( self, connpool, sql, ):
         
         rst = connpool.read( self.conn_args , sql )
         
