@@ -1734,7 +1734,7 @@ class Table ( object ) :
             newcols += pkey
             oldcols += pkey
             nclens += [len(pkey)]
-            decoders += [ lambda x : x ]
+            decoders += [ lambda *x : x ]
         
         nclens = reduce( lambda x, y : x+[x[-1]+y], nclens, [0] )
         nclens = zip( nclens[:-1], nclens[1:] )
