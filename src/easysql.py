@@ -1775,7 +1775,7 @@ class Table ( object ) :
                
         pps = zip( newcolses, decoderses, sqls, segs )
         
-        sqls = dict( zip( sqls, pps ) )
+        sqls = dict( zip( names, pps ) )
         
         def query( datas, stunt = {} ):
             
