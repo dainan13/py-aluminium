@@ -217,7 +217,6 @@ class Node( object ):
         
         return
 
-
 class Text( Node ):
     
     def __init__( self, text, **styles ):
@@ -253,17 +252,17 @@ class Text( Node ):
         #styles.update(self.styles)
         styles = self._find_styles(stylesheet)
         
-        v_align = styles.get('vertical-align','top')
+        v_align = styles.get('vertical-align','middle')
         if v_align == 'top' :
             r = self.texts[:h] + ['']*max( h - len(self.texts), 0 )
         elif v_align == 'bottom' :
             r = ['']*max( h - len(self.texts), 0 ) + self.texts[:h]
         elif v_align == 'middle' :
             bt = ['']*max( (h - len(self.texts))/2, 0 )
-            bb = ['']*max( h - bt - len(self.texts), 0 )
-            r = bt + self.texts[:h]
+            bb = ['']*max( h - len(bt) - len(self.texts), 0 )
+            r = bt + self.texts[:h] + bb
             
-        align = styles.get('align','left')
+        align = styles.get('align','center')
         if align == 'left' :
             align = lambda s : s.ljust( w, ' ' )
         elif align == 'right' :
@@ -287,6 +286,57 @@ class Text( Node ):
         nid = 'id="%s"' % ( str(nid), ) if self.nid != None else '' 
         
         return '<%s %s %s>%s</%s>' % (pname,st,nid,r,pname)
+    
+
+class Number( Text ):
+    
+    
+    def __init__( self, n, **styles ):
+        
+        super( Text, self ).__init__( '', **styles )
+        
+        self.number = n
+        self.isfloat = ( type(n) == types.FloatType )
+        self.defaultformat = '%d' \
+                    if type(n) in ( types.IntType, types.LongType ) else '%0.2f'
+        
+        return
+        
+    def _console_length_( self ):
+        
+        return len( self.defaultformat % (self.number,) )
+        
+    def _console_height_( self ):
+        
+        return 1
+        
+    def _console_print_( self, w, h, stylesheet ):
+        
+        styles = self._find_styles(stylesheet)
+        
+        fm = styles.get( 'numformat', self.defaultformat )
+        
+        self.texts = fm % (self.number,)
+        
+        super( Text, self ).__init__( **styles )
+        
+
+class Bool( Text ):
+    
+    def __init__( self, b, **styles ):
+        
+        super( Text, self ).__init__( '[ ]' if b else '[+]', **styles )
+        
+        self.b = b
+        
+    def _console_length_( self ):
+        
+        return 3
+        
+    def _console_height_( self ):
+        
+        return 1
+        
     
 
 class Bar( Node ):
@@ -504,8 +554,12 @@ class Table( Node ):
         # +----------------------+   <---------- tb[2]
         #
         
-        unborder = dict( ( ( x, y+i ), c[cell_heigth(y,i)+1:][:border_heigth] )
+        unborder = dict( ( ( x, y+i ), c[cell_heigth(y,i):][:border_heigth] )
                            for x, y, l, h, c in cells for i in range( 1, h ) )
+        
+        #_unborder = dict( ( ( x, y+i ), (cell_heigth(y,i),border_heigth) )
+        #                   for x, y, l, h, c in cells for i in range( 1, h ) )
+        #print _unborder
         
         #       (3)
         # (10) ------ (9)
@@ -689,7 +743,20 @@ class EasyPrinter( object ):
         rows = list(prs)
         rows.sort()
         
+        rowg = [ i for i, ( p, _p ) in enumerate( zip( rows, rows[1:]+[[None]] ) ) 
+                   if p != _p[:len(p)] ]
+        rows = [ rows[s+1:e+1] for s,e in zip( [-1] + rowg[:-1], rowg ) ]
         
+        tbs_v = [ dict( ( k, (prs[p], v) ) for k, p, v in tbv if p in rs ) 
+                  for rs in rows ]
+        
+        tbs_v = [ [ ( vrow.get(k,(len(rs[-1])-len(k)+1,'')), cols ) for k, ep, cols in kcs 
+                    if k in vrow or ( len(k) >= len(rs[0]) and ep and \
+                                            all( ( tuple(k[:ik+1]) not in vrow ) 
+                                                 for ik in range(len(k)) ) )
+                  ] for rs, vrow in zip( rows, tbs_v ) ]
+        
+        tbs_v = [ [ valuem % ( r, c, v ) for (r, v), c in row ] for row in tbs_v ]
         
         tbl = Table( contains = t )
         r = tbl._console_print_()
