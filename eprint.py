@@ -227,6 +227,10 @@ class Text( Node ):
         
         return
         
+    def __repr__( self ):
+        
+        return 'Text('+repr('\r\n'.join(self.texts))+')'
+        
     @staticmethod
     def _onelinelen( a ):
         
@@ -766,16 +770,16 @@ class EasyPrinter( object ):
         rownum = reduce( lambda x, y : x + [x[-1]+y[1]], rowcheck, [rowmax] )
         rownum = dict( zip( rows , rownum ) )
         
-        print rownum
-        print colnum
-        print
+        #print rownum
+        #print colnum
+        #print
         
         rowspans = dict( ( r,  self._fast_get_childrows( i, rowcheck, r ) )
                          for i, r in enumerate( rows ) )
         
         colspans = dict( ( k, c ) for k, e, c in kcs )
         
-        print t
+        #print t
         
         t += [ ( colnum[k], rownum[pth], colspans[k], rowspans[pth], v ) 
                for k, pth, v in tbv ]
@@ -812,10 +816,13 @@ if __name__ == '__main__' :
     print
     
     d = [ { 'colA' : 'A.1.alpha\r\nA.1.beta' ,
-            'colB' : 'B.1.alpha\r\nB.1.beta\r\nB.1.gamma\r\nB.1.delta' },
+            'colB' : 'B.1.alpha\r\nB.1.beta\r\nB.1.gamma\r\nB.1.delta',
+            'colC' : '-',
+          },
           { 'colA' : 'A.2.alpha\r\nA.2.beta' ,
             'colB' : '-',
-            'colC' : [{'B.2.alpha':'z','B.1':'qew' }] },
+            'colC' : [{'B.2.alpha':'z','B.1':'qew' },{'B.2.alpha':'z','B.1':'qew' }],
+          },
         ]
     
     ep = EasyPrinter()
