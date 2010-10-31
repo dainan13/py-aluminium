@@ -687,6 +687,21 @@ class EasyPrinter( object ):
         
         return sum( a, [] )
         
+    @staticmethod
+    def _fast_get_childrows( i, p, x ):
+        
+        s = 0
+        
+        print x, p[i:], i
+        
+        for c, e in p[i:]:
+            if c[:len(x)] == x :
+                s += e
+            else :
+                return s + e
+        
+        return s
+        
     def _parse( self, data, covert={}, format={} ):
         '''
         convert :
@@ -737,26 +752,35 @@ class EasyPrinter( object ):
         t = [ ( x, len(k)-1, c, rowmax-len(k)+1 if e else 1, Text(k[-1]) ) 
               for ( k, e, c ), x in zip( kcs, colnum )  ]
         
+        colnum = dict( ( ( k, x ) for (k, e, c), x in zip(kcs, colnum) ) )
+        
         prs = set( p for k, p, a in tbv )
         prs = set( p[:i+1] for p in prs for i in range(len(p)) )
         
         rows = list(prs)
         rows.sort()
         
-        rowg = [ i for i, ( p, _p ) in enumerate( zip( rows, rows[1:]+[[None]] ) ) 
-                   if p != _p[:len(p)] ]
-        rows = [ rows[s+1:e+1] for s,e in zip( [-1] + rowg[:-1], rowg ) ]
+        rowcheck = [ ( c, 0 if ( n[:len(c)] == c and sum( n[len(c):] ) == 0 ) else 1 )
+                     for c, n in zip( rows, rows[1:]+[[]] ) ]
         
-        tbs_v = [ dict( ( k, (prs[p], v) ) for k, p, v in tbv if p in rs ) 
-                  for rs in rows ]
+        rownum = reduce( lambda x, y : x + [x[-1]+y[1]], rowcheck, [rowmax] )
+        rownum = dict( zip( rows , rownum ) )
         
-        tbs_v = [ [ ( vrow.get(k,(len(rs[-1])-len(k)+1,'')), cols ) for k, ep, cols in kcs 
-                    if k in vrow or ( len(k) >= len(rs[0]) and ep and \
-                                            all( ( tuple(k[:ik+1]) not in vrow ) 
-                                                 for ik in range(len(k)) ) )
-                  ] for rs, vrow in zip( rows, tbs_v ) ]
+        print rownum
+        print colnum
+        print
         
-        tbs_v = [ [ valuem % ( r, c, v ) for (r, v), c in row ] for row in tbs_v ]
+        rowspans = dict( ( r,  self._fast_get_childrows( i, rowcheck, r ) )
+                         for i, r in enumerate( rows ) )
+        
+        colspans = dict( ( k, c ) for k, e, c in kcs )
+        
+        print t
+        
+        t += [ ( colnum[k], rownum[pth], colspans[k], rowspans[pth], v ) 
+               for k, pth, v in tbv ]
+        
+        print t
         
         tbl = Table( contains = t )
         r = tbl._console_print_()
@@ -790,7 +814,8 @@ if __name__ == '__main__' :
     d = [ { 'colA' : 'A.1.alpha\r\nA.1.beta' ,
             'colB' : 'B.1.alpha\r\nB.1.beta\r\nB.1.gamma\r\nB.1.delta' },
           { 'colA' : 'A.2.alpha\r\nA.2.beta' ,
-            'colB'*6 : [{'B.2.alpha':'z','B.1':'qew' }] },
+            'colB' : '-',
+            'colC' : [{'B.2.alpha':'z','B.1':'qew' }] },
         ]
     
     ep = EasyPrinter()
