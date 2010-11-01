@@ -611,11 +611,13 @@ class Table( Node ):
         
         
         
-        grids = [ ( ( x, y+i ), c[cell_heigth(y,i)+border_heigth:][:heigths[i]] )
+        grids = [ ( ( x, y+i ), c[cell_heigth(y,i)+border_heigth:][:heigths[y]] )
                   for x, y, l, h, c in cells for i in range(h) ]
         
         grids = [ [ ( x, c ) for (x, y), c in grids if y == _y ] 
                  for _y in range(self.y_max) ]
+        
+        #print grids[2], cell_heigth(y,1)+border_heigth, heigths[0]
         
         for row in grids :
             row.sort( key = lambda r : r[0] )
@@ -647,7 +649,7 @@ class Table( Node ):
         #
         #
         
-
+        
         
         return
 
@@ -696,13 +698,13 @@ class EasyPrinter( object ):
         
         s = 0
         
-        print x, p[i:], i
+        #print x, p[i:], i
         
         for c, e in p[i:]:
             if c[:len(x)] == x :
                 s += e
             else :
-                return s + e
+                return s
         
         return s
         
@@ -820,7 +822,7 @@ if __name__ == '__main__' :
             'colC' : '-',
           },
           { 'colA' : 'A.2.alpha\r\nA.2.beta' ,
-            'colB' : '-',
+            'colB' : ['-','-'],
             'colC' : [{'B.2.alpha':'z','B.1':'qew' },{'B.2.alpha':'z','B.1':'qew' }],
           },
         ]
