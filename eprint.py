@@ -611,18 +611,25 @@ class Table( Node ):
         
         
         
-        grids = [ ( ( x, y+i ), c[cell_heigth(y,i)+border_heigth:][:heigths[y]] )
+        grids = [ ( ( x, y+i, l ), c[cell_heigth(y,i)+border_heigth:][:heigths[y]] )
                   for x, y, l, h, c in cells for i in range(h) ]
         
-        grids = [ [ ( x, c ) for (x, y), c in grids if y == _y ] 
-                 for _y in range(self.y_max) ]
+        grids = [ dict( ( x+i, c if i==0 else None ) 
+                    for (x, y, l), c in grids if y == _y for i in range(l) ) 
+                  for _y in range(self.y_max) ]
         
         #print grids[2], cell_heigth(y,1)+border_heigth, heigths[0]
         
-        for row in grids :
-            row.sort( key = lambda r : r[0] )
+        #for row in grids :
+        #    row.sort( key = lambda r : r[0] )
         
-        grids = [ zip(*row)[1] for row in grids ]
+        #grids = [ zip(*row)[1] for row in grids ]
+        
+        grids = [ [ row.get( c, [' '*widths[c]]*heigths[i] ) 
+                    for c in range(self.x_max) ] 
+                  for i, row in enumerate( grids ) ]
+        
+        grids = [ [ c for c in row if c != None ] for row in grids ]
         
         grids = [ [ bcstr(border[12]) + \
                     bcstr(border[12]).join(l) + \
@@ -639,16 +646,6 @@ class Table( Node ):
         return lines
         
     def _html_print_( self, ):
-        
-        #
-        # +-------+---------------+-------------+
-        # |       |       X       |             |
-        # |   X   +-------+-------+      X      |
-        # |       |   X   |   X   |             |
-        # +-------+-------+-------+-------------+
-        #
-        #
-        
         
         
         return
@@ -689,7 +686,10 @@ class EasyPrinter( object ):
             return [( rk, pth, AutoNode(data) ),]
         
         a = [ self._parse_inner( v, tuple(list(rk)+[k]), tuple(list(pth)+[i]) )
-              for i, _a in enumerate(data) for k, v in _a.items() ]
+              for i, _a in enumerate(data) if type(_a) == types.DictType for k, v in _a.items() ]
+        
+        a += [ self._parse_inner( _a, tuple(list(rk)), tuple(list(pth)+[i]) )
+               for i, _a in enumerate(data) if type(_a) != types.DictType ]
         
         return sum( a, [] )
         
@@ -786,7 +786,7 @@ class EasyPrinter( object ):
         t += [ ( colnum[k], rownum[pth], colspans[k], rowspans[pth], v ) 
                for k, pth, v in tbv ]
         
-        print t
+        #print t
         
         tbl = Table( contains = t )
         r = tbl._console_print_()
@@ -819,11 +819,11 @@ if __name__ == '__main__' :
     
     d = [ { 'colA' : 'A.1.alpha\r\nA.1.beta' ,
             'colB' : 'B.1.alpha\r\nB.1.beta\r\nB.1.gamma\r\nB.1.delta',
-            'colC' : '-',
+            #'colC' : '-',
           },
           { 'colA' : 'A.2.alpha\r\nA.2.beta' ,
-            'colB' : ['-','-'],
-            'colC' : [{'B.2.alpha':'z','B.1':'qew' },{'B.2.alpha':'z','B.1':'qew' }],
+            'colB' : ['-',],
+            'colC' : ['-',{'B.2.alpha':'z','B.1':'qew' }],
           },
         ]
     
