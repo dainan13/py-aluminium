@@ -37,23 +37,31 @@ class ColorString(object) :
         
     def fgcolor( self, color, s=0, e=STREND, mode='cover' ):
         
+        if s == e :
+            return
+        
         e = self.displaylen if e == STREND else e
         
         if mode == 'cover' :
             self.foreground[s:e] = color
         elif mode == 'back' :
-            self.foreground.merge(Line([(s,color),(e,None)]))
+            self.foreground = realnum.Line([(s,color),(e,None)]).merge( self.foreground )
+            #self.foreground.merge(realnum.Line([(s,color),(e,None)]))
         else :
             raise ValueError, 'ColorString:foreground not supported the mode'
         
     def bgcolor( self, color, s=0, e=STREND, mode='cover' ):
+        
+        if s == e :
+            return
         
         e = self.displaylen if e == STREND else e
         
         if mode == 'cover' :
             self.background[s:e] = color
         elif mode == 'back' :
-            self.background.merge(Line([(s,color),(e,None)]))
+            self.background = realnum.Line([(s,color),(e,None)]).merge( self.background )
+            #self.background.merge()
         else :
             raise ValueError, 'ColorString:foreground not supported the mode'
 
@@ -242,11 +250,11 @@ class Text( Node ):
                             else 1 
                           for c in a ])
         
-    def _console_length_( self ):
+    def _console_length_( self, stylesheet ):
         
         return max( [ self._onelinelen(l) for l in self.texts ] )
             
-    def _console_height_( self ):
+    def _console_height_( self, stylesheet ):
         
         return len( self.texts )
         
@@ -368,15 +376,20 @@ class Bar( Node ):
         styles = self._find_styles(stylesheet)
         
         r = [ ( ColorString(' ') + l + ColorString(' ') )
-              for l in self.contain._console_print_( w, h, styles ) ]
+              for l in self.contain._console_print_( w-2, h, styles ) ]
         
         for l in r :
             
-            l.bgcolor( styles.get('barcolor',237),
+            e = int(l.displaylen*self.number)
+            if e <= 0 :
+                continue
+            
+            l.bgcolor( styles.get('barcolor',235),
                        s=0,
                        e=int(l.displaylen*self.number),
+                       #mode='cover',
                        mode='back',
-                     ) 
+                     )
         
         return r
         
@@ -525,10 +538,9 @@ class Table( Node ):
         
         styles = self._find_styles(stylesheet)
         
-        #border = styles.get( 'borderchars', [ hex(i)[2] for i in range(16) ] )
         border = styles.get( 'borderchars', ' xx-x+++x+++|+++' )
-        border_fgc, border_bgc = styles.get( 'bordercolor', (236,None) )
-        #border_len = [ ColorString.displaylength() for b in border ]
+        border_fgc, border_bgc = styles.get( 'bordercolor', (237,None) )
+        #border_fgc, border_bgc = styles.get( 'bordercolor', (22,None) )
         border_width = 1 if border[3] else 0
         border_heigth = 1 if border[12] else 0
         
@@ -675,6 +687,8 @@ class EasyPrinter( object ):
         
         cvrt = covert.get( rk, lambda x : x )
         
+        print rk, covert
+        
         data = cvrt(data)
         
         cvrt = covert.get( type(data), None ) or \
@@ -685,13 +699,13 @@ class EasyPrinter( object ):
         if type(data) not in ( types.ListType, types.TupleType ):
             return [( rk, pth, AutoNode(data) ),]
         
-        a = [ self._parse_inner( v, tuple(list(rk)+[k]), tuple(list(pth)+[i]) )
+        a = [ self._parse_inner( v, tuple(list(rk)+[k]), tuple(list(pth)+[i]), covert = covert )
               for i, _a in enumerate(data) if type(_a) == types.DictType for k, v in _a.items() ]
         
-        a += [ self._parse_inner( _a, tuple(list(rk)), tuple(list(pth)+[i]) )
-               for i, _a in enumerate(data) if type(_a) != types.DictType ]
+        b = [ ( rk, tuple(list(pth)+[i]), AutoNode(_a) )
+              for i, _a in enumerate(data) if type(_a) != types.DictType ]
         
-        return sum( a, [] )
+        return sum( a, [] ) + b
         
     @staticmethod
     def _fast_get_childrows( i, p, x ):
@@ -770,6 +784,7 @@ class EasyPrinter( object ):
                      for c, n in zip( rows, rows[1:]+[[]] ) ]
         
         rownum = reduce( lambda x, y : x + [x[-1]+y[1]], rowcheck, [rowmax] )
+        rowmax = rownum[-1]
         rownum = dict( zip( rows , rownum ) )
         
         #print rownum
@@ -786,7 +801,19 @@ class EasyPrinter( object ):
         t += [ ( colnum[k], rownum[pth], colspans[k], rowspans[pth], v ) 
                for k, pth, v in tbv ]
         
-        #print t
+        print rowmax, colsum
+        
+        blanks = [ set( x+i for x, y, l, h, v in t if _y >= y and _y < y+h
+                            for i in range(l) ) 
+                   for _y in range(rowmax) ]
+                       
+        blanks = [ ( x, y, 1, 1, Node() ) 
+                   for y, row in enumerate(blanks) 
+                   for x in range(colsum) if x not in row ]
+        
+        print blanks
+        
+        t += blanks
         
         tbl = Table( contains = t )
         r = tbl._console_print_()
@@ -799,34 +826,42 @@ class EasyPrinter( object ):
         
 if __name__ == '__main__' :
     
-    a = ColorString('ABCDEFGHIJKLMNOPQRSTUVWSYZ')
-    a.fgcolor( 200, e=10 )
-    a.bgcolor( 150, s=5, e=15 )
-    print a
+    #a = ColorString('ABCDEFGHIJKLMNOPQRSTUVWSYZ')
+    #a.fgcolor( 200, e=10 )
+    #a.bgcolor( 150, s=5, e=15 )
+    #print a
+    
+    print ColorString.sum([ ColorString( str(b).ljust(4), bg = b ) for b in range(16) ])
+    
+    for x in range(6):
+        print ColorString.sum([ ColorString( str(x*36+b+16).ljust(4), bg = x*36+b+16, fg = ~(x*36+b)%216 + 16 ) for b in range(36) ])
 
-    print ColorString('|',bg=237).join(['A','B','C'])
-    print ColorString('hello',bg=90)+' world '+ColorString('!',fg=90)
+    print ColorString.sum([ ColorString( str(b).ljust(4), bg = b ) for b in range(232,256) ])
     
-    print u'\u2714'
-    print u'\u28ff'
-    print u'\u2423\u2420\u2422'
-    print u'\u204B'
+    #print ColorString('|',bg=237).join(['A','B','C'])
+    #print ColorString('hello',bg=90)+' world '+ColorString('!',fg=90)
+
+
+    #print u'\u2714'
+    #print u'\u28ff'
+    #print u'\u2423\u2420\u2422'
+    #print u'\u204B'
     
-    print 
-    print
+    #print 
+    #print
     print
     print
     
     d = [ { 'colA' : 'A.1.alpha\r\nA.1.beta' ,
-            'colB' : 'B.1.alpha\r\nB.1.beta\r\nB.1.gamma\r\nB.1.delta',
-            #'colC' : '-',
+            'colB' : [1,2],
+            'colC' : 'B.1.alpha\r\nB.1.beta\r\nB.1.gamma\r\nB.1.delta',
           },
           { 'colA' : 'A.2.alpha\r\nA.2.beta' ,
-            'colB' : ['-',],
-            'colC' : ['-',{'B.2.alpha':'z','B.1':'qew' }],
+            'colB' : [0.1,0.9,0.3,0,-1],
+            'colC' : ['3',{'B.2.alpha':'z','B.1':'qew' }],
           },
         ]
     
     ep = EasyPrinter()
-    ep._parse(d)
+    ep._parse( d, covert = { ('colB',) : (lambda x : [ Bar(_x,str(_x)) for _x in x ]) } )
 
