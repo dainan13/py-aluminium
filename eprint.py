@@ -184,15 +184,7 @@ class Node( object ):
         
         return
         
-    def _console_length_( self ):
-        
-        return 1
-        
-    def _console_height_( self ):
-        
-        return 1
-        
-    def _find_styles( self, stylesheet ):
+    def use_stylesheet( self, stylesheet ):
         
         styles = {}
         
@@ -201,13 +193,42 @@ class Node( object ):
         
         styles.update(self.styles)
         
-        return styles
+        self.styles = styles
         
-    def _console_print_( self, w, h, stylesheet ):
+        return
         
-        styles = self._find_styles(stylesheet)
-        #fg = styles.get('color', None)
-        bg = styles.get('background-color', None)
+    def _console_length_( self, d=1 ):
+        
+        # up ringt down left
+        padding = self.styles.get( 'padding', 0 )
+        
+        return max( self.styles.get( 'width', d ),
+                    self.styles.get( 'min-width', 0 )
+               ) + padding[1] + padding[3]
+        
+    def _console_height_( self, d=1 ):
+        
+        # up ringt down left
+        padding = self.styles.get( 'padding', 0 )
+        
+        return max( self.styles.get( 'height', d ), 
+                    self.styles.get( 'min-height', 0 )
+               ) + padding[0] + padding[2]
+        
+    #def _find_styles( self, stylesheet ):
+    #    
+    #    styles = {}
+    #    
+    #    for c in self.nclses :
+    #        styles.update( stylesheet.get(c,{}) )
+    #    
+    #    styles.update(self.styles)
+    #    
+    #    return styles
+        
+    def _console_print_( self, w, h ):
+        
+        bg = self.styles.get('background', None)
         
         return [ ColorString(' '*w, bg=bg ) for i in range(h) ]
         
@@ -231,7 +252,7 @@ class Text( Node ):
         
         super( Text, self ).__init__( **styles )
         
-        self.texts = text.splitlines()
+        self.texts = text.splitlines() or ['']
         
         return
         
@@ -250,21 +271,21 @@ class Text( Node ):
                             else 1 
                           for c in a ])
         
-    def _console_length_( self, stylesheet ):
+    def _console_length_( self ):
         
-        return max( [ self._onelinelen(l) for l in self.texts ] )
+        l = max( [ self._onelinelen(l) for l in self.texts ] )
             
-    def _console_height_( self, stylesheet ):
+        return super( Text, self )._console_length_( l )
+            
+    def _console_height_( self ):
         
-        return len( self.texts )
+        h = len( self.texts )
         
-    def _console_print_( self, w, h, stylesheet ):
+        return super( Text, self )._console_height_( l )
         
-        #styles = styles.copy()
-        #styles.update(self.styles)
-        styles = self._find_styles(stylesheet)
+    def _console_print_( self, w, h ):
         
-        v_align = styles.get('vertical-align','middle')
+        v_align = self.styles.get('vertical-align','middle')
         if v_align == 'top' :
             r = self.texts[:h] + ['']*max( h - len(self.texts), 0 )
         elif v_align == 'bottom' :
@@ -274,7 +295,8 @@ class Text( Node ):
             bb = ['']*max( h - len(bt) - len(self.texts), 0 )
             r = bt + self.texts[:h] + bb
             
-        align = styles.get('align','center')
+        align = self.styles.get('align','center')
+        
         if align == 'left' :
             align = lambda s : s.ljust( w, ' ' )
         elif align == 'right' :
@@ -282,8 +304,8 @@ class Text( Node ):
         elif align == 'center' :
             align = lambda s : s.center( w, ' ' )
         
-        fg = styles.get('color', None)
-        bg = styles.get('background-color', None)
+        fg = self.styles.get('color', None)
+        bg = self.styles.get('background', None)
         
         r = [ ColorString( align(l[:w]), fg=fg, bg=bg ) for l in r ]
         
@@ -302,12 +324,11 @@ class Text( Node ):
 
 class Number( Text ):
     
-    
     def __init__( self, n, **styles ):
         
         super( Text, self ).__init__( '', **styles )
         
-        self.number = n
+        self.value = n
         self.isfloat = ( type(n) == types.FloatType )
         self.defaultformat = '%d' \
                     if type(n) in ( types.IntType, types.LongType ) else '%0.2f'
@@ -316,21 +337,26 @@ class Number( Text ):
         
     def _console_length_( self ):
         
-        return len( self.defaultformat % (self.number,) )
+        f = self.styles.get('number-format', [ '%d', '%0.2f' ] )
+        f = f[1] if self.isfloat else f[0]
         
-    def _console_height_( self ):
+        l = len( f % (self.value,) )
         
-        return 1
+        return super( Number, self )._console_length_( l )
         
-    def _console_print_( self, w, h, stylesheet ):
+    #def _console_height_( self ):
+    #    return 1
         
-        styles = self._find_styles(stylesheet)
+    def _console_print_( self, w, h ):
         
-        fm = styles.get( 'numformat', self.defaultformat )
+        f = self.styles.get('number-format', [ '%d', '%0.2f' ] )
+        f = f[1] if self.isfloat else f[0]
         
-        self.texts = fm % (self.number,)
+        self.texts = [ f % (self.value,), ]
         
-        super( Text, self ).__init__( **styles )
+        self.styels.setdefault( 'align', 'right' )
+        
+        return super( Number, self )._console_print_( w, h )
         
 
 class Bool( Text ):
@@ -339,16 +365,27 @@ class Bool( Text ):
         
         super( Text, self ).__init__( '[ ]' if b else '[+]', **styles )
         
-        self.b = b
+        self.value = b
         
     def _console_length_( self ):
         
-        return 3
+        f = self.styles.get('number-format', [ '[ ]', '[+]' ] )
+        l = len( f[1] if self.value else f[0] )
         
-    def _console_height_( self ):
+        return super( Bool, self )._console_length_( l )
         
-        return 1
+    #def _console_height_( self ):
+    #    
+    #    return 1
+    
+    def _console_print_( self, w, h ):
         
+        f = self.styles.get('number-format', [ '[ ]', '[+]' ] )
+        
+        self.texts = f[1] if self.isfloat else f[0]
+        
+        return super( Bool, self )._console_print_( w, h )
+    
     
 
 class Bar( Node ):
