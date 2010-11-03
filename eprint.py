@@ -286,13 +286,27 @@ class Node( object ):
         
         return cts
         
-    def _html_print_( self, pname='div' ):
+    def _html_printframe( self, pname, attr, ct ):
         
-        st = '' if st == {} else \
-                 ( 'style="' + ';'.join( ('%s: %v' % x) for x in self.styles.items() ) + '"' )
-        nid = 'id="%s"' % ( str(nid), ) if self.nid != None else '' 
-        return '<%s %s %s />' % (pname,st,nid)
-        #e = "</%s>" % (pname,)
+        st = '' if self.styles == {} else \
+            ( 'style="' + ';'.join( ('%s: %s' % x) for x in self.styles.items() ) + '"' )
+        
+        st = ''
+        
+        attr = ' '.join( '%s="%s"' % ( k, str(v) ) for k, v in attr.items() )
+        
+        nids = 'id="%s"' % ( str(nid), ) if self.nid != None else ''
+            
+        if ct == None :
+            return '<%s %s %s %s />' % ( pname, attr, st, nids )
+        else :
+            return '<%s %s %s %s>%s</%s>' % ( pname, attr, st, nids, ct, pname )
+        
+    def _html_print_( self, pname='div', attr={} ):
+        
+        ct = '\n'.join( s._html_print_( 'div', {} ) for s in self.contains )
+        
+        return self._html_printframe( pname, attr, '\n'+ct+'\n' )
         
     def add_node_cls( self, cls ):
         
@@ -300,7 +314,7 @@ class Node( object ):
         
         return
         
-    def consoleprint( stylesheet=None ):
+    def consoleprint( self, stylesheet=None ):
         
         if stylesheet != None :
             self.use_stylesheet( stylesheet )
@@ -313,6 +327,20 @@ class Node( object ):
             print l
         
         return
+        
+    def htmlprint( self, stylesheet=None ):
+        
+        if stylesheet != None :
+            self.use_stylesheet( stylesheet )
+        
+        r = self._html_print_( )
+        
+        print r
+        
+        return
+
+
+
 
 class Text( Node ):
     
@@ -385,15 +413,11 @@ class Text( Node ):
         
         return r
         
-    def _html_print_( self, pname='div' ):
+    def _html_print_( self, pname='div', attr={} ):
         
-        r = '<br>'.join([ saxutils.escape(l) for l in self.texts ])
+        ct = '<br>\n'.join([ saxutils.escape(l) for l in self.texts ])
         
-        st = '' if st == {} else \
-                 ( 'style="' + ';'.join( ('%s: %v' % x) for x in self.styles.items() ) + '"' )
-        nid = 'id="%s"' % ( str(nid), ) if self.nid != None else '' 
-        
-        return '<%s %s %s>%s</%s>' % (pname,st,nid,r,pname)
+        return self._html_printframe( pname, attr, '\n'+ct+'\n' )
     
 
 class Number( Text ):
@@ -489,18 +513,6 @@ class Bar( Node ):
         
         return
         
-    #def _console_length_( self ):
-    #    
-    #    l = self.contains[-1]._console_length_()
-    #    
-    #    return super( Bar, self )._console_length_( l )
-        
-    #def _console_height_( self ):
-    #    
-    #    h = self.contains[-1]._console_height_()
-    #    
-    #    return super( Bar, self )._console_height_( h )
-        
     def _console_print_( self, w, h ):
         
         bg = self.styles.get( 'background', 235 )
@@ -528,22 +540,13 @@ class Bar( Node ):
         
         return cts
         
-    def _html_print_( self, pname='div' ):
+    def _html_print_( self, pname='div', attr={} ):
         
-        r = self.contain._html_print_( 'div' )
+        ct = self.contains[-1]._html_print_( 'div', {} )
+        ct = ( '<div style="width: %s%%">\n' % (int(self.number*100),) ) + \
+             ct + "\n</div>"
         
-        st = '' if st == {} else \
-                 ( 'style="' + ';'.join( ('%s: %v' % x) for x in self.styles.items() ) + '"' )
-        nid = 'id="%s"' % ( str(nid), ) if self.nid != None else '' 
-        
-        return """\
-<%s %s %s>
-<div style="width: %s%%">
-<div>
-%s
-</div>
-</div>
-</%s>""" % (pname,st,nid,int(self.number*100),r,pname)
+        return self._html_printframe( pname, attr, '\n'+ct+'\n' )
         
 
 class Grid( Node ):
@@ -805,39 +808,45 @@ class Grid( Node ):
         
         return lines
         
-    def _html_print_( self, ):
+    def _html_print_( self, pname = 'table', attr={} ):
         
+        doms = [ [ ( x, n._html_print_( pname = 'td', 
+                                        attr = { 'colspan':l, 'rowspan':h } ) )
+                   for x, y, l, h, n in self.contains if y == _y ] 
+                 for _y in range(self.y_max) ]
         
-        return
+        for tr in doms :
+            tr.sort( key = lambda x : x[0] )
+        
+        doms = [ "<tr>\n" + "\n".join(zip(*tr)[1]) + "\n</tr>" for tr in doms ]
+        
+        return self._html_printframe( pname, attr, '\n'+ '\n'.join(doms) +'\n' )
 
 
 class Table( Grid ):
     
     def __init__( self, data, convert={}, format={}, **styles ):
         
-        super( Table, self ).__init__( **styles )
-        
-        self.contains = self._parse( data, convert, format )
+        super( Table, self ).__init__( 
+            contains = self._parse( data, convert, format ),
+            **styles )
         
         return
         
-    def _parse_inner( self, data, rk=(), pth=(), strick=False, covert={} ):
+    def _parse_inner( self, data, rk=(), pth=(), strick=False, convert={} ):
         
-        cvrt = covert.get( rk, lambda x : x )
-        
-        #print rk, covert
+        cvrt = convert.get( rk, lambda x : x )
         
         data = cvrt(data)
         
-        cvrt = covert.get( type(data), None ) or \
-                    self.covert.get( type(data), lambda x : x )
+        cvrt = convert.get( type(data), lambda x : x )
         
         data = cvrt(data)
         
         if type(data) not in ( types.ListType, types.TupleType ):
             return [( rk, pth, AutoNode(data) ),]
         
-        a = [ self._parse_inner( v, tuple(list(rk)+[k]), tuple(list(pth)+[i]), covert = covert )
+        a = [ self._parse_inner( v, tuple(list(rk)+[k]), tuple(list(pth)+[i]), convert = convert )
               for i, _a in enumerate(data) if type(_a) == types.DictType for k, v in _a.items() ]
         
         b = [ ( rk, tuple(list(pth)+[i]), AutoNode(_a) )
@@ -860,7 +869,7 @@ class Table( Grid ):
         
         return s
         
-    def _parse( self, data, covert={}, format={} ):
+    def _parse( self, data, convert={}, format={} ):
         '''
         convert :
         
@@ -879,7 +888,7 @@ class Table( Grid ):
         
         '''
         
-        tbv = self._parse_inner( data, covert=covert )
+        tbv = self._parse_inner( data, convert=convert )
         
         #print tbv
         
@@ -960,6 +969,8 @@ class Table( Grid ):
         return super( Table, self )._console_print_( w, h )
         
         
+        
+        
 if __name__ == '__main__' :
     
     print ColorString.sum([ ColorString( str(b).ljust(4), bg = b ) for b in range(16) ])
@@ -982,6 +993,11 @@ if __name__ == '__main__' :
           },
         ]
     
-    ep = EasyPrinter()
-    ep._parse( d, covert = { ('colB',) : (lambda x : [ Bar(_x, width=15) for _x in x ]), ('colA',) : ( lambda x : AutoNode( x, padding=[0,2]*2, align='right', width=20 ) ), } )
+    ep = Table( d, convert = { 
+            ('colB',) : (lambda x : [ Bar(_x, width=15) for _x in x ]), 
+            ('colA',) : ( lambda x : AutoNode( x, padding=[0,2]*2, align='right', width=20 ) ), 
+        } )
+    
+    ep.consoleprint()
+    ep.htmlprint()
 
