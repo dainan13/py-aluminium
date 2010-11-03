@@ -163,11 +163,17 @@ class ColorString(object) :
 
 
 
-def AutoNode( d ):
+def AutoNode( d, **sytles ):
+    
+    #print d, 
     
     if issubclass( d.__class__, Node ):
         return d
-    return Text( str(d) )
+    
+    if type(d) in ( types.IntType, types.LongType, types.FloatType ):
+        return Number( d, **sytles )
+    
+    return Text( str(d), **sytles )
 
 
 class Node( object ):
@@ -205,12 +211,14 @@ class Node( object ):
         if d == None :
             lo = self.styles.get( 'layout', 'horizontal' )
             if lo == 'horizontal' :
-                d = sum( self.contains._console_length_() ) if self.contains else 1
+                d = sum( [ c._console_length_() for c in self.contains ] ) if self.contains else 1
             elif lo == 'vertical' :
-                d = max( self.contains._console_length_() ) if self.contains else 1
+                d = max( [ c._console_length_() for c in self.contains ] ) if self.contains else 1
         
         # up ringt down left
         padding = self.styles.get( 'padding', [0]*4 )
+        
+
         
         return max( self.styles.get( 'width', d ),
                     self.styles.get( 'min-width', 0 )
@@ -221,9 +229,9 @@ class Node( object ):
         if d == None :
             lo = self.styles.get( 'layout', 'horizontal' )
             if lo == 'horizontal' :
-                d = max( self.contains._console_height_() ) if self.contains else 1
+                d = max( [ c._console_height_() for c in self.contains ] ) if self.contains else 1
             elif lo == 'vertical' :
-                d = sum( self.contains._console_height_() ) if self.contains else 1
+                d = sum( [ c._console_height_() for c in self.contains ] ) if self.contains else 1
         
         # up ringt down left
         padding = self.styles.get( 'padding', [0]*4 )
@@ -237,7 +245,7 @@ class Node( object ):
         lo = self.styles.get( 'layout', 'horizontal' )
         border = self.styles.get( 'borderchars', ' xx-x+++x+++|+++' )
         
-        padding = self.styles.get( 'padding', 0 )
+        padding = self.styles.get( 'padding', [0]*4 )
         _h = h - padding[0] - padding[2]
         _w = w - padding[1] - padding[3]
         
@@ -245,8 +253,9 @@ class Node( object ):
             cts = [ ct._console_print_( ct._console_length_(), _h ) 
                     for ct in self.contains ]
             cts = zip( *cts )
-            cts = [ ColorString.sum(row)[:_w] for row in cts ]
-            cts = [ row + ColorString(' '*(_w-len(row))) for row in cts ]
+            #cts = [ ColorString.sum(row)[:_w] for row in cts ]
+            cts = [ ColorString.sum(row) for row in cts ]
+            cts = [ row + ColorString(' '*(_w-row.displaylen)) for row in cts ]
         elif lo == 'vertical' :
             cts = [ ct._console_print_( _w, ct._console_height_() ) 
                     for ct in self.contains ]
@@ -290,6 +299,20 @@ class Node( object ):
         self.nclses += [cls]
         
         return
+        
+    def consoleprint( stylesheet=None ):
+        
+        if stylesheet != None :
+            self.use_stylesheet( stylesheet )
+        
+        r = self._console_print_( self._console_length_(),
+                                  self._console_height_(),
+                                )
+        
+        for l in r :
+            print l
+        
+        return
 
 class Text( Node ):
     
@@ -319,19 +342,19 @@ class Text( Node ):
     def _console_length_( self ):
         
         l = max( [ self._onelinelen(l) for l in self.texts ] )
-            
+        
         return super( Text, self )._console_length_( l )
             
     def _console_height_( self ):
         
         h = len( self.texts )
         
-        return super( Text, self )._console_height_( l )
+        return super( Text, self )._console_height_( h )
         
     def _console_print_( self, w, h ):
         
         # up ringt down left
-        padding = self.styles.get( 'padding', 0 )
+        padding = self.styles.get( 'padding', [0]*4 )
         _h = h - padding[0] - padding[2]
         _w = w - padding[1] - padding[3]
         
@@ -349,16 +372,16 @@ class Text( Node ):
         align = self.styles.get('align','center')
         
         if align == 'left' :
-            align = lambda s : ' '*padding[1] + s.ljust( w, ' ' ) + ' '*padding[3]
+            _align = lambda s : ' '*padding[1] + s.ljust( _w, ' ' ) + ' '*padding[3]
         elif align == 'right' :
-            align = lambda s : ' '*padding[1] + s.rjust( w, ' ' ) + ' '*padding[3]
+            _align = lambda s : ' '*padding[1] + s.rjust( _w, ' ' ) + ' '*padding[3]
         elif align == 'center' :
-            align = lambda s : ' '*padding[1] + s.center( w, ' ' ) + ' '*padding[3]
+            _align = lambda s : ' '*padding[1] + s.center( _w, ' ' ) + ' '*padding[3]
         
         fg = self.styles.get('color', None)
         bg = self.styles.get('background', None)
         
-        r = [ ColorString( align(l[:w]), fg=fg, bg=bg ) for l in r ]
+        r = [ ColorString( _align(l[:w]), fg=fg, bg=bg ) for l in r ]
         
         return r
         
@@ -386,6 +409,10 @@ class Number( Text ):
         
         return
         
+    def __repr__( self ):
+        
+        return 'Number('+repr(self.value)+')'
+        
     def _console_length_( self ):
         
         f = self.styles.get('number-format', [ '%d', '%0.2f' ] )
@@ -393,10 +420,11 @@ class Number( Text ):
         
         l = len( f % (self.value,) )
         
-        return super( Number, self )._console_length_( l )
+        #return super( Number, self )._console_length_( l )
+        return Node._console_length_( self, l )
         
-    #def _console_height_( self ):
-    #    return 1
+    def _console_height_( self ):
+        return Node._console_length_( self, 1 )
         
     def _console_print_( self, w, h ):
         
@@ -405,7 +433,7 @@ class Number( Text ):
         
         self.texts = [ f % (self.value,), ]
         
-        self.styels.setdefault( 'align', 'right' )
+        self.styles.setdefault( 'align', 'right' )
         
         return super( Number, self )._console_print_( w, h )
         
@@ -417,6 +445,10 @@ class Bool( Text ):
         super( Text, self ).__init__( '[ ]' if b else '[+]', **styles )
         
         self.value = b
+        
+    def __repr__( self ):
+        
+        return 'Bool('+repr(self.value)+')'
         
     def _console_length_( self ):
         
@@ -446,7 +478,7 @@ class Bar( Node ):
         super( Bar, self ).__init__( **styles )
         
         self.number = number if number < 1 else 1
-        self.contains.append( AutoNode(contain if contain else number )  )
+        self.contains = [ AutoNode( contain if contain else number ) ]
         self.add_node_cls('epBar')
         
     def use_stylesheet( self, stylesheet ):
@@ -457,14 +489,36 @@ class Bar( Node ):
         
         return
         
+    #def _console_length_( self ):
+    #    
+    #    l = self.contains[-1]._console_length_()
+    #    
+    #    return super( Bar, self )._console_length_( l )
+        
+    #def _console_height_( self ):
+    #    
+    #    h = self.contains[-1]._console_height_()
+    #    
+    #    return super( Bar, self )._console_height_( h )
+        
     def _console_print_( self, w, h ):
         
         bg = self.styles.get( 'background', 235 )
+        padding = self.styles.setdefault( 'padding', [ 0, 1, 0, 1 ] )
         
-        cts = self._console_printchild_( w, h )
+        _w = w-padding[1]-padding[3]
+        _h = h-padding[0]-padding[2]
+        #cts = self._console_printchild_( w, h )
         
+        cts = self.contains[-1]._console_print_( _w , _h )
         
-        for l in r :
+        cts = [ ColorString(' '*padding[1]) + c + ColorString(' '*padding[3])
+                for c in cts ]
+        
+        cts = [ ColorString(' '*w) ]*padding[0] + cts + \
+              [ ColorString(' '*w) ]*padding[2]
+        
+        for l in cts :
             
             e = int(l.displaylen*self.number)
             if e <= 0 :
@@ -472,7 +526,7 @@ class Bar( Node ):
             
             l.bgcolor( bg, s=0, e=e, mode='back' )
         
-        return r
+        return cts
         
     def _html_print_( self, pname='div' ):
         
@@ -492,15 +546,14 @@ class Bar( Node ):
 </%s>""" % (pname,st,nid,int(self.number*100),r,pname)
         
 
-class Table( Node ):
+class Grid( Node ):
     
-    def __init__( self, contains=[], headers=[], **styles ):
+    def __init__( self, contains=[], **styles ):
         
         #self.number = number if number < 1 else 1
-        super( Table, self ).__init__( **styles )
+        super( Grid, self ).__init__( **styles )
         
         self.contains = contains
-        self.headers = headers
         self.x_max = max( (x+l) for x, y, l, h, n in contains )
         self.y_max = max( (y+h) for x, y, l, h, n in contains )
         self.add_node_cls('epTable')
@@ -510,6 +563,22 @@ class Table( Node ):
         return
         
     def _console_height_( self ):
+        
+        return
+        
+    def use_stylesheet( self, stylesheet ):
+        
+        styles = {}
+        
+        for c in self.nclses :
+            styles.update( stylesheet.get(c,{}) )
+        
+        styles.update(self.styles)
+        
+        self.styles = styles
+        
+        for x, y, l, h, n in self.contains :
+            n.use_stylesheet( stylesheet )
         
         return
         
@@ -637,7 +706,7 @@ class Table( Node ):
         
         cells = [ ( x, y, l, h, n._console_print_( cell_width( x, l ), 
                                                    cell_heigth( y, h ), 
-                                                   stylesheet ) )
+                                                 ) )
                   for x, y, l, h, n in self.contains
                 ]
         
@@ -742,23 +811,13 @@ class Table( Node ):
         return
 
 
-class EasyPrinter( object ):
+class Table( Grid ):
     
-    covert = {}
-    
-    def __init__( self, ):
+    def __init__( self, data, convert={}, format={}, **styles ):
         
-        return
+        super( Table, self ).__init__( **styles )
         
-    def htmltable( self, ):
-        
-        return
-        
-    def eprint( self, ):
-        
-        return
-        
-    def _colssort( self, cols ):
+        self.contains = self._parse( data, convert, format )
         
         return
         
@@ -766,7 +825,7 @@ class EasyPrinter( object ):
         
         cvrt = covert.get( rk, lambda x : x )
         
-        print rk, covert
+        #print rk, covert
         
         data = cvrt(data)
         
@@ -822,7 +881,7 @@ class EasyPrinter( object ):
         
         tbv = self._parse_inner( data, covert=covert )
         
-        print tbv
+        #print tbv
         
         ks = [ tuple(k[:i]) for k, pth, v in tbv for i in range(1,len(k)+1) ]
         ks = list( set( ks ) )
@@ -880,7 +939,7 @@ class EasyPrinter( object ):
         t += [ ( colnum[k], rownum[pth], colspans[k], rowspans[pth], v ) 
                for k, pth, v in tbv ]
         
-        print rowmax, colsum
+        #print rowmax, colsum
         
         blanks = [ set( x+i for x, y, l, h, v in t if _y >= y and _y < y+h
                             for i in range(l) ) 
@@ -890,25 +949,18 @@ class EasyPrinter( object ):
                    for y, row in enumerate(blanks) 
                    for x in range(colsum) if x not in row ]
         
-        print blanks
+        #print blanks
         
         t += blanks
         
-        tbl = Table( contains = t )
-        r = tbl._console_print_()
+        return t
         
-        for l in r :
-            print l
+    def _console_print_( self, w=None, h=None ):
         
-        return
+        return super( Table, self )._console_print_( w, h )
         
         
 if __name__ == '__main__' :
-    
-    #a = ColorString('ABCDEFGHIJKLMNOPQRSTUVWSYZ')
-    #a.fgcolor( 200, e=10 )
-    #a.bgcolor( 150, s=5, e=15 )
-    #print a
     
     print ColorString.sum([ ColorString( str(b).ljust(4), bg = b ) for b in range(16) ])
     
@@ -917,17 +969,6 @@ if __name__ == '__main__' :
 
     print ColorString.sum([ ColorString( str(b).ljust(4), bg = b ) for b in range(232,256) ])
     
-    #print ColorString('|',bg=237).join(['A','B','C'])
-    #print ColorString('hello',bg=90)+' world '+ColorString('!',fg=90)
-
-
-    #print u'\u2714'
-    #print u'\u28ff'
-    #print u'\u2423\u2420\u2422'
-    #print u'\u204B'
-    
-    #print 
-    #print
     print
     print
     
@@ -937,10 +978,10 @@ if __name__ == '__main__' :
           },
           { 'colA' : 'A.2.alpha\r\nA.2.beta' ,
             'colB' : [0.1,0.9,0.3,0,-1],
-            'colC' : ['3',{'B.2.alpha':'z','B.1':'qew' }],
+            'colC' : [3,0.7,{'B.2.alpha':'z','B.1':'qew' },True,False],
           },
         ]
     
     ep = EasyPrinter()
-    ep._parse( d, covert = { ('colB',) : (lambda x : [ Bar(_x,str(_x)) for _x in x ]) } )
+    ep._parse( d, covert = { ('colB',) : (lambda x : [ Bar(_x, width=15) for _x in x ]), ('colA',) : ( lambda x : AutoNode( x, padding=[0,2]*2, align='right', width=20 ) ), } )
 
