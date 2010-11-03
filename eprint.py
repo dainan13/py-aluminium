@@ -195,42 +195,87 @@ class Node( object ):
         
         self.styles = styles
         
+        for ct in self.contains :
+            ct.use_stylesheet( stylesheet )
+        
         return
         
-    def _console_length_( self, d=1 ):
+    def _console_length_( self, d=None ):
+        
+        if d == None :
+            lo = self.styles.get( 'layout', 'horizontal' )
+            if lo == 'horizontal' :
+                d = sum( self.contains._console_length_() ) if self.contains else 1
+            elif lo == 'vertical' :
+                d = max( self.contains._console_length_() ) if self.contains else 1
         
         # up ringt down left
-        padding = self.styles.get( 'padding', 0 )
+        padding = self.styles.get( 'padding', [0]*4 )
         
         return max( self.styles.get( 'width', d ),
                     self.styles.get( 'min-width', 0 )
                ) + padding[1] + padding[3]
         
-    def _console_height_( self, d=1 ):
+    def _console_height_( self, d=None ):
+        
+        if d == None :
+            lo = self.styles.get( 'layout', 'horizontal' )
+            if lo == 'horizontal' :
+                d = max( self.contains._console_height_() ) if self.contains else 1
+            elif lo == 'vertical' :
+                d = sum( self.contains._console_height_() ) if self.contains else 1
         
         # up ringt down left
-        padding = self.styles.get( 'padding', 0 )
+        padding = self.styles.get( 'padding', [0]*4 )
         
         return max( self.styles.get( 'height', d ), 
                     self.styles.get( 'min-height', 0 )
                ) + padding[0] + padding[2]
         
-    #def _find_styles( self, stylesheet ):
-    #    
-    #    styles = {}
-    #    
-    #    for c in self.nclses :
-    #        styles.update( stylesheet.get(c,{}) )
-    #    
-    #    styles.update(self.styles)
-    #    
-    #    return styles
+    def _console_printchild_( self, w, h ):
+        
+        lo = self.styles.get( 'layout', 'horizontal' )
+        border = self.styles.get( 'borderchars', ' xx-x+++x+++|+++' )
+        
+        padding = self.styles.get( 'padding', 0 )
+        _h = h - padding[0] - padding[2]
+        _w = w - padding[1] - padding[3]
+        
+        if lo == 'horizontal' :
+            cts = [ ct._console_print_( ct._console_length_(), _h ) 
+                    for ct in self.contains ]
+            cts = zip( *cts )
+            cts = [ ColorString.sum(row)[:_w] for row in cts ]
+            cts = [ row + ColorString(' '*(_w-len(row))) for row in cts ]
+        elif lo == 'vertical' :
+            cts = [ ct._console_print_( _w, ct._console_height_() ) 
+                    for ct in self.contains ]
+            cts = sum( cts )[:_h]
+            cts = cts + [ ColorString(' '*_w) ]*(_h-len(cts))
+            
+        cts = [ ColorString(' '*(padding[1])) + row + \
+                                                ColorString(' '*(padding[3])) 
+                for row in cts ]
+            
+        cts = [ ColorString(' '*w) ]*padding[0] + cts + \
+              [ ColorString(' '*w) ]*padding[2]
+              
+        return cts
         
     def _console_print_( self, w, h ):
         
         bg = self.styles.get('background', None)
         
-        return [ ColorString(' '*w, bg=bg ) for i in range(h) ]
+        if not self.contains :
+            return [ ColorString(' '*w, bg=bg ) for i in range(h) ]
+        
+        self._console_printchild_( w, h )
+        
+        if bg :
+            for l in cts :
+                l.bgcolor( bg, mode = 'back' )
+        
+        return cts
         
     def _html_print_( self, pname='div' ):
         
@@ -285,24 +330,30 @@ class Text( Node ):
         
     def _console_print_( self, w, h ):
         
+        # up ringt down left
+        padding = self.styles.get( 'padding', 0 )
+        _h = h - padding[0] - padding[2]
+        _w = w - padding[1] - padding[3]
+        
         v_align = self.styles.get('vertical-align','middle')
+        r = self.texts[:_h]
         if v_align == 'top' :
-            r = self.texts[:h] + ['']*max( h - len(self.texts), 0 )
+            r = ['']*padding[0] + r + ['']*( h - len(r) - padding[0] )
         elif v_align == 'bottom' :
-            r = ['']*max( h - len(self.texts), 0 ) + self.texts[:h]
+            r = ['']*( h - len(r) - padding[2] ) + r + ['']*padding[2]
         elif v_align == 'middle' :
-            bt = ['']*max( (h - len(self.texts))/2, 0 )
-            bb = ['']*max( h - len(bt) - len(self.texts), 0 )
-            r = bt + self.texts[:h] + bb
+            bt = ['']*( padding[0] + (_h - len(r))/2 )
+            bb = ['']*( h - len(bt) - len(r) )
+            r = bt + r + bb
             
         align = self.styles.get('align','center')
         
         if align == 'left' :
-            align = lambda s : s.ljust( w, ' ' )
+            align = lambda s : ' '*padding[1] + s.ljust( w, ' ' ) + ' '*padding[3]
         elif align == 'right' :
-            align = lambda s : s.rjust( w, ' ' )
+            align = lambda s : ' '*padding[1] + s.rjust( w, ' ' ) + ' '*padding[3]
         elif align == 'center' :
-            align = lambda s : s.center( w, ' ' )
+            align = lambda s : ' '*padding[1] + s.center( w, ' ' ) + ' '*padding[3]
         
         fg = self.styles.get('color', None)
         bg = self.styles.get('background', None)
@@ -390,30 +441,28 @@ class Bool( Text ):
 
 class Bar( Node ):
     
-    def __init__( self, number, contain='', **styles ):
+    def __init__( self, number, contain=None, **styles ):
         
         super( Bar, self ).__init__( **styles )
         
         self.number = number if number < 1 else 1
-        self.contain = AutoNode(contain)
+        self.contains.append( AutoNode(contain if contain else number )  )
         self.add_node_cls('epBar')
         
-    def _console_length_( self ):
+    def use_stylesheet( self, stylesheet ):
         
-        return self.contain._console_length_() + 2
+        super( Bar, self ).use_stylesheet(stylesheet)
         
-    def _console_height_( self ):
+        self.styles.setdefault( 'padding', [ 0, 1, 0, 1 ] )
         
-        return self.contain._console_height_()
+        return
         
-    def _console_print_( self, w, h, stylesheet ):
+    def _console_print_( self, w, h ):
         
-        #styles = styles.copy()
-        #styles.update(self.styles)
-        styles = self._find_styles(stylesheet)
+        bg = self.styles.get( 'background', 235 )
         
-        r = [ ( ColorString(' ') + l + ColorString(' ') )
-              for l in self.contain._console_print_( w-2, h, styles ) ]
+        cts = self._console_printchild_( w, h )
+        
         
         for l in r :
             
@@ -421,12 +470,7 @@ class Bar( Node ):
             if e <= 0 :
                 continue
             
-            l.bgcolor( styles.get('barcolor',235),
-                       s=0,
-                       e=int(l.displaylen*self.number),
-                       #mode='cover',
-                       mode='back',
-                     )
+            l.bgcolor( bg, s=0, e=e, mode='back' )
         
         return r
         
@@ -550,7 +594,7 @@ class Table( Node ):
         
         return d.items()
     
-    def _console_print_( self, w=None, h=None, stylesheet={} ):
+    def _console_print_( self, w=None, h=None ):
         
         #
         #      2
@@ -573,10 +617,8 @@ class Table( Node ):
         #         |   |     |     |     |    |      |
         #
         
-        styles = self._find_styles(stylesheet)
-        
-        border = styles.get( 'borderchars', ' xx-x+++x+++|+++' )
-        border_fgc, border_bgc = styles.get( 'bordercolor', (237,None) )
+        border = self.styles.get( 'borderchars', ' xx-x+++x+++|+++' )
+        border_fgc, border_bgc = self.styles.get( 'bordercolor', (237,None) )
         #border_fgc, border_bgc = styles.get( 'bordercolor', (22,None) )
         border_width = 1 if border[3] else 0
         border_heigth = 1 if border[12] else 0
