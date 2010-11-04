@@ -13,6 +13,10 @@ background
 \033[0m
 """
 
+class Padding(list):
+    def __str__( self ):
+        return ' '.join( [ str(x*5)+'px' for x in self ] )
+
 class STREND(object):
     pass
 
@@ -173,20 +177,27 @@ def AutoNode( d, **sytles ):
     if type(d) in ( types.IntType, types.LongType, types.FloatType ):
         return Number( d, **sytles )
     
+    if type(d) == types.BooleanType :
+        return Bool( d, **sytles )
+    
     return Text( str(d), **sytles )
 
 
 class Node( object ):
     
-    def __init__( self, nclses=[], styles = {}, nid=None,
+    def __init__( self, nid=None, nclses=None, attr={}, styles={},  
                         *contains, **_styles ):
         
         self.contains = [ AutoNode(c) for c in contains ]
         
         self.styles = styles.copy()
         self.styles.update(_styles)
-        self.nclses = nclses
+        self.nclses = nclses or []
         self.nid = nid
+        
+        self.cls = 'ep-' + str( self.__class__.__name__ ).lower()
+        self.nclses.append(self.cls)
+        self.attr = attr
         
         return
         
@@ -291,16 +302,25 @@ class Node( object ):
         st = '' if self.styles == {} else \
             ( 'style="' + ';'.join( ('%s: %s' % x) for x in self.styles.items() ) + '"' )
         
-        st = ''
+        #st = ''
         
-        attr = ' '.join( '%s="%s"' % ( k, str(v) ) for k, v in attr.items() )
+        attr = attr.copy()
+        attr.update( self.attr )
+        
+        attr = ' '.join( '%s="%s"' % ( k, str(v) ) for k, v in attr.items() 
+                                                   if not k.startswith('ep-')
+                       )
         
         nids = 'id="%s"' % ( str(nid), ) if self.nid != None else ''
-            
+        
+        cls = 'class="%s"' % ( ' '.join(self.nclses) ) if self.nclses else ''
+        
+        m = ' '.join( x for x in ( pname, nids, cls, attr, st ) if x )
+        
         if ct == None :
-            return '<%s %s %s %s />' % ( pname, attr, st, nids )
+            return '<%s/>' % ( m, )
         else :
-            return '<%s %s %s %s>%s</%s>' % ( pname, attr, st, nids, ct, pname )
+            return '<%s>%s</%s>' % ( m, ct, pname )
         
     def _html_print_( self, pname='div', attr={} ):
         
@@ -397,7 +417,7 @@ class Text( Node ):
             bb = ['']*( h - len(bt) - len(r) )
             r = bt + r + bb
             
-        align = self.styles.get('align','center')
+        align = self.styles.get('text-align','center')
         
         if align == 'left' :
             _align = lambda s : ' '*padding[1] + s.ljust( _w, ' ' ) + ' '*padding[3]
@@ -417,14 +437,15 @@ class Text( Node ):
         
         ct = '<br>\n'.join([ saxutils.escape(l) for l in self.texts ])
         
-        return self._html_printframe( pname, attr, '\n'+ct+'\n' )
+        return self._html_printframe( pname, attr, 
+                                      '\n'+ct+'\n' if ct else '&nbsp;' )
     
 
 class Number( Text ):
     
     def __init__( self, n, **styles ):
         
-        super( Text, self ).__init__( '', **styles )
+        super( Number, self ).__init__( '', **styles )
         
         self.value = n
         self.isfloat = ( type(n) == types.FloatType )
@@ -439,7 +460,7 @@ class Number( Text ):
         
     def _console_length_( self ):
         
-        f = self.styles.get('number-format', [ '%d', '%0.2f' ] )
+        f = self.styles.get('ep-number-format', [ '%d', '%0.2f' ] )
         f = f[1] if self.isfloat else f[0]
         
         l = len( f % (self.value,) )
@@ -452,21 +473,31 @@ class Number( Text ):
         
     def _console_print_( self, w, h ):
         
-        f = self.styles.get('number-format', [ '%d', '%0.2f' ] )
+        f = self.styles.get('ep-number-format', [ '%d', '%0.2f' ] )
         f = f[1] if self.isfloat else f[0]
         
         self.texts = [ f % (self.value,), ]
         
-        self.styles.setdefault( 'align', 'right' )
+        self.styles.setdefault( 'text-align', 'right' )
         
         return super( Number, self )._console_print_( w, h )
         
-
+    def _html_print_( self, pname='div', attr={} ):
+        
+        f = self.styles.get('ep-number-format', [ '%d', '%0.2f' ] )
+        f = f[1] if self.isfloat else f[0]
+        
+        self.texts = [ f % (self.value,), ]
+        
+        self.styles.setdefault( 'text-align', 'right' )
+        
+        return super( Number, self )._html_print_( pname, attr )
+    
 class Bool( Text ):
     
     def __init__( self, b, **styles ):
         
-        super( Text, self ).__init__( '[ ]' if b else '[+]', **styles )
+        super( Bool, self ).__init__( '[ ]' if b else '[+]', **styles )
         
         self.value = b
         
@@ -476,10 +507,11 @@ class Bool( Text ):
         
     def _console_length_( self ):
         
-        f = self.styles.get('number-format', [ '[ ]', '[+]' ] )
+        f = self.styles.get('ep-bool-format', [ '[ ]', '[+]' ] )
         l = len( f[1] if self.value else f[0] )
         
-        return super( Bool, self )._console_length_( l )
+        #return super( Bool, self )._console_length_( l )
+        return Node._console_length_( self, l )
         
     #def _console_height_( self ):
     #    
@@ -487,13 +519,21 @@ class Bool( Text ):
     
     def _console_print_( self, w, h ):
         
-        f = self.styles.get('number-format', [ '[ ]', '[+]' ] )
+        f = self.styles.get('ep-bool-format', [ '[ ]', '[+]' ] )
         
-        self.texts = f[1] if self.isfloat else f[0]
+        self.texts = [f[1] if self.value else f[0]]
         
         return super( Bool, self )._console_print_( w, h )
     
-    
+    def _html_print_( self, pname='div', attr={} ):
+        
+        f = self.styles.get('ep-bool-format', 
+                         [ '<input type="checkbox" checked="yes" disabled />', 
+                           '<input type="checkbox" disabled>' ] )
+        ct = f[1] if self.value else f[0]
+        
+        #return super( Bool, self )._html_print_( pname, attr )
+        return self._html_printframe( pname, attr, ct )
 
 class Bar( Node ):
     
@@ -501,22 +541,22 @@ class Bar( Node ):
         
         super( Bar, self ).__init__( **styles )
         
-        self.number = number if number < 1 else 1
+        self.number = max( min( number, 1 ), 0 )
         self.contains = [ AutoNode( contain if contain else number ) ]
-        self.add_node_cls('epBar')
+        #self.add_node_cls('ep-bar')
         
     def use_stylesheet( self, stylesheet ):
         
         super( Bar, self ).use_stylesheet(stylesheet)
         
-        self.styles.setdefault( 'padding', [ 0, 1, 0, 1 ] )
+        self.styles.setdefault( 'padding', Padding([ 0, 1, 0, 1 ]) )
         
         return
         
     def _console_print_( self, w, h ):
         
-        bg = self.styles.get( 'background', 235 )
-        padding = self.styles.setdefault( 'padding', [ 0, 1, 0, 1 ] )
+        bg = self.styles.get( 'background-color', 235 )
+        padding = self.styles.setdefault( 'padding', Padding([ 0, 1, 0, 1 ]) )
         
         _w = w-padding[1]-padding[3]
         _h = h-padding[0]-padding[2]
@@ -542,9 +582,15 @@ class Bar( Node ):
         
     def _html_print_( self, pname='div', attr={} ):
         
+        #self.styles.setdefault( 'background', '#888888' )
+        
+        self.contains[-1].add_node_cls(self.cls+'-iiin')
         ct = self.contains[-1]._html_print_( 'div', {} )
-        ct = ( '<div style="width: %s%%">\n' % (int(self.number*100),) ) + \
-             ct + "\n</div>"
+        ct = ( '<div class="%s" style="width: %s%%">\n<div class="%s">\n' % \
+                                ( self.cls+'-in',
+                                  int(self.number*100),
+                                  self.cls+'-iin' ) ) + \
+             ct + "\n</div>\n</div>"
         
         return self._html_printframe( pname, attr, '\n'+ct+'\n' )
         
@@ -559,7 +605,6 @@ class Grid( Node ):
         self.contains = contains
         self.x_max = max( (x+l) for x, y, l, h, n in contains )
         self.y_max = max( (y+h) for x, y, l, h, n in contains )
-        self.add_node_cls('epTable')
         
     def _console_length_( self ):
         
@@ -995,9 +1040,14 @@ if __name__ == '__main__' :
     
     ep = Table( d, convert = { 
             ('colB',) : (lambda x : [ Bar(_x, width=15) for _x in x ]), 
-            ('colA',) : ( lambda x : AutoNode( x, padding=[0,2]*2, align='right', width=20 ) ), 
+            ('colA',) : ( lambda x : AutoNode( x, padding=Padding([0,2]*2), align='right', width=20 ) ), 
         } )
     
     ep.consoleprint()
+    
+    ep = Table( d, convert = { 
+            ('colB',) : (lambda x : [ Bar(_x) for _x in x ]), 
+        } )
+        
     ep.htmlprint()
 
