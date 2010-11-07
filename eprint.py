@@ -1018,6 +1018,11 @@ class Table( Grid ):
         
 if __name__ == '__main__' :
     
+    # over
+    # above
+    # below
+    # under
+    
     print ColorString.sum([ ColorString( str(b).ljust(4), bg = b ) for b in range(16) ])
     
     for x in range(6):
