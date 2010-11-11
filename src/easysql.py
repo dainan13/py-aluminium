@@ -705,7 +705,7 @@ class SQLConnectionPool( object ):
         return
         
     def _traceback( self, info, wrt, conn, sql, time, r, *args ):
-        return self.mytraceback( self, conn, sql, time )
+        return self.mytraceback( conn, sql, time )
         
     def mytraceback( self, conn, sql, time ):
         
