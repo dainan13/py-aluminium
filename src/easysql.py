@@ -596,12 +596,14 @@ class SQLConnectionPool( object ):
         
         return affect, lastid, info
     
-    def read( self, conn_args, sql, presql=None ):
+    def read( self, conn_args, sql, presql=None, infos=() ):
         
         conn_args = tuple(conn_args)
         
-        conn = self._get( conn_args, False, sql )
+        conn = self._get( conn_args, False, sql, infos = infos )
         rconn = None
+        
+        r = None
         
         starttime = time.time()
         
@@ -615,8 +617,11 @@ class SQLConnectionPool( object ):
                     break
                 except MySQLdb.OperationalError, e :
                     if e.args[0] == 2006 :
-                        conn = self._get( conn_args, False, sql )
+                        conn = self._get( conn_args, False, sql, infos )
+                        self._traceback( infos, False, 
+                                         tuple(conn_args), sql, -1, None )
                         starttime = time.time()
+                        continue
                     else :
                         raise
                 except MySQLdb.ProgrammingError, e :
@@ -625,19 +630,23 @@ class SQLConnectionPool( object ):
         finally :
             self._put( conn_args, False, rconn )
             endtime = time.time()
-            self.mytraceback( tuple(conn_args), 
-                              ';'.join( ( presql, sql ) ) \
+            self._traceback( infos, False, tuple(conn_args), 
+                             ';'.join( ( presql, sql ) ) \
                                                   if presql != None else sql ,
-                              0 if rconn == None else endtime - starttime )
+                             0 if rconn == None else endtime - starttime,
+                             r,
+                           )
         
         return r
     
-    def write( self, conn_args, sql ):
+    def write( self, conn_args, sql, infos=() ):
         
         conn_args = tuple(conn_args)
         
-        conn = self._get( conn_args, True, sql )
+        conn = self._get( conn_args, True, sql, infos = infos )
         rconn = None
+        
+        r = None
         
         starttime = time.time()
         
@@ -649,19 +658,21 @@ class SQLConnectionPool( object ):
                     break
                 except MySQLdb.OperationalError, e :
                     if e.args[0] == 2006 :
-                        conn = self._get( conn_args, True, sql )
+                        conn = self._get( conn_args, True, sql, infos )
+                        self._traceback( infos, True, 
+                                         tuple(conn_args), sql, -1, None )
                         starttime = time.time()
                     else :
                         raise
         finally :
             self._put( conn_args, True, rconn )
             endtime = time.time()
-            self.mytraceback( tuple(conn_args), sql, \
-                              0 if rconn == None else endtime - starttime )
+            self._traceback( infos, True, tuple(conn_args), sql, \
+                             0 if rconn == None else endtime - starttime, r )
             
         return r
     
-    def _get( self, conn_args, wrt, sql = None ):
+    def _get( self, conn_args, wrt, sql='', infos=() ):
         
         try :
             conn = self.conns.get( conn_args, self.dq ).get( False ) \
@@ -679,7 +690,7 @@ class SQLConnectionPool( object ):
                         connect_timeout = self.default_timeout,
                     )
             except MySQLdb.OperationalError, e :
-                self.mytraceback( tuple(conn_args), sql, 0 )
+                self._traceback( infos, wrt, tuple(conn_args), sql, 0, self.connectionfailed )
                 self.connectionfailed += 1
                 raise ConnectionError, e.args
         
@@ -692,6 +703,9 @@ class SQLConnectionPool( object ):
             self.conns[conn_args].put( conn )
             
         return
+        
+    def _traceback( self, info, wrt, conn, sql, time, r, *args ):
+        return self.mytraceback( self, conn, sql, time )
         
     def mytraceback( self, conn, sql, time ):
         
