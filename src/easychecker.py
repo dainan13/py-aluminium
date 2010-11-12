@@ -511,7 +511,7 @@ class Checker(object):
     @autologchecker
     def checker_ascii( self, x ):
         return type(x) in ( type(''), type(u'') ) \
-               and re.match(r'[a-zA-Z0-9_-]*',x) != None
+               and re.match(r'^[a-zA-Z0-9_-]*$',x) != None
     
     @autologchecker
     def checker_alnum( self, x ):
