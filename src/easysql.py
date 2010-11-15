@@ -693,6 +693,8 @@ class SQLConnectionPool( object ):
                 self._traceback( infos, wrt, tuple(conn_args), sql, 0, self.connectionfailed )
                 self.connectionfailed += 1
                 raise ConnectionError, e.args
+                
+            conn.query("set autocommit=1")
         
         return conn
     
