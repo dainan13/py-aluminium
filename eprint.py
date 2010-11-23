@@ -1066,7 +1066,8 @@ if __name__ == '__main__' :
                         ('colA',) : ( lambda x : AutoNode( x, padding=Padding([0,2]*2), align='right', width=20 ) ), 
                    }, 
                    formatter = {
-                        ('colB',) : under('colA') )
+                        col().sort( ( 'colA','colB', 'colC' ) )
+                        col('colB',).position.under('colA',).leftside(None) : ( under('colA'), leftside('') ) )
                    },
               )
     
