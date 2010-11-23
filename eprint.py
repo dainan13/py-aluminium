@@ -868,6 +868,39 @@ class Grid( Node ):
         return self._html_printframe( pname, attr, '\n'+ '\n'.join(doms) +'\n' )
 
 
+class _Position( object ):
+    
+    def __init__( p, s ):
+        self.p = p
+        self.s = s
+        return
+
+
+def over(s):
+    return _Position( 'over', s )
+    
+def above(s):
+    return _Position( 'above', s )
+    
+def below(s):
+    return _Position( 'below', s )
+    
+def under(s):
+    return _Position( 'under', s )
+    
+def leftside(s):
+    return _Position( 'leftside', s )
+    
+def rightside(s):
+    return _Position( 'rightside', s )
+
+def leftnext(s)
+    return _Position( 'leftnext', s )
+    
+def rightnext(s)
+    return _Position( 'rightnext', s )
+
+
 class Table( Grid ):
     
     def __init__( self, data, convert={}, format={}, **styles ):
@@ -915,23 +948,6 @@ class Table( Grid ):
         return s
         
     def _parse( self, data, convert={}, format={} ):
-        '''
-        convert :
-        
-        format :
-        ( A, (A2,A1) ) : None
-        ( C, ) : under(A, )
-        ( D, ) : inner(B, )
-        
-        +---------+---------+
-        |    A    |    B    |
-        +----+----+---------+
-        | A2 | A1 |    D    |
-        +----+----+---------+
-        |    C    |         |
-        +---------+---------+
-        
-        '''
         
         tbv = self._parse_inner( data, convert=convert )
         
@@ -939,7 +955,7 @@ class Table( Grid ):
         
         ks = [ tuple(k[:i]) for k, pth, v in tbv for i in range(1,len(k)+1) ]
         ks = list( set( ks ) )
-        ks.sort()
+        #ks.sort()
         
         kcs = [ ( k, sum( 1 for _k in ks 
                             if len(_k) > len(k) and _k[:len(k)] == k ) ) 
@@ -947,6 +963,8 @@ class Table( Grid ):
         
         #        key end  cols
         kcs = [ ( k, c==0, max(c,1) ) for k, c in kcs ]
+        
+        #print kcs
         
         colnum = [ ( 1 if e else 0 ) for k, e, c in kcs ]
         colnum = reduce( lambda x, y : x+[x[-1]+y], colnum, [0] )
@@ -1044,9 +1062,13 @@ if __name__ == '__main__' :
         ]
     
     ep = Table( d, convert = { 
-            ('colB',) : (lambda x : [ Bar(_x, width=15) for _x in x ]), 
-            ('colA',) : ( lambda x : AutoNode( x, padding=Padding([0,2]*2), align='right', width=20 ) ), 
-        } )
+                        ('colB',) : ( lambda x : [ Bar(_x, width=15) for _x in x ] ), 
+                        ('colA',) : ( lambda x : AutoNode( x, padding=Padding([0,2]*2), align='right', width=20 ) ), 
+                   }, 
+                   formatter = {
+                        ('colB',) : under('colA') )
+                   },
+              )
     
     ep.consoleprint()
     
