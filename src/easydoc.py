@@ -394,7 +394,7 @@ class EasyDoc( object ):
             if b - f == 1 :
                 r[k] = v
             else :
-                r[k] = self.parse_object_ex( lines[f:b] )
+                r[k] = self.parse_object_ex( lines[f+1:b] )
                 if v != '' :
                     r[k][''] = v
             
@@ -459,9 +459,9 @@ class EasyDoc( object ):
     
 DEFAULT_E = EasyDoc()
     
-def parse( doc ):
+def parse( doc, *args, **kwargs ):
     
-    return DEFAULT_E.parse( doc )
+    return DEFAULT_E.parse( doc, *args, **kwargs )
     
     
     
