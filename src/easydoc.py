@@ -203,7 +203,12 @@ class EasyDoc( object ):
         self.sep = sep
         self.title = title
         
-    def parse( self, doc ):
+    def parse( self, doc, parser = None, *args, **kwargs ):
+        
+        if parser != None :
+            body = self.onestage( doc )
+            parser = getattr( self, 'parse_' + parser )
+            return parser( body, *args, **kwargs )
         
         stages = self.splitstage(doc)
         
@@ -230,6 +235,21 @@ class EasyDoc( object ):
         m.setkeys(names)
         
         return m
+    
+    def onestage( self, doc ):
+        
+        dls = doc.splitlines()
+        
+        if dls == [] :
+            return dls
+        
+        while( dls[0].strip() == '' ):
+            del dls[0]
+        
+        while( dls[-1].strip() == '' ):
+            del dls[-1]
+            
+        return dls
     
     def splitstage( self, doc ):
         '''
@@ -352,6 +372,34 @@ class EasyDoc( object ):
         
         return dict(r)
         
+    def parse_object_ex( self, lines ):
+        
+        if lines == [] :
+            return {}
+        
+        spacelen = lambda x : len(x) - len(x.lstrip(' '))
+        
+        sl = spacelen(lines[0])
+        p = [ i for i, li in enumerate( lines ) if spacelen(li) == sl ]
+        seg = zip( p, p[1:]+[len(lines)] )
+        
+        r = {}
+        
+        for f, b in seg :
+            
+            k, v = lines[f].split(':',1)
+            k = k.strip()
+            v = v.strip()
+            
+            if b - f == 1 :
+                r[k] = v
+            else :
+                r[k] = self.parse_object_ex( lines[f:b] )
+                if v != '' :
+                    r[k][''] = v
+            
+        return r
+        
     def parse_table( self, lines ):
         
         if lines[0].startswith('!'):
@@ -468,6 +516,16 @@ if __name__=='__main__':
         
         ##!# BAR                                               .value as Metas_D
         A
+        
+        
+        ##!# Metas_EX                                                 .object_ex
+        argument: showstyle
+            showtype: dropdownlist
+                items: ['table','list']
+                default: 'table'
+            action: js.changeshowstyle
+        showtype: text
+        
         '''
         
     e = EasyDoc()
@@ -494,3 +552,5 @@ if __name__=='__main__':
     #b
     
     print r['Metas_C']
+    
+    print r['Metas_EX']

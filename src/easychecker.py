@@ -172,7 +172,10 @@ class Checker(object):
     
     @staticmethod
     def _log( stack, logger, info ):
-        logger += [ (stack[:], info), ]
+        #print 
+        #logger += [ (stack[:], info), ]
+        logger.append( (stack[:], info) )
+        #print logger
         return
     
     def _makechecker_funchkr( self, name, checker, tags, pairs, items  ):
@@ -531,6 +534,8 @@ if __name__=='__main__':
             [ {}, {'a':'hahaha'}, {'a':3}],
         'object( -5, #.a:string, .a:number )':
             [ {}, {'a':'hahaha'}, {'a':3}],
+        'object( #.a:string )':
+            [ {}, {'b':'hahaha'} ],
         'array( string(3) )':
             [ ['abd','abc'], ],
         'null':
@@ -544,5 +549,9 @@ if __name__=='__main__':
         ckr = Checker(checker)
         
         for data in datas :
-            print '  ', data, '>', ckr(data)
-    
+            a = []
+            print '  ', data, '>', ckr(data, log=a), '>>>', a
+            #print
+        
+        print
+        
