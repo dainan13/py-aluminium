@@ -768,7 +768,7 @@ mainhtml = Template(mainhtml)
 
 
 from Al import easydoc
-from Al.__future__ import easyprint as eprint
+from Al.__furture__ import easyprint as eprint
 
 import json
 from pprint import pprint
