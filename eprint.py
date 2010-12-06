@@ -359,6 +359,14 @@ class Node( object ):
         
         return
 
+    def htmlformat( self, stylesheet=None ):
+        
+        if stylesheet != None :
+            self.use_stylesheet( stylesheet )
+        
+        r = self._html_print_( )
+        
+        return r
 
 
 
@@ -894,10 +902,10 @@ def leftside(s):
 def rightside(s):
     return _Position( 'rightside', s )
 
-def leftnext(s)
+def leftnext(s):
     return _Position( 'leftnext', s )
     
-def rightnext(s)
+def rightnext(s):
     return _Position( 'rightnext', s )
 
 
@@ -1066,8 +1074,6 @@ if __name__ == '__main__' :
                         ('colA',) : ( lambda x : AutoNode( x, padding=Padding([0,2]*2), align='right', width=20 ) ), 
                    }, 
                    formatter = {
-                        col().sort( ( 'colA','colB', 'colC' ) )
-                        col('colB',).position.under('colA',).leftside(None) : ( under('colA'), leftside('') ) )
                    },
               )
     
