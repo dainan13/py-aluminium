@@ -431,7 +431,7 @@ body  {
 .twoColHybLt #argbar {
     font: 120% arial;
     width: auto;
-    height: 30px;
+    height: auto !important; height: 30px; min-height: 30px;
     text-align: left;
     background: #EBEFF9;
     border-bottom: 1px solid #C2CFF1;
@@ -488,6 +488,104 @@ html {
     height:100%;
 }
 '''
+
+maincss = maincss + '''
+
+.ep-table {
+    padding: 0;
+    margin: 0;
+}
+
+caption {
+    padding: 0 0 5px 0;
+    width: 700px;     
+    font: italic 11px "Trebuchet MS", Verdana, Arial, Helvetica, sans-serif;
+    text-align: right;
+}
+
+th {
+    font: bold 11px "Trebuchet MS", Verdana, Arial, Helvetica, sans-serif;
+    color: #4f6b72;
+    border-right: 1px solid #C1DAD7;
+    border-bottom: 1px solid #C1DAD7;
+    border-top: 1px solid #C1DAD7;
+    letter-spacing: 2px;
+    text-align: left;
+    padding: 6px 6px 6px 12px;
+    background: #CAE8EA;
+    width: 30px;
+}
+
+th.nobg {
+    border-top: 0;
+    border-left: 0;
+    border-right: 1px solid #C1DAD7;
+    background: none;
+}
+
+td {
+    border-right: 1px solid #C1DAD7;
+    border-bottom: 1px solid #C1DAD7;
+    background: #fff;
+    padding: 6px 6px 6px 12px;
+    color: #4f6b72;
+}
+
+
+td.alt {
+    background: #F5FAFA;
+    color: #797268;
+}
+
+th.spec {
+    border-left: 1px solid #C1DAD7;
+    border-top: 0;
+    background: #fff;
+    font: bold 10px "Trebuchet MS", Verdana, Arial, Helvetica, sans-serif;
+}
+
+th.specalt {
+    border-left: 1px solid #C1DAD7;
+    border-top: 0;
+    background: #f5fafa url(images/bullet2.gif) no-repeat;
+    font: bold 10px "Trebuchet MS", Verdana, Arial, Helvetica, sans-serif;
+    color: #797268;
+}
+
+.ep-bar {
+    height: 100%; 
+    _position: relative; 
+    margin: 0 auto; 
+    padding: 1px 1px 1px 1px;
+}
+
+.ep-bar-in {
+    height: 100%; 
+    background-color: #B1D632; 
+    position: relative; 
+    display: table;
+}
+
+.ep-bar-iin{
+    _position: absolute; 
+    _top: 50%; 
+    vertical-align: middle; 
+    display: table-cell;
+}
+
+.ep-bar-iiin {
+    _position: relative; 
+    width: 100%; 
+    height: 100%; 
+    _top: -50%;
+}
+
+.ep-number {
+    white-space: nowrap;
+}
+
+'''
+
 
 ajaxlib = r'''
 function Server() {
@@ -673,10 +771,14 @@ from Al import easydoc
 import json
 from pprint import pprint
 from urlparse import urlparse
+import eprint
+import xml.sax.saxutils
 
 class EasyWeb( object ):
     
-    def __init__( self, ):
+    def __init__( self, title = None ):
+        
+        self.title = title or "EasyWeb"
         
         self.methods = dict( ( k[4:], getattr( self, k ) ) for k in dir(self) 
                              if k.startswith('web_') )
@@ -690,7 +792,7 @@ class EasyWeb( object ):
         self.methods_meta = dict( ( k, easydoc.parse( v.__doc__, 'object_ex' ) ) 
                                   for k, v in self.methods.items() )
         
-        pprint( self.methods_meta )
+        #pprint( self.methods_meta )
         
         self.mp = self.make_mainpage()
         
@@ -714,7 +816,7 @@ class EasyWeb( object ):
         funclist = '\n'.join(funclist)
         
         #return mainhtml % ( 'Monitor', funlist )
-        return mainhtml.safe_substitute( title = 'Monitor',
+        return mainhtml.safe_substitute( title = self.title,
                                          funclist = funclist,
                                          
                                          jsothers = jsothers,
@@ -786,6 +888,42 @@ class EasyWeb( object ):
         
         yield '''window.location.href=window.location.href+"%s";''' \
                     %( str(work_n), )
+        
+        showargs = self.methods_meta[work_n].get( "arguments", {} )
+        showargs = self.make_args( showargs )
+        
+        yield '''document.getElementById('argbar').innerHTML = '%s';''' \
+                                       % ( showargs.encode('string_escape'), )
+        
+    def make_args( self, args ):
+        
+        r = [ getattr(self,'arg_'+v[''] )( k, v ) for k, v in args.items() ]
+        r = [ k + i for k, i in zip(args.keys(), r)]
+        r = '<br />'.join(r)
+        
+        return r
+    
+    def arg_dropdownlist( self, name, arg ):
+        
+        items = eval( arg['items'] )
+        default = eval( arg.get( 'default','None') )
+        
+        r = [ '<option value="%s" %s >%s</option>' \
+                     % ( i, 'selected="selected"' if i == default else '', i) 
+              for i in items ]
+        
+        r = '\n'.join(r)
+        r = ( '<select name="%s">\n' % (name,) ) + r + '\n</select>'
+        
+        return r
+    
+    def arg_text( self, name, arg ):
+        
+        default = eval( arg.get( 'default','""') )
+        
+        r = '<input type="test" name="%s" value="%s" />' % ( name, default)
+        
+        return r
     
     def serve( self, port, engine = '' ):
         
@@ -821,11 +959,6 @@ class EasyWeb( object ):
     
     def _web_default( self, user ):
         '''
-        argument:
-            showtype: dropdownlist
-                items: ['table','list']
-                default: 'table'
-            action: js.changeshowstyle
         showtype: text
         '''
         
@@ -835,21 +968,47 @@ class EasyWeb( object ):
         
         return r
         
-    def resp_text( self, r ):
+    def resp_raw( self, r ):
+        
+        if type(r) == type(u''):
+            r = r.encoding('utf-8')
+        
+        if type(r) != type(''):
+            r = str(r)
         
         return '''document.getElementById('contentzone').innerHTML = '%s';''' \
-                                                                    % ( r, )
+                                               % ( r.encode('string_escape'), )
+        
+    def resp_text( self, r ):
+        
+        if type(r) == type(u''):
+            r = r.encoding('utf-8')
+        
+        if type(r) != type(''):
+            r = str(r)
+        
+        r = xml.sax.saxutils.escape(r)
+        
+        return '''document.getElementById('contentzone').innerHTML = '%s';''' \
+                                               % ( r.encode('string_escape'), )
+                                                                    
+    def resp_table( self, r ):
+        
+        r = eprint.Table( r, attr={"cellSpacing":0} ).htmlformat()
+        
+        return self.resp_raw(r)
 
 
-class EasyWebTest( enatio ):
+class EasyWebTest( EasyWeb ):
     
     def web_test( self, user ):
         '''
-        argument:
-            showtype: dropdownlist
+        arguments:
+            input1: dropdownlist
                 items: ['table','list']
                 default: 'table'
-            action: js.changeshowstyle
+            input2: text
+                default: 'hello'
         showtype: text
         '''
         
@@ -857,23 +1016,25 @@ class EasyWebTest( enatio ):
         
     def web_test2( self, user ):
         '''
-        argument:
-            showtype: dropdownlist
-                items: ['table','list']
-                default: 'table'
-        showtype: text
+        showtype: table
         name: hello world
         group: Hello
         '''
         
-        return
+        d = [ { 'colA' : 'A.1.alpha\r\nA.1.beta' ,
+                'colB' : [1,2],
+                'colC' : 'B.1.alpha\r\nB.1.beta\r\nB.1.gamma\r\nB.1.delta',
+              },
+              { 'colA' : 'A.2.alpha\r\nA.2.beta' ,
+                'colB' : [0.1,0.9,0.3,0,-1],
+                'colC' : [3,0.7,{'B.2.alpha':'z','B.1':'qew' },True,False],
+              },
+            ]
+        
+        return d
 
     def web_test3( self, user ):
         '''
-        argument:
-            showtype: dropdownlist
-                items: ['table','list']
-                default: 'table'
         showtype: text
         name: sleep 1 sec
         group: Hello
@@ -882,7 +1043,7 @@ class EasyWebTest( enatio ):
         import time
         time.sleep(1)
         
-        return
+        return 'server sleeped 1 sec'
 
 if __name__ == '__main__' :
     
