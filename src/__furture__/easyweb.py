@@ -973,7 +973,7 @@ class EasyWeb( object ):
     def resp_raw( self, r ):
         
         if type(r) == type(u''):
-            r = r.encoding('utf-8')
+            r = r.encode('utf-8')
         
         if type(r) != type(''):
             r = str(r)
