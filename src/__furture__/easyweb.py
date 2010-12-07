@@ -743,6 +743,9 @@ function resize(){
     $("sidebar").style.height = h + "px";
     $("splitbar").style.height = h + "px";
     $("mainContent").style.height = h + "px";
+    
+    server.resizecontainzone()
+    
     doc = null;
 }
 '''
