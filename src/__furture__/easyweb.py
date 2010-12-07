@@ -618,7 +618,16 @@ function Server() {
             if ( this.status == "200" ) 
             {
                 eval( this.responseText ) ;
-                this.resizecontainzone() ;
+                
+                var h = document.getElementById( "mainContent" ).offsetHeight;
+                
+                h = h - document.getElementById( "topbar" ).offsetHeight;
+                h = h - document.getElementById( "argbar" ).offsetHeight;
+                
+                $("contentzone").style.height = h + "px";
+        
+                //this.resizecontainzone() ;
+                
                 tip = document.getElementById("toptip") ;
                 tip.style.display = "none" ;
             }
