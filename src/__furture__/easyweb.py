@@ -442,8 +442,6 @@ body  {
 .twoColHybLt #contentzone {
     width: auto;
     height: auto;
-    overflow: scroll;
-    overflow-y: scroll;
 }
 
 .opts {
