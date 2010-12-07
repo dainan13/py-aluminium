@@ -603,6 +603,10 @@ function Server() {
     
     this.resizecontainzone = function()
     {
+        function $(id){
+            return window.document.getElementById(id);
+        }
+    
         var h = document.getElementById( "mainContent" ).offsetHeight;
         
         h = h - document.getElementById( "topbar" ).offsetHeight;
@@ -619,14 +623,18 @@ function Server() {
             {
                 eval( this.responseText ) ;
                 
+                
+                function $(id){
+                    return window.document.getElementById(id);
+                }
+            
                 var h = document.getElementById( "mainContent" ).offsetHeight;
                 
                 h = h - document.getElementById( "topbar" ).offsetHeight;
                 h = h - document.getElementById( "argbar" ).offsetHeight;
                 
                 $("contentzone").style.height = h + "px";
-        
-                //this.resizecontainzone() ;
+                
                 
                 tip = document.getElementById("toptip") ;
                 tip.style.display = "none" ;
