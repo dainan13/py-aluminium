@@ -440,8 +440,6 @@ body  {
 }
 
 .twoColHybLt #contentzone {
-    width: auto;
-    height: auto;
     overflow: scoll;
 }
 
@@ -626,7 +624,8 @@ function Server() {
     
     this.resizecontainzone = function()
     {
-        document.getElementById( "mainContent" ).offsetHeight;
+        var h = document.getElementById( "mainContent" ).offsetHeight;
+        
         h = h - document.getElementById( "topbar" ).offsetHeight;
         h = h - document.getElementById( "argbar" ).offsetHeight;
         
