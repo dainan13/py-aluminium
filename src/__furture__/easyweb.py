@@ -440,6 +440,8 @@ body  {
 }
 
 .twoColHybLt #contentzone {
+    width: auto;
+    height: auto;
     overflow: scroll;
     overflow-y: scroll;
 }
@@ -736,9 +738,6 @@ $maincss
 </style>
 <![endif]-->
 <script type="text/javascript">
-$jsonlib
-</script>
-<script type="text/javascript">
 $ajaxlib
 </script>
 <script type="text/javascript">
@@ -829,7 +828,6 @@ class EasyWeb( object ):
                                          funclist = funclist,
                                          
                                          jsothers = jsothers,
-                                         jsonlib = jsonlib,
                                          ajaxlib = ajaxlib,
                                          maincss = maincss,
                                        )
