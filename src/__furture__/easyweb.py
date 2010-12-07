@@ -442,6 +442,7 @@ body  {
 .twoColHybLt #contentzone {
     width: auto;
     height: auto;
+    overflow: scoll;
 }
 
 .opts {
@@ -609,6 +610,7 @@ function Server() {
             if ( this.status == "200" ) 
             {
                 eval( this.responseText ) ;
+                this.resizecontainzone() ;
                 tip = document.getElementById("toptip") ;
                 tip.style.display = "none" ;
             }
@@ -620,6 +622,15 @@ function Server() {
                 tip.style.display = "" ;
             }
         }
+    };
+    
+    this.resizecontainzone = function()
+    {
+        document.getElementById( "mainContent" ).offsetHeight;
+        h = h - document.getElementById( "topbar" ).offsetHeight;
+        h = h - document.getElementById( "argbar" ).offsetHeight;
+        
+        $("contentzone").style.height = h + "px";
     };
     
     this.ajaxcall = function( content, info ) {
