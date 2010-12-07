@@ -601,6 +601,16 @@ function Server() {
         this.conn = new ActiveXObject("MSXML2.XMLHTTP.3.0");
     };
     
+    this.resizecontainzone = function()
+    {
+        var h = document.getElementById( "mainContent" ).offsetHeight;
+        
+        h = h - document.getElementById( "topbar" ).offsetHeight;
+        h = h - document.getElementById( "argbar" ).offsetHeight;
+        
+        $("contentzone").style.height = h + "px";
+    };
+    
     this.conn.onreadystatechange = function() 
     {
         if( this.readyState == 4 ) 
@@ -620,16 +630,6 @@ function Server() {
                 tip.style.display = "" ;
             }
         }
-    };
-    
-    this.resizecontainzone = function()
-    {
-        var h = document.getElementById( "mainContent" ).offsetHeight;
-        
-        h = h - document.getElementById( "topbar" ).offsetHeight;
-        h = h - document.getElementById( "argbar" ).offsetHeight;
-        
-        $("contentzone").style.height = h + "px";
     };
     
     this.ajaxcall = function( content, info ) {
