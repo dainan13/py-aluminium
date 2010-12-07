@@ -439,6 +439,10 @@ body  {
     padding: 0 10px 0 10px;
 }
 
+.twoColHybLt #contentzone {
+    overflow: scroll;
+    overflow-y: scroll;
+}
 
 .opts {
     padding: 5px 0px 5px 0px;
