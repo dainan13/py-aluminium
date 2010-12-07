@@ -440,7 +440,7 @@ body  {
 }
 
 .twoColHybLt #contentzone {
-    overflow: scoll;
+    overflow: scroll;
 }
 
 .opts {
