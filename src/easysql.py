@@ -569,6 +569,18 @@ class SQLConnectionPool( object ):
         
         return rst
     
+    def _read_with_cols( self, conn, sql ):
+        
+        conn.query(sql)
+        
+        rst = conn.store_result()
+        
+        fs = rst.field_flags()
+        
+        rst = rst.fetch_row(rst.num_rows())
+        
+        return rst, fs
+    
     def _write( self, conn, sql ):
         '''
         using Mysql_info() to get the match number affact number
@@ -595,6 +607,42 @@ class SQLConnectionPool( object ):
         conn.commit()
         
         return affect, lastid, info
+    
+    def explain( self, conn_args, sql, infos=() ):
+        
+        conn_args = tuple(conn_args)
+        
+        conn = self._get( conn_args, False, sql, infos = infos )
+        rconn = None
+        
+        r = None
+        
+        starttime = time.time()
+        
+        try :
+            while(True):
+                try :
+                    r, fs = self._read_with_cols( conn, sql )
+                    rconn = conn
+                except MySQLdb.OperationalError, e :
+                    if e.args[0] == 2006 :
+                        conn = self._get( conn_args, False, sql, infos )
+                        self._traceback( infos, False, 
+                                         tuple(conn_args), sql, -1, None )
+                        starttime = time.time()
+                        continue
+                    else :
+                        raise
+                except MySQLdb.ProgrammingError, e :
+                    e.args = tuple( list(e.args)+[sql,] )
+                    raise
+        finally :
+            self._put( conn_args, False, rconn )
+            endtime = time.time()
+            self._traceback( infos, False, tuple(conn_args), sql ,
+                             0 if rconn == None else endtime - starttime, r,
+                           )
+        return r, fs
     
     def read( self, conn_args, sql, presql=None, infos=() ):
         
@@ -1016,7 +1064,13 @@ class Tablet( object ) :
         
         return sql
     
-    
+    def _explain_low( self, connpool, sql, ):
+        
+        rst, fs = connpool.explain( self.conn_args , sql )
+        
+        #rst = [ dict(zip(cols,row)) for row in rst ] 
+        
+        return len(rst), rst, fs
 
 
 
@@ -1376,6 +1430,21 @@ class Table ( object ) :
               ]
         
         #rst = [ self._decoderow(r) for r in rst ]
+        
+        return n, rst
+    
+    def _explain_low( self, sql ):
+        
+        for excpt in ([ConnectionError]*(self.retrytimes-1)+[None,]) :
+            
+            try :
+                n, rst, fs = tbl._explain_low( self.connpool, sql )
+            except excpt as e :
+                continue
+            
+            break
+        
+        rst = [ dict( zip(fs, r) ) for r in rst ]
         
         return n, rst
     
@@ -1821,7 +1890,20 @@ class Table ( object ) :
         query.sqls = sqls
         
         return query
-
+    
+    def asexplain( self, sql ):
+        
+        def query( stunt = {} ):
+            
+            tbl = self._gettablets( self._splitter_ex( stunt )[0][0] )
+            
+            n, r = self._explain_low( p.raw, tbl )
+            
+            return r
+        
+        query.sqls = [sql]
+        
+        return query
 
 
 class DataBase ( object ):
