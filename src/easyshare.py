@@ -25,9 +25,9 @@ class Share( property ):
         
         self.sharespace = RawValue( ShareStructure, 1 )
         
-        self.value = _v
-        
         self.lock = threading.Lock()
+        
+        self.value = _v
         
         property.__init__( self, self.value_getter , self.value_setter )
     
