@@ -29,7 +29,7 @@ def colssql( cols ):
     return ','.join( ('`%s`' % (c) if c is not None else 'NULL') for c in cols )
 
 
-def fetcher( conn, sql, q, t, step = 50, s ):
+def fetcher( conn, sql, q, s={}, step = 50 ):
     
     conn.query( sql )
     
@@ -44,7 +44,7 @@ def fetcher( conn, sql, q, t, step = 50, s ):
     
     return
     
-def putter( conn, sql, q, t ):
+def putter( conn, sql, q, s={} ):
     
     while( True ):
         
