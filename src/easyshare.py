@@ -64,12 +64,18 @@ class Share( property ):
         self.lock.acquire()
         
         try :
+            
             j = json.dumps( value, encoding='utf-8' )
             m = hashlib.md5(j).hexdigest()
             l = len(j)
+            
             self.sharespace.len = l
             self.sharespace.md5 = m
             self.sharespace.json = j
+            
+            self.md5 = hashlib.md5(j).hexdigest()
+            self._value = self.on_sharereload( value )
+            
         finally :
             self.lock.release()
             
