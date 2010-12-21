@@ -63,8 +63,8 @@ def putter( conn, sql, q, t ):
 
 def datamove( src, dst, src_cols = None, dst_cols = None, convert = None, cb = False, t = 1 ):
     
-    src_conn = mysqldb.connect( **src, conv={} )
-    dst_conn = mysqldb.connect( **dst, conv={} )
+    src_conn = mysqldb.connect( conv={}, **src )
+    dst_conn = mysqldb.connect( conv={}, **dst )
     
     if cb is not None and not callable(cb) :
         raise Exception, 'cb must callable.'
