@@ -117,6 +117,8 @@ def datamove( src, dst, src_cols = None, dst_cols = None, convert = None, cb = N
     r = {}
     q = Queue.Queue(200)
 
+    cb( r )
+
     src_conn.query( sql )
     
     datas = src_conn.use_result()
