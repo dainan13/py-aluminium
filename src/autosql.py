@@ -119,7 +119,7 @@ def datamove( src, dst, src_cols = None, dst_cols = None, convert = None, cb = N
 
     cb( r )
 
-    src_conn.query( sql )
+    src_conn.query( readsql )
     
     datas = src_conn.use_result()
     r['totalrows'] = datas.num_rows()
