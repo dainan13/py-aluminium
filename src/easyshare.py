@@ -1,23 +1,38 @@
-
+import ctypes
+import hashlib
 
 import multiprocessing
 from multiprocessing.sharedctypes import RawValue
-
-import ctypes
+import threading
 
 import json
-import hashlib
-import threading
+import cPickle
 
 
 class Share( property ):
     
-    def __init__( self, _v=None, maxsize=10240 ):
+    __ver__ = 2
+    
+    def __init__( self, _v=None, maxsize=10240, serializing=json, szarg=None ):
         
         class ShareStructure ( ctypes.Structure ):
             _fields_ = [("len",  ctypes.c_long  ),
                         ("md5",  ctypes.c_char* 32),
-                        ("json", ctypes.c_char* maxsize)]
+                        ("data", ctypes.c_char* maxsize)]
+        
+        
+        if serializing == 'json' :
+            serializing = json
+            if szarg == None :
+                szarg = ( {'encoding':'utf-8'}, {'encoding':'utf-8'} )
+        elif serializing == 'pickle' :
+            serializing = cPickle
+        
+        if szarg == None :
+            szarg = ({},{})
+        
+        self.szarg = szarg
+        self.sz = serializing
         
         self.sharestruct = ShareStructure
         
@@ -45,12 +60,12 @@ class Share( property ):
             
                 l = self.sharespace.len
                 m = self.sharespace.md5
-                j = self.sharespace.json
+                j = self.sharespace.data
                 
                 if len(j) == l and hashlib.md5(j).hexdigest() == m :
                     
                     self._value = self.on_sharereload(
-                                        json.loads( j, encoding='utf-8' ) )
+                                    self.sz.loads( j, **self.szarg[1] ) )
                     self.md5 = m
                     
             finally :
@@ -65,13 +80,15 @@ class Share( property ):
         
         try :
             
-            j = json.dumps( value, encoding='utf-8' )
+            j = self.sz.dumps( value, **self.szarg[0])
             m = hashlib.md5(j).hexdigest()
             l = len(j)
             
+            if l >
+            
             self.sharespace.len = l
             self.sharespace.md5 = m
-            self.sharespace.json = j
+            self.sharespace.data = j
             
             self.md5 = hashlib.md5(j).hexdigest()
             self._value = self.on_sharereload( value )
