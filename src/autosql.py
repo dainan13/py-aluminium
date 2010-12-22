@@ -129,13 +129,22 @@ def datamove( src, dst, src_cols = None, dst_cols = None, convert = None, cb = N
     q = Queue.Queue(200)
 
     cb( r )
+    
+    s = time.time()
 
     src_conn.query( readsql )
     
+    e = time.time()
+    
+    r['querytime'] = e-s
+    r['usedtime'] = 0
+    
+    s = e
+    
     datas = src_conn.use_result()
-    #r['totalrows'] = datas.num_rows()
-    r['totalrows'] = src_conn.affected_rows()
-    r['info'] = src_conn.info()
+    r['totalrows'] = datas.num_rows()
+    #r['totalrows'] = src_conn.affected_rows()
+    #r['info'] = src_conn.info()
     r['fill'] = True
     r['fetch'] = True
     r['error'] = False
@@ -145,16 +154,19 @@ def datamove( src, dst, src_cols = None, dst_cols = None, convert = None, cb = N
     cb( r )
     
     fe = threading.Thread( target = fetcher, args=( datas, q, r ) )
-    fi = threading.Thread( target = filler, args=( _dst, writesql, q, r ) )
+    fis = [ threading.Thread( target = filler, args=( _dst, writesql, q, r ) ) for i in range(3) ]
     
     fe.start()
-    fi.start()
+    for fi in fis :
+        fi.start()
     
     while( True ):
         
-        r['fetch'], r['fill'] = fe.isAlive(), fi.isAlive()
+        r['fetch'] = fe.isAlive()
+        r['fill'] = [ fi.isAlive() for fi in fis ]
         
         if cb :
+            r['usedtime'] = time.time() - s
             cb( r )
 
         if r['fetch'] == False and r['fill'] == False :
@@ -163,7 +175,8 @@ def datamove( src, dst, src_cols = None, dst_cols = None, convert = None, cb = N
         time.sleep(t)
         
     fe.join()
-    fi.join()
+    for fi in fis :
+        fi.join()
         
     return
     
