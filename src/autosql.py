@@ -61,7 +61,7 @@ def fetcher( datas, q, r={}, step = 50 ):
     
 
 
-def filler( dst, sql, q, r={} ):
+def filler( dst, sql, q, xr={} ):
     
     conn = MySQLdb.connect( conv={}, **dst )
     
@@ -80,10 +80,10 @@ def filler( dst, sql, q, r={} ):
             
             conn.commit()
             
-            r['fillrows'] += i 
+            xr['fillrows'] += i 
     
     finally :
-        r['error'] = True
+        xr['error'] = True
     
     return
 
@@ -133,7 +133,9 @@ def datamove( src, dst, src_cols = None, dst_cols = None, convert = None, cb = N
     src_conn.query( readsql )
     
     datas = src_conn.use_result()
-    r['totalrows'] = datas.num_rows()
+    #r['totalrows'] = datas.num_rows()
+    r['totalrows'] = src_conn.affectrows()
+    r['info'] = src_conn.info()
     r['fill'] = True
     r['fetch'] = True
     r['error'] = False
