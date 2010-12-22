@@ -20,7 +20,7 @@ def simplequery( conn, sql ):
 
 def getcols( conn, table ):
     
-    sql =  "DESCRIBE %s" % (src['table'])
+    sql =  "DESCRIBE %s" % ( table )
     r = simplequery( conn, sql )
     
     return zip(*r)[0]
