@@ -31,6 +31,7 @@ class Share( property ):
         if szarg == None :
             szarg = ({},{})
         
+        self.maxsize = maxsize
         self.szarg = szarg
         self.sz = serializing
         
@@ -84,7 +85,8 @@ class Share( property ):
             m = hashlib.md5(j).hexdigest()
             l = len(j)
             
-            if l >
+            if l > maxsize :
+                raise Exception, 'data too large.'
             
             self.sharespace.len = l
             self.sharespace.md5 = m
