@@ -81,7 +81,7 @@ def filler( dst, sql, q, r={} ):
 def dmprint( r ):
     print r
 
-def datamove( src, dst, src_cols = None, dst_cols = None, convert = None, cb = False, t = 1 ):
+def datamove( src, dst, src_cols = None, dst_cols = None, convert = None, cb = None, t = 1 ):
     
     _src = src.copy()
     _dst = dst.copy()
@@ -126,6 +126,8 @@ def datamove( src, dst, src_cols = None, dst_cols = None, convert = None, cb = F
     r['error'] = False
     r['fillrows'] = 0
     r['fetchrows'] = 0
+    
+    cb( r )
     
     fe = threading.Tread( target = fetcher, args=( datas, q, r ) )
     fi = threading.Tread( target = filler, args=( _dst, writesql, q, r ) )
