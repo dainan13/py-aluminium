@@ -83,8 +83,14 @@ def dmprint( r ):
 
 def datamove( src, dst, src_cols = None, dst_cols = None, convert = None, cb = False, t = 1 ):
     
-    src_conn = MySQLdb.connect( conv={}, **src )
-    dst_conn = MySQLdb.connect( conv={}, **dst )
+    _src = src.copy()
+    _dst = dst.copy()
+    
+    del _src['table']
+    del _dst['table']
+    
+    src_conn = MySQLdb.connect( conv={}, **_src )
+    dst_conn = MySQLdb.connect( conv={}, **_dst )
     
     if cb is not None and not callable(cb) :
         raise Exception, 'cb must callable.'
@@ -122,7 +128,7 @@ def datamove( src, dst, src_cols = None, dst_cols = None, convert = None, cb = F
     r['fetchrows'] = 0
     
     fe = threading.Tread( target = fetcher, args=( datas, q, r ) )
-    fi = threading.Tread( target = putter, args=( dst, writesql, q, r ) )
+    fi = threading.Tread( target = putter, args=( _dst, writesql, q, r ) )
     
     fe.run()
     fi.run()
