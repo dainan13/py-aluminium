@@ -111,8 +111,8 @@ def datamove( src, dst, src_cols = None, dst_cols = None, convert = None, cb = N
         src_cols = [ c if c in src_cols else convert.get(c,None) for c in dst_cols ]
         convert = None
 
-    readsql = 'SELECT SQL_BIG_RESULT SQL_BUFFER_RESULT SQL_NO_CACHE %s From `%s`' % ( colsql(src_cols), src['table'] )
-    writesql = 'INSERT DELAYED IGNORE INTO `%s` (%s) VALUES ' % ( src['table'], colsql(src_cols) )
+    readsql = 'SELECT SQL_BIG_RESULT SQL_BUFFER_RESULT SQL_NO_CACHE %s From `%s`' % ( colssql(src_cols), src['table'] )
+    writesql = 'INSERT DELAYED IGNORE INTO `%s` (%s) VALUES ' % ( src['table'], colssql(src_cols) )
 
     r = {}
     q = Queue.Queue(200)
