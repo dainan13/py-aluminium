@@ -134,7 +134,7 @@ def datamove( src, dst, src_cols = None, dst_cols = None, convert = None, cb = N
     
     datas = src_conn.use_result()
     #r['totalrows'] = datas.num_rows()
-    r['totalrows'] = src_conn.affectrows()
+    r['totalrows'] = src_conn.affected_rows()
     r['info'] = src_conn.info()
     r['fill'] = True
     r['fetch'] = True
