@@ -85,7 +85,7 @@ class Share( property ):
             m = hashlib.md5(j).hexdigest()
             l = len(j)
             
-            if l > maxsize :
+            if l > self.maxsize :
                 raise Exception, 'data too large.'
             
             self.sharespace.len = l
