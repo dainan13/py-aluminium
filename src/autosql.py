@@ -78,8 +78,8 @@ def filler( dst, sql, q, r={} ):
 
 
 
-def dmprint( fa, pa, r ):
-    print fa, pa, r
+def dmprint( r ):
+    print r
 
 def datamove( src, dst, src_cols = None, dst_cols = None, convert = None, cb = False, t = 1 ):
     
