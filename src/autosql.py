@@ -1,5 +1,5 @@
 import threading
-import queue
+import Queue
 import time
 import types
 
@@ -109,7 +109,7 @@ def datamove( src, dst, src_cols = None, dst_cols = None, convert = None, cb = F
     writesql = 'INSERT DELAYED IGNORE INTO `%s` (%s) VALUES ' % ( src['table'], colsql(src_cols) )
 
     r = {}
-    q = queue.Queue(200)
+    q = Queue.Queue(200)
 
     src_conn.query( sql )
     
