@@ -35,11 +35,22 @@ def fetcher( datas, q, r={}, step = 50 ):
     
     try :
         
-        for i in range( 0, r['totalrows'], step ):
-            q.put( datas.fetch_row( step ) )
-            datas['fetchrows'] = i
-        q.put( datas.fetch_row( r['totalrows'] - i ) )
-        r['fetchrows'] = r['totalrows']
+        while( True ):
+            
+            rs = datas.fetch_row( step )
+            
+            if len(rs) == 0 :
+                break
+            
+            q.put( rs )
+            
+            r['fetchrows'] += len(rs)
+            
+        #for i in range( 0, r['totalrows'], step ):
+        #    q.put( datas.fetch_row( step ) )
+        #    datas['fetchrows'] = i
+        #q.put( datas.fetch_row( r['totalrows'] - i ) )
+        #r['fetchrows'] = r['totalrows']
         
     finally :
         
@@ -60,10 +71,10 @@ def filler( dst, sql, q, r={} ):
             
             rs = q.get()
             
-            i = len(rs)
-            
             if rs == None :
                 break
+                
+            i = len(rs)
             
             conn.query( sql, [ [ '"'+MySQLdb.escape_string(str(v))+'"' if v != None else "NULL" for v in r ] for r in rs ] )
             
@@ -131,8 +142,8 @@ def datamove( src, dst, src_cols = None, dst_cols = None, convert = None, cb = N
     
     cb( r )
     
-    fe = threading.Tread( target = fetcher, args=( datas, q, r ) )
-    fi = threading.Tread( target = filler, args=( _dst, writesql, q, r ) )
+    fe = threading.Thread( target = fetcher, args=( datas, q, r ) )
+    fi = threading.Thread( target = filler, args=( _dst, writesql, q, r ) )
     
     fe.start()
     fi.start()
