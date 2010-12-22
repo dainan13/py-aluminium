@@ -29,37 +29,57 @@ def colssql( cols ):
     return ','.join( ('`%s`' % (c) if c is not None else 'NULL') for c in cols )
 
 
-def fetcher( conn, sql, q, s={}, step = 50 ):
+
+
+def fetcher( datas, q, r={}, step = 50 ):
     
-    conn.query( sql )
-    
-    r = conn.use_result()
-    s['total'] = r.num_rows()
-    
-    for i in range( 0, s['total'], step ):
-        q.put( r.fetch_row( step ) )
-        s['fetch'] = i
-    
-    q.put( None )
+    try :
+        
+        for i in range( 0, r['totalrows'], step ):
+            q.put( datas.fetch_row( step ) )
+            datas['fetchrows'] = i
+        q.put( datas.fetch_row( r['totalrows'] - i ) )
+        r['fetchrows'] = r['totalrows']
+        
+    finally :
+        
+        r['error'] = True
+        q.put( None )
     
     return
     
-def putter( conn, sql, q, s={} ):
+
+
+def filler( dst, sql, q, r={} ):
     
-    while( True ):
+    conn = mysqldb.connect( conv={}, **dst )
+    
+    try :
         
-        rs = q.get()
-        
-        i = len(rs)
-        
-        if rs == None :
-            break
-        
-        conn.query( sql, [ [ '"'+MySQLdb.escape_string(str(v))+'"' if v != None else "NULL" for v in r ] for r in rs ] )
+        while( True ):
             
-        s['fill'] += i 
+            rs = q.get()
+            
+            i = len(rs)
+            
+            if rs == None :
+                break
+            
+            conn.query( sql, [ [ '"'+MySQLdb.escape_string(str(v))+'"' if v != None else "NULL" for v in r ] for r in rs ] )
+            
+            conn.commit()
+            
+            r['fillrows'] += i 
+    
+    finally :
+        r['error'] = True
     
     return
+
+
+
+def dmprint( fa, pa, r ):
+    print fa, pa, r
 
 def datamove( src, dst, src_cols = None, dst_cols = None, convert = None, cb = False, t = 1 ):
     
@@ -87,28 +107,40 @@ def datamove( src, dst, src_cols = None, dst_cols = None, convert = None, cb = F
 
     readsql = 'SELECT SQL_BIG_RESULT SQL_BUFFER_RESULT SQL_NO_CACHE %s From `%s`' % ( colsql(src_cols), src['table'] )
     writesql = 'INSERT DELAYED IGNORE INTO `%s` (%s) VALUES ' % ( src['table'], colsql(src_cols) )
-    
-    q = queue.Queue(200)
-    
+
     r = {}
+    q = queue.Queue(200)
+
+    src_conn.query( sql )
     
-    f = threading.Tread( target = fetcher, args=( conn, readsql, q, r ) )
-    p = threading.Tread( target = putter, args=( conn, readsql, q, r ) )
+    datas = src_conn.use_result()
+    r['totalrows'] = datas.num_rows()
+    r['fill'] = True
+    r['fetch'] = True
+    r['error'] = False
+    r['fillrows'] = 0
+    r['fetchrows'] = 0
     
-    f.run()
-    p.run()
+    fe = threading.Tread( target = fetcher, args=( datas, q, r ) )
+    fi = threading.Tread( target = putter, args=( dst, writesql, q, r ) )
+    
+    fe.run()
+    fi.run()
     
     while( True ):
         
-        fa, pa = f.isAlive(), p.isAlive()
+        r['fetch'], r['fill'] = fe.isAlive(), fi.isAlive()
         
         if cb :
-            cb( fa, pa, r )
+            cb( r )
 
-        if not ( fa or pa ) :
+        if not ( r['fetch'] or r['fill'] ) :
             break
             
         time.sleep(t)
+        
+    fe.join()
+    fi.join()
         
     return
     
