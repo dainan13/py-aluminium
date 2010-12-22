@@ -52,7 +52,7 @@ def fetcher( datas, q, r={}, step = 50 ):
 
 def filler( dst, sql, q, r={} ):
     
-    conn = mysqldb.connect( conv={}, **dst )
+    conn = MySQLdb.connect( conv={}, **dst )
     
     try :
         
@@ -83,8 +83,8 @@ def dmprint( fa, pa, r ):
 
 def datamove( src, dst, src_cols = None, dst_cols = None, convert = None, cb = False, t = 1 ):
     
-    src_conn = mysqldb.connect( conv={}, **src )
-    dst_conn = mysqldb.connect( conv={}, **dst )
+    src_conn = MySQLdb.connect( conv={}, **src )
+    dst_conn = MySQLdb.connect( conv={}, **dst )
     
     if cb is not None and not callable(cb) :
         raise Exception, 'cb must callable.'
