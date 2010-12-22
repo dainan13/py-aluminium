@@ -76,7 +76,7 @@ def filler( dst, sql, q, xr={} ):
                 
             i = len(rs)
             
-            conn.query( sql, [ [ '"'+MySQLdb.escape_string(str(v))+'"' if v != None else "NULL" for v in r ] for r in rs ] )
+            conn.query( sql + ','.join( '(' + ','.join( '"'+MySQLdb.escape_string(str(v))+'"' if v != None else "NULL" for v in r ) + ')' for r in rs ) )
             
             conn.commit()
             
