@@ -128,10 +128,10 @@ def datamove( src, dst, src_cols = None, dst_cols = None, convert = None, cb = F
     r['fetchrows'] = 0
     
     fe = threading.Tread( target = fetcher, args=( datas, q, r ) )
-    fi = threading.Tread( target = putter, args=( _dst, writesql, q, r ) )
+    fi = threading.Tread( target = filler, args=( _dst, writesql, q, r ) )
     
-    fe.run()
-    fi.run()
+    fe.start()
+    fi.start()
     
     while( True ):
         
@@ -140,7 +140,7 @@ def datamove( src, dst, src_cols = None, dst_cols = None, convert = None, cb = F
         if cb :
             cb( r )
 
-        if not ( r['fetch'] or r['fill'] ) :
+        if r['fetch'] == False and r['fill'] == False :
             break
             
         time.sleep(t)
