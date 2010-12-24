@@ -965,6 +965,8 @@ class EasyWeb( object ):
         
         r = '\n'.join(r)
         r = ( '<dl>\n<dt>%s</dt><dd>' % (name,) ) + r + '\n</dd></dl>'
+        
+        return r
     
     def arg_text( self, name, arg ):
         
