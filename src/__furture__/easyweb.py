@@ -369,7 +369,7 @@ body  {
     text-align: left;
     margin: 0;
     overflow:auto;
-    height: 70px;
+    height: 40px;
 }
 
 .twoColHybLt #container {
@@ -952,6 +952,19 @@ class EasyWeb( object ):
         r = ( '<select name="%s">\n' % (name,) ) + r + '\n</select>'
         
         return r
+    
+    def arg_selectlist( self, name, arg ):
+        
+        items = eval( arg['items'] )
+        
+        _its = [ ( name+'_'+str(idx), i ) for idx, i in enumerate(items) ]
+        
+        r = [ '<div><input type="checkbox" id="%s" name="%s" value="%s" /><label for="%s">%s</lable></div>' \
+                    % ( idx, name, i, idx, i ) 
+              for idx, i in _its ]
+        
+        r = '\n'.join(r)
+        r = ( '<dl>\n<dt>%s</dt><dd>' % (name,) ) + r + '\n</dd></dl>'
     
     def arg_text( self, name, arg ):
         
