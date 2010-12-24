@@ -1058,6 +1058,8 @@ class EasyWebTest( EasyWeb ):
                 default: 'table'
             input2: text
                 default: 'hello'
+            input3: selectlist
+                items: [1,2,3,4,5]
         showtype: text
         '''
         
