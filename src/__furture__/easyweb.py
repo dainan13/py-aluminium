@@ -452,7 +452,8 @@ body  {
 }
 
 #argbar dd {
-    float : right;
+    float: right;
+    overflow: hidden;
 }
 
 #argbar dd div {
