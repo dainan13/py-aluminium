@@ -439,6 +439,30 @@ body  {
     padding: 0 10px 0 10px;
 }
 
+#argbar dl {
+    padding: 0px 10px 0px 10px;
+    border-top: 1px dashed #C2CFF1;
+}
+
+#argbar dt {
+    float: left;
+    width: 120px;
+    font-weight: bold;
+    text-align: right;
+}
+
+#argbar dd {
+    float : right;
+}
+
+#argbar dd div {
+    float: left;
+    width: 155px;
+    height: 25px;
+    border: 1px solid white;
+    margin: 0 15px 1px 0;
+}
+
 .twoColHybLt #contentzone {
     overflow: scroll;
 }
