@@ -1,4 +1,4 @@
-
+# -*- coding: utf-8 -*-
 
 from string import Template
 
@@ -363,6 +363,10 @@ body  {
     height: 20px;
 }
 
+.twoColHybLt #main_title h3 {
+    margin: 0;
+}
+
 .twoColHybLt #main_title {
     font: 120% Arial;
     width: auto;
@@ -425,7 +429,27 @@ body  {
     height: 30px;
     background: #C2CFF1;
     overflow: auto;
-    padding: 0 10px 0 10px;
+    padding: 5px 15px 0 10px;
+}
+
+#topnav {
+    float: left;
+}
+
+#topmenu {
+    float: right;
+}
+
+#toptitle {
+    width: auto;
+}
+
+#switch_argbar {
+    font: 50% arial;
+    color: #0000CC;
+    float: right;
+    position: relative;
+    top: 5px;
 }
 
 .twoColHybLt #argbar {
@@ -439,29 +463,73 @@ body  {
     padding: 0 10px 0 10px;
 }
 
+#argbar dl .first {
+    border-top: 0;
+}
+
 #argbar dl {
     padding: 0px 10px 0px 10px;
     border-top: 1px dashed #C2CFF1;
+    overflow: hidden;
+    margin: 0;
 }
 
 #argbar dt {
     float: left;
-    width: 120px;
+    width: 60px;
     font-weight: bold;
     text-align: right;
+    padding: 2px 0 0 0;
 }
 
 #argbar dd {
-    float: right;
-    overflow: hidden;
+    overflow: auto;
+    width: auto;
+    padding: 0 0 0 20px;
 }
 
 #argbar dd div {
+    font: 60% arial;
     float: left;
-    width: 155px;
-    height: 25px;
-    border: 1px solid white;
-    margin: 0 15px 1px 0;
+    width: 100px;
+    height: 20px;
+    border: 3px solid #B6CDDC;
+    -moz-border-radius: 5px;
+    -webkit-border-radius: 5px;
+    border-radius: 5px;
+    margin: 0 10px 1px 0;
+}
+
+#argbar dd div:hover {
+    background: white;
+}
+
+#argbar dd select {
+    min-width: 220px;
+    height: 26px;
+    border: 3px solid #B6CDDC;
+    -moz-border-radius: 5px;
+    -webkit-border-radius: 5px;
+    border-radius: 5px;
+    background: #EBEFF9;
+}
+
+#argbar dd select:hover {
+    background: white;
+}
+
+#argbar dd input[type=text] {
+    min-width: 220px;
+    height: 20px;
+    border: 3px solid #B6CDDC;
+    -moz-border-radius: 5px;
+    -webkit-border-radius: 5px;
+    border-radius: 5px;
+    background: #EBEFF9;
+}
+
+#argbar dd input[type=text]:hover {
+    background: white;
 }
 
 .twoColHybLt #contentzone {
@@ -754,10 +822,13 @@ window.onload = function(){
     server.onload();
 };
 window.onresize = resize;
+
+function $(id){
+    return window.document.getElementById(id);
+}
+
 function resize(){
-    function $(id){
-        return window.document.getElementById(id);
-    }
+
     var doc = window.document;
     var h = Math.max(doc.body.offsetHeight, doc.documentElement.offsetHeight);
     
@@ -773,6 +844,47 @@ function resize(){
     
     doc = null;
 }
+
+function hidesidebar() {
+    if (this.visibale) 
+    {
+        $("sidebar").style.display = "none";
+        //$("mainContent").style.width = "100%";
+        $("topnav").style.display = "block";
+        this.visibale = 0;
+        //resize();
+    }
+    else
+    {
+        //$("mainContent").style.width = "auto";
+        $("sidebar").style.display = "block";
+        $("topnav").style.display = "none";
+        this.visibale = 1;
+        //resize();
+    }
+}
+
+hidesidebar.visibale = 1;
+
+function hideargbar() {
+    if (this.visibale) 
+    {
+        $("argbar").style.display = "none";
+        $("switch_argbar").innerHTML = "显示参数栏";
+        this.visibale = 0;
+        resize();
+    }
+    else
+    {
+        $("argbar").style.display = "block";
+        $("switch_argbar").innerHTML = "隐藏参数栏";
+        this.visibale = 1;
+        resize();
+    }
+}
+
+hideargbar.visibale = 1;
+
 '''
 
 mainhtml = r'''
@@ -809,10 +921,18 @@ Login
   <div id="sidebar">
     $funclist
   </div>
-  <div id="splitbar">
-  </div>
+  <div id="splitbar" onclick="hidesidebar()"></div>
   <div id="mainContent">
-    <div id="topbar" ></div>
+    <div id="topbar" >
+        <div id="topnav" style="display:none;" >
+            <input type="button" value="导航" />
+        </div>
+        <div id="topmenu">
+            <input type="button" value="提交/刷新" />
+        </div>
+        <div id="switch_argbar" onclick="hideargbar()">隐藏参数栏</div>
+        <div id="toptitle"></div>
+    </div>
     <div id="argbar" ></div>
     <div id="contentzone" ></div>
   </div>
@@ -941,7 +1061,7 @@ class EasyWeb( object ):
         if work_n is None :
             return
         
-        yield '''document.getElementById('topbar').innerHTML = '%s';''' \
+        yield '''document.getElementById('toptitle').innerHTML = '%s';''' \
                     % ( str(self.methods_meta[work_n].get('name', work_n )), )
         
         if req['event'] == 'onload' :
@@ -959,8 +1079,9 @@ class EasyWeb( object ):
     def make_args( self, args ):
         
         r = [ getattr(self,'arg_'+v[''] )( k, v ) for k, v in args.items() ]
-        r = [ k + i for k, i in zip(args.keys(), r)]
-        r = '<br />'.join(r)
+        r = [ '<dl>\n<dt>%s</dt><dd>%s\n</dd></dl>' % ( k, i )
+              for k, i in zip(args.keys(), r)]
+        r = '\n'.join(r)
         
         return r
     
@@ -989,7 +1110,7 @@ class EasyWeb( object ):
               for idx, i in _its ]
         
         r = '\n'.join(r)
-        r = ( '<dl>\n<dt>%s</dt><dd>' % (name,) ) + r + '\n</dd></dl>'
+        #r = ( '<dl>\n<dt>%s</dt><dd>' % (name,) ) + r + '\n</dd></dl>'
         
         return r
     
@@ -997,7 +1118,7 @@ class EasyWeb( object ):
         
         default = eval( arg.get( 'default','""') )
         
-        r = '<input type="test" name="%s" value="%s" />' % ( name, default)
+        r = '<input type="text" name="%s" value="%s" />' % ( name, default)
         
         return r
     
@@ -1086,7 +1207,7 @@ class EasyWebTest( EasyWeb ):
             input2: text
                 default: 'hello'
             input3: selectlist
-                items: [1,2,3,4,5]
+                items: [1,2,3,4,5,6,7,8,9]
         showtype: text
         '''
         
