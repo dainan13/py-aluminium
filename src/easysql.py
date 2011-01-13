@@ -1160,45 +1160,29 @@ class Table ( object ) :
         self.tablets = tablets
         self.hashtablets = {'':tuple(self.tablets)}
         
-        self._x_splitter = lambda x : [('',None,None),]
+        #self._x_splitter = lambda x : [('',None,None),]
         
         self.retrytimes = 3
         
         return
     
-    @property
-    def splitter( self ):
-        return self._x_splitter
+    def splitter( self, row ):
         
-    @splitter.setter
-    def splitter( self, v ):
-        self._x_splitter = lambda x : [ (r,None,None) for r in v(x) ]
+        return ['']
+        
+    def splitter_ex( self, row, oper ):
+        
+        return [ ( r, None, None ) for r in self.splitter( row ) ]
     
-    @splitter.deleter
-    def splitter( self ):
-        self._x_splitter = lambda x : [('',None,None),]
-        
-    @property
-    def splitter_ex( self ):
-        return self._x_splitter
-        
-    @splitter_ex.setter
-    def splitter_ex( self, v ):
-        self._x_splitter = v
-        
-    @splitter_ex.deleter
-    def splitter_ex( self ):
-        self._x_splitter = lambda x : [('',None,None),]
-    
-    def _splitter( self, row ):
+    def _splitter( self, row, oper ):
         
         return [ self.hashtablets[h]
-                 for h, mrcnd, id in self.splitter(row) ]
+                 for h, mrcnd, _id in self.splitter( row, oper ) ]
     
-    def _splitter_ex( self, row ):
+    def _splitter_ex( self, row, oper ):
         
-        return [ ( self.hashtablets[h], mrcnd, id )
-                 for h, mrcnd, id in self.splitter(row) ]
+        return [ ( self.hashtablets[h], mrcnd, _id )
+                 for h, mrcnd, _id in self.splitter( row, oper ) ]
     
     def _hashtablets( self, hasher ):
         
@@ -1264,7 +1248,7 @@ class Table ( object ) :
         
         rows = [ self._encoderow(row) for row in rows ]
         
-        tbls = [ self._splitter(row) for row in rows ]
+        tbls = [ self._splitter( row, 'insert' ) for row in rows ]
         tblc = [ r for r, t in zip(rows, tbls) if len(t) != 1 ]
         if tblc != [] :
             raise PrimaryKeyError, \
@@ -1293,7 +1277,7 @@ class Table ( object ) :
     def _replace( self, rows ):
         
         rows = [ self._encoderow(row) for row in rows ]
-        tbls = [ self._splitter(row) for row in rows ]
+        tbls = [ self._splitter( row, 'replace' ) for row in rows ]
         tblc = [ r for r, t in zip(rows, tbls) if len(t) != 1 ]
         if tblc != [] :
             raise PrimaryKeyError, \
@@ -1327,7 +1311,7 @@ class Table ( object ) :
             cond = dict(sum([ c.items() for c in cond ], []))
         
         cond = self._encoderow(cond) if cond else cond
-        tbls = self._splitter_ex(cond) # todo : set to all tablets if cond is none
+        tbls = self._splitter_ex(cond, 'select') # todo : set to all tablets if cond is none
         
         tlimit = limit
         rst = []
@@ -1353,7 +1337,7 @@ class Table ( object ) :
                 toffset = toffset[0]
                 
                 toffset = self._encoderow(toffset)
-                toffset = self._splitter_ex(toffset)
+                toffset = self._splitter_ex(toffset, 'select')
                 
                 toffset = [ i for o in toffset for i, t in enumerate(tbls)
                                     if o[0] == t[0] and o[2] == t[2] ]
@@ -1375,7 +1359,7 @@ class Table ( object ) :
         
         ocalc = ('SQL_CALC_FOUND_ROWS' in opts )
         
-        for tbl, mrcnd, id in tbls : # read lazy
+        for tbl, mrcnd, _id in tbls : # read lazy
             
             if offset != None and not tbl is tbls[-1]:
                 xopts = opts | set(['SQL_CALC_FOUND_ROWS'])
@@ -1454,7 +1438,7 @@ class Table ( object ) :
             cond = dict(sum([ c.items() for c in cond ], []))
         
         cond = self._encoderow(cond) if cond else cond
-        tbls = self._splitter(cond) # todo : set to all tablets if cond is none
+        tbls = self._splitter(cond, 'update') # todo : set to all tablets if cond is none
         
         row = self._encoderow(row)
         
@@ -1483,7 +1467,7 @@ class Table ( object ) :
             cond = dict(sum([ c.items() for c in cond ], []))
         
         cond = self._encoderow(cond) if cond else cond
-        tbls = self._splitter(cond) # todo : set to all tablets if cond is none
+        tbls = self._splitter(cond, 'delete') # todo : set to all tablets if cond is none
         
         tlimit = limit
         nx = 0
@@ -1867,7 +1851,7 @@ class Table ( object ) :
         
         def query( datas, stunt = {} ):
             
-            tbl = self._gettablets( self._splitter_ex( stunt )[0][0] )
+            tbl = self._gettablets( self._splitter_ex( stunt, 'select' )[0][0] )
             
             cols, dec, sql, positions = sqls[tbl.name]
             
@@ -1895,7 +1879,7 @@ class Table ( object ) :
         
         def query( stunt = {} ):
             
-            tbl = self._gettablets( self._splitter_ex( stunt )[0][0] )
+            tbl = self._gettablets( self._splitter_ex( stunt, 'explain' )[0][0] )
             
             n, r = self._explain_low( p.raw, tbl )
             
