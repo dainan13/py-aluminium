@@ -16,6 +16,8 @@ import time
 import ctypes
 import Queue
 
+
+
 class EasySqlException( Exception ):
     """
     Default WorkFlow Exception
@@ -1082,6 +1084,8 @@ class Table ( object ) :
     table class of easysql
     '''
     
+    __ver__ = 2
+    
     @staticmethod
     def getresult( conn ):
         
@@ -1169,7 +1173,7 @@ class Table ( object ) :
     def splitter( self, row ):
         
         return ['']
-        
+
     def splitter_ex( self, row, oper ):
         
         return [ ( r, None, None ) for r in self.splitter( row ) ]
@@ -1177,12 +1181,12 @@ class Table ( object ) :
     def _splitter( self, row, oper ):
         
         return [ self.hashtablets[h]
-                 for h, mrcnd, _id in self.splitter( row, oper ) ]
+                 for h, mrcnd, _id in self.splitter_ex( row, oper ) ]
     
     def _splitter_ex( self, row, oper ):
         
         return [ ( self.hashtablets[h], mrcnd, _id )
-                 for h, mrcnd, _id in self.splitter( row, oper ) ]
+                 for h, mrcnd, _id in self.splitter_ex( row, oper ) ]
     
     def _hashtablets( self, hasher ):
         
