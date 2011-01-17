@@ -605,14 +605,24 @@ class Bar( Node ):
 
 class Grid( Node ):
     
-    def __init__( self, contains=[], **styles ):
+    def __init__( self, contains=[], 
+                  hdrows=0, ftrows=0, bdrows=None, 
+                  headstyle={}, footstyle={}, bodystyle={}, **styles ):
         
         #self.number = number if number < 1 else 1
         super( Grid, self ).__init__( **styles )
         
         self.contains = contains
+        
+        self.hdrows = hdrows
+        self.ftrows = ftrows
+        
         self.x_max = max( (x+l) for x, y, l, h, n in contains )
         self.y_max = max( (y+h) for x, y, l, h, n in contains )
+        
+        bdrows = bdrows or [ self.y_max - hdrows - ftrows ]
+        bdrows = [ sum(bdrows[:i+1]) for i in range(len(dbrows)) ]
+        self.dbrows = zip( [None,]+bdrows, bdrows+[None,] )
         
     def _console_length_( self ):
         
@@ -863,15 +873,26 @@ class Grid( Node ):
         
     def _html_print_( self, pname = 'table', attr={} ):
         
-        doms = [ [ ( x, n._html_print_( pname = 'td', 
-                                        attr = { 'colspan':l, 'rowspan':h } ) )
-                   for x, y, l, h, n in self.contains if y == _y ] 
+        doms = [ [ ( x, n._html_print_( 
+                            pname = 'th' if y < self.hdrows else 'td', 
+                            attr = { 'colspan':l, 'rowspan':h } )
+                   ) for x, y, l, h, n in self.contains if y == _y ] 
                  for _y in range(self.y_max) ]
         
         for tr in doms :
             tr.sort( key = lambda x : x[0] )
         
         doms = [ "<tr>\n" + "\n".join(zip(*tr)[1]) + "\n</tr>" for tr in doms ]
+        
+        thdoms = doms[:hdrows]
+        ftdoms = [] if ftrows == 0 else doms[-ftrows:]
+        doms = doms[hdrows:(-self.ftrows or None)]
+        
+        self._html_printframe( 'thead', attr, '\n'+ '\n'.join(thdoms) +'\n' )
+        self._html_printframe( 'tfoot', attr, '\n'+ '\n'.join(tfdoms) +'\n' )
+        
+        bds = [ self._html_printframe( 'tbody', attr, '\n'+ '\n'.join(doms) +'\n' )
+                for _doms in self.doms ]
         
         return self._html_printframe( pname, attr, '\n'+ '\n'.join(doms) +'\n' )
 
