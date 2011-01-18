@@ -621,8 +621,10 @@ class Grid( Node ):
         self.y_max = max( (y+h) for x, y, l, h, n in contains )
         
         bdrows = bdrows or [ self.y_max - hdrows - ftrows ]
-        bdrows = [ sum(bdrows[:i+1]) for i in range(len(dbrows)) ]
-        self.dbrows = zip( [None,]+bdrows, bdrows+[None,] )
+        bdrows = [ sum(bdrows[:i+1]) for i in range(len(bdrows)) ]
+        self.bdrows = zip( [None,]+bdrows[:-1], bdrows )
+        
+        #print '>>>', self.bdrows
         
     def _console_length_( self ):
         
@@ -884,17 +886,18 @@ class Grid( Node ):
         
         doms = [ "<tr>\n" + "\n".join(zip(*tr)[1]) + "\n</tr>" for tr in doms ]
         
-        thdoms = doms[:hdrows]
-        ftdoms = [] if ftrows == 0 else doms[-ftrows:]
-        doms = doms[hdrows:(-self.ftrows or None)]
+        hddoms = doms[:self.hdrows]
+        ftdoms = [] if self.ftrows == 0 else doms[-self.ftrows:]
+        doms = doms[self.hdrows:(-self.ftrows or None)]
         
-        self._html_printframe( 'thead', attr, '\n'+ '\n'.join(thdoms) +'\n' )
-        self._html_printframe( 'tfoot', attr, '\n'+ '\n'.join(tfdoms) +'\n' )
+        hd = ( '<thead>\n'+ '\n'.join(hddoms) +'\n</thead>' ) if hddoms else ''
+        ft = ( '<tfoot>\n'+ '\n'.join(ftdoms) +'\n</tfoot>' ) if ftdoms else ''
         
-        bds = [ self._html_printframe( 'tbody', attr, '\n'+ '\n'.join(doms) +'\n' )
-                for _doms in self.doms ]
+        bds = [ '<tbody>\n'+ '\n'.join(doms[s:e]) +'\n</tbody>'
+                for s, e in self.bdrows ]
         
-        return self._html_printframe( pname, attr, '\n'+ '\n'.join(doms) +'\n' )
+        return self._html_printframe( pname, attr, 
+                        '\n'+ hd +'\n' + '\n'.join(bds) + '\n' + ft + '\n' )
 
 
 class _Position( object ):
@@ -934,8 +937,10 @@ class Table( Grid ):
     
     def __init__( self, data, convert={}, format={}, **styles ):
         
+        c, hdrows, bdrows = self._parse( data, convert, format )
+        
         super( Table, self ).__init__( 
-            contains = self._parse( data, convert, format ),
+            contains = c, hdrows = hdrows, bdrows = bdrows,
             **styles )
         
         return
@@ -978,9 +983,11 @@ class Table( Grid ):
         
     def _parse( self, data, convert={}, format={} ):
         
+        l = len(data)
+        
         tbv = self._parse_inner( data, convert=convert )
         
-        #print tbv
+        print tbv
         
         ks = [ tuple(k[:i]) for k, pth, v in tbv for i in range(1,len(k)+1) ]
         ks = list( set( ks ) )
@@ -1002,6 +1009,8 @@ class Table( Grid ):
         #colsum = sum( 1 for k, e, c in kcs if e )
         
         rowmax = max( len(k) for k in ks )
+        
+        hdrows = rowmax
         
         #tbs_k = [ [ ( rowmax-len(k)+1 if e else 1 , c, k[-1] ) 
         #            for k, e, c in kcs if len(k) == r+1 ] 
@@ -1033,6 +1042,11 @@ class Table( Grid ):
         rowspans = dict( ( r,  self._fast_get_childrows( i, rowcheck, r ) )
                          for i, r in enumerate( rows ) )
         
+        #print rowspans
+        bdrows = [ rowspans.get( (i,), None ) or \
+                                self._fast_get_childrows( i, rowcheck, (i,) )
+                   for i in range(l) ]
+        
         colspans = dict( ( k, c ) for k, e, c in kcs )
         
         #print t
@@ -1054,7 +1068,7 @@ class Table( Grid ):
         
         t += blanks
         
-        return t
+        return t, hdrows, bdrows
         
     def _console_print_( self, w=None, h=None ):
         
