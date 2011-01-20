@@ -1882,16 +1882,12 @@ class Table ( object ) :
                 
                 if n >= 1 :
                     return r[0]
-            
-            else :
                 
-                if multi :
-                    return _r
-                else :
-                    raise NotFoundError, 'not found'
+            if multi :
+                return _r
+
+            raise NotFoundError, 'not found'
             
-                #return r[0]
-        
         query.sqls = sqls
         
         return query
