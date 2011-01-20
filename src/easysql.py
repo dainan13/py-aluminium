@@ -1860,25 +1860,38 @@ class Table ( object ) :
         
         def query( datas, stunt = {} ):
             
-            tbl = self._gettablets( self._splitter_ex( stunt, 'select' )[0][0] )
+            tbls = zip( *self._gettablets( \
+                                self._splitter_ex( stunt, 'select' ) ) )[0]
             
-            cols, dec, sql, positions = sqls[tbl.name]
+            _r = []
             
-            p = ctypes.create_string_buffer(sql)
+            for tbl in tbls :
             
-            for pos, d in zip( positions, datas ):
-                d = sqlstr(d)
-                p[pos:pos+len(d)] = d
+                cols, dec, sql, positions = sqls[tbl.name]
+                
+                p = ctypes.create_string_buffer(sql)
+                
+                for pos, d in zip( positions, datas ):
+                    d = sqlstr(d)
+                    p[pos:pos+len(d)] = d
+                
+                n, r = self._read_low( p.raw, cols, dec, tbl )
+                
+                if multi :
+                    _r.extends(r)
+                    continue
+                
+                if n >= 1 :
+                    return r[0]
             
-            n, r = self._read_low( p.raw, cols, dec, tbl )
+            else :
+                
+                if multi :
+                    return _r
+                else :
+                    raise NotFoundError, 'not found'
             
-            if multi :
-                return r
-            
-            if n != 1 :
-                raise NotFoundError, 'not found'
-            
-            return r[0]
+                #return r[0]
         
         query.sqls = sqls
         
