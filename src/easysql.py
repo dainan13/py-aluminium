@@ -1860,7 +1860,7 @@ class Table ( object ) :
         
         def query( datas, stunt = {} ):
             
-            tbls = self._gettablets( self._splitter_ex( stunt, 'select' ) )[0]
+            tbls = zip( *self._splitter_ex( stunt, 'select' ) )[0]
             
             _r = []
             
@@ -1874,7 +1874,8 @@ class Table ( object ) :
                     d = sqlstr(d)
                     p[pos:pos+len(d)] = d
                 
-                n, r = self._read_low( p.raw, cols, dec, tbl )
+                n, r = self._read_low( p.raw, cols, dec, 
+                                                    self._gettablets( tbl ) )
                 
                 if multi :
                     _r.extends(r)
