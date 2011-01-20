@@ -1866,7 +1866,7 @@ class Table ( object ) :
             
             for tbl in tbls :
             
-                cols, dec, sql, positions = sqls[tbl.name]
+                cols, dec, sql, positions = sqls[tbl[0].name]
                 
                 p = ctypes.create_string_buffer(sql)
                 
