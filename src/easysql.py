@@ -1860,8 +1860,8 @@ class Table ( object ) :
         
         def query( datas, stunt = {} ):
             
-            tbls = zip( *self._gettablets( \
-                                self._splitter_ex( stunt, 'select' ) ) )[0]
+            tbls = self._gettablets( self._splitter_ex( stunt, 'select' ) )
+            tbls = zip( *tbls )[0]
             
             _r = []
             
