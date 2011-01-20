@@ -1,3 +1,9 @@
+#
+# Module to use sql using 
+#
+# author : d13
+# license : new BSD license
+#
 
 import types
 import threading
@@ -15,7 +21,6 @@ import time
 
 import ctypes
 import Queue
-
 
 
 class EasySqlException( Exception ):
