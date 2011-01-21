@@ -893,8 +893,9 @@ class Grid( Node ):
         hd = ( '<thead>\n'+ '\n'.join(hddoms) +'\n</thead>' ) if hddoms else ''
         ft = ( '<tfoot>\n'+ '\n'.join(ftdoms) +'\n</tfoot>' ) if ftdoms else ''
         
-        bds = [ '<tbody>\n'+ '\n'.join(doms[s:e]) +'\n</tbody>'
-                for s, e in self.bdrows ]
+        bds = [ '<tbody class="ep-t-' + ('odd' if i%2 == 1 else 'even') + \
+                                    '">\n'+ '\n'.join(doms[s:e]) +'\n</tbody>'
+                for i, (s, e) in enumerate(self.bdrows) ]
         
         return self._html_printframe( pname, attr, 
                         '\n'+ hd +'\n' + '\n'.join(bds) + '\n' + ft + '\n' )
@@ -987,7 +988,7 @@ class Table( Grid ):
         
         tbv = self._parse_inner( data, convert=convert )
         
-        print tbv
+        #print tbv
         
         ks = [ tuple(k[:i]) for k, pth, v in tbv for i in range(1,len(k)+1) ]
         ks = list( set( ks ) )
@@ -1012,13 +1013,13 @@ class Table( Grid ):
         
         hdrows = rowmax
         
-        #tbs_k = [ [ ( rowmax-len(k)+1 if e else 1 , c, k[-1] ) 
-        #            for k, e, c in kcs if len(k) == r+1 ] 
-        #          for r in range(rowmax) ]
-        
         # x, y, cols, rows, node
         t = [ ( x, len(k)-1, c, rowmax-len(k)+1 if e else 1, Text(k[-1]) ) 
               for ( k, e, c ), x in zip( kcs, colnum )  ]
+        
+        
+        
+        # need a translater for pth in tbv
         
         colnum = dict( ( ( k, x ) for (k, e, c), x in zip(kcs, colnum) ) )
         
@@ -1031,13 +1032,11 @@ class Table( Grid ):
         rowcheck = [ ( c, 0 if ( n[:len(c)] == c and sum( n[len(c):] ) == 0 ) else 1 )
                      for c, n in zip( rows, rows[1:]+[[]] ) ]
         
+        # rownum depand on sort
         rownum = reduce( lambda x, y : x + [x[-1]+y[1]], rowcheck, [rowmax] )
         rowmax = rownum[-1]
         rownum = dict( zip( rows , rownum ) )
         
-        #print rownum
-        #print colnum
-        #print
         
         rowspans = dict( ( r,  self._fast_get_childrows( i, rowcheck, r ) )
                          for i, r in enumerate( rows ) )
@@ -1049,10 +1048,11 @@ class Table( Grid ):
         
         colspans = dict( ( k, c ) for k, e, c in kcs )
         
-        #print t
-        
+        # k : col
+        # pth : row
         t += [ ( colnum[k], rownum[pth], colspans[k], rowspans[pth], v ) 
                for k, pth, v in tbv ]
+        
         
         #print rowmax, colsum
         
@@ -1084,12 +1084,12 @@ if __name__ == '__main__' :
     # below
     # under
     
-    print ColorString.sum([ ColorString( str(b).ljust(4), bg = b ) for b in range(16) ])
+    #print ColorString.sum([ ColorString( str(b).ljust(4), bg = b ) for b in range(16) ])
     
-    for x in range(6):
-        print ColorString.sum([ ColorString( str(x*36+b+16).ljust(4), bg = x*36+b+16, fg = ~(x*36+b)%216 + 16 ) for b in range(36) ])
+    #for x in range(6):
+    #    print ColorString.sum([ ColorString( str(x*36+b+16).ljust(4), bg = x*36+b+16, fg = ~(x*36+b)%216 + 16 ) for b in range(36) ])
 
-    print ColorString.sum([ ColorString( str(b).ljust(4), bg = b ) for b in range(232,256) ])
+    #print ColorString.sum([ ColorString( str(b).ljust(4), bg = b ) for b in range(232,256) ])
     
     print
     print
