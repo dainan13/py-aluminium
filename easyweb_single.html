@@ -5,7 +5,7 @@
 body {
     font: 100% Arial, Verdana, Helvetica, sans-serif;
     height: 100%;
-    background: #FFFFFF; 
+    background: #EEEEEE; 
     margin: 0;
     padding: 0;
     text-align: center; 
@@ -13,7 +13,6 @@ body {
 }
 
 .singleblt #container {
-    font-size: 2em;
     width: auto;  
     border: 0px none #000000;
     text-align: left; 
@@ -25,6 +24,7 @@ body {
 }
 
 .singleblt #prev {
+    font-size: 2em;
     height: 2em;
     float: left;
     width: 7em;
@@ -38,6 +38,7 @@ body {
 }
 
 .singleblt #next {
+    font-size: 2em;
     height: 2em;
     float: right;
     text-align: right; 
@@ -51,10 +52,43 @@ body {
     border-bottom: 1px solid #AAAAAA;
 }
 
-.singleblt #title {
-    height: 1.3333333333333333333em;
-    font-size: 1.5em;
+.singleblt #logo {
+    float: left;
+}
+
+.singleblt #login {
+    float: right;
+}
+
+.singleblt #titlebar {
+    height: 4em;
     border-bottom: 1px solid #AAAAAA;
+    background: #FFFFFF; 
+}
+
+.singleblt #title {
+    font-size: 2.5em;
+    text-align: center;
+    color: #000000;
+}
+
+.singleblt #title-prev {
+    font-size: 1.5em;
+    text-align: right;
+    color: #555555;
+    float: left;
+    width: 6em;
+}
+
+.singleblt #title-next {
+    font-size: 1.5em;
+    text-align: left;
+    color: #555555;
+    float: right;
+    width: 6em;
+}
+
+.singleblt #title-comments {
     text-align: center;
     color: #333333;
 }
@@ -63,15 +97,128 @@ body {
     height: 3px;
     background: #E0E0E0;
 }
+
+.button {
+    border: 1px solid #BBB;
+    font-weight: bold;
+    color: #666;
+    background: #CCC;
+    text-align: center;
+    cursor: pointer;
+    display: inline-block;
+    padding: 0.3em 0.7em 0.3em 0.7em;
+    margin-right: -.4em; 
+}
+
+.button-left {
+    -moz-border-radius-topleft: 4px;
+    -webkit-border-top-left-radius: 4px;
+    border-top-left-radius: 4px;
+    -moz-border-radius-bottomleft: 4px;
+    -webkit-border-bottom-left-radius: 4px;
+    border-bottom-left-radius: 4px;
+}
+
+.button-rigtht {
+    -moz-border-radius-topright: 4px;
+    -webkit-border-top-right-radius: 4px;
+    border-top-right-radius: 4px;
+    -moz-border-radius-bottomright: 4px;
+    -webkit-border-bottom-right-radius: 4px;
+    border-bottom-right-radius: 4px;
+}
+
+.active {
+    background: #2353A8;
+    color: #FFFFFF;
+    border: 1px solid #134398;
+}
+
+.hidden {
+    position: absolute;
+    left: -99999999px;
+    visibility: hidden;
+}
+
+.input {
+    margin-bottom: .4em;
+}
+
+.inputitem {
+    display: inline-block;
+    font-weight: bold;
+    margin-right: 1em;
+    width: 12em;
+    vertical-align: top;
+    text-align: right;
+}
+
+.inputcotainer {
+    display: inline-block;
+}
+
 </style> 
 </head>
 <body class="singleblt" >
+
 <div id="container">
- <div id="prev">Prev</div>
- <div id="next">Next</div>
- <div id="title">Title</div>
+ <div id="prev">
+  <div id="logo">Logo</div>
+  <span>Prev</span>
+ </div>
+ <div id="next">
+  <div id="login">Login</div>
+  <span>Next</span>
+ </div>
+ <div id="titlebar">
+  <div id="title-prev">
+   <span>PREV</span>
+   <span>&middot;&middot;&middot;</span>
+  </div>
+  <div id="title-next">
+   <span>&middot;&middot;&middot;</span>
+   <span>NEXT</span>
+  </div>
+  <div id="title">Title</div>
+  <div id="title-comments">comments</div>
+ </div>
 </div>
+
 <div id="bar"></div>
-<div>D</div>
+
+<div>
+ <div>
+  <div class="input">
+   <label for="inp.1" class="inputitem">Input Label</label>
+   <div id="inp.1" class="inputcotainer">
+    <input type="radio" name="inp.1" id="inp.1.A" value="A" class="hidden">
+    <label for="inp.1.A" class="button button-left active">A</label>
+    <input type="radio" name="inp.1" id="inp.1.B" value="B" class="hidden">
+    <label for="inp.1.B" class="button button-rigtht">B Long-Texts</label>
+   </div>
+  </div>
+  <div class="input">
+   <label for="inp.2" class="inputitem">Very Looooooooooooooog Input Label</label>
+   <div id="inp.2" class="inputcotainer">
+    <input type="radio" name="inp.2" id="inp.2.A" value="A" class="hidden">
+    <label for="inp.2.A" class="button button-left">ON</label>
+    <input type="radio" name="inp.2" id="inp.2.B" value="B" class="hidden">
+    <label for="inp.2.B" class="button button-rigtht active">OFF</label>
+   </div>
+  </div>
+  <div class="input">
+   <label for="inp.3" class="inputitem">Yet Another Input Label</label>
+   <div id="inp.3" class="inputcotainer">
+    <input type="checkbox" name="inp.3" id="inp.3_" value="A" class="hidden">
+    <label for="inp.3_" class="button button-left button-rigtht">Clear</label>
+    <input type="checkbox" name="inp.3" id="inp.3.A" value="A" class="hidden">
+    <label for="inp.3.A" class="button button-left button-rigtht">Choice</label>
+    <input type="checkbox" name="inp.3" id="inp.3.B" value="B" class="hidden">
+    <label for="inp.3.B" class="button button-left button-rigtht active">Choice</label>
+   </div>
+  </div>
+ </div>
+</div>
+
 </body>
 </html>
