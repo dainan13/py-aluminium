@@ -124,6 +124,9 @@ def datamove( src, dst, src_cols = None, dst_cols = None, convert = None, cb = N
 
     readsql = 'SELECT SQL_BIG_RESULT SQL_BUFFER_RESULT SQL_NO_CACHE %s From `%s`' % ( colssql(src_cols), src['table'] )
     writesql = 'INSERT DELAYED IGNORE INTO `%s` (%s) VALUES ' % ( src['table'], colssql(dst_cols) )
+    
+    if 'cond' in src and src['cond'] != None :
+        readsql += ('WHERE ' + cond)
 
     r = {}
     q = Queue.Queue(200)

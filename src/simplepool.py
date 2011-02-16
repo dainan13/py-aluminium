@@ -103,3 +103,5 @@ if __name__ == '__main__' :
     p( lambda : bar(200) )
     
     p.join()
+    
+    
