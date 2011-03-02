@@ -100,6 +100,8 @@ def datamove( src, dst, src_cols = None, dst_cols = None, convert = None, cond =
     del _src['table']
     del _dst['table']
     
+    cond = _src.pop( 'cond', cond )
+    
     src_conn = MySQLdb.connect( conv={}, **_src )
     dst_conn = MySQLdb.connect( conv={}, **_dst )
     
@@ -125,11 +127,7 @@ def datamove( src, dst, src_cols = None, dst_cols = None, convert = None, cond =
     readsql = 'SELECT SQL_BIG_RESULT SQL_BUFFER_RESULT SQL_NO_CACHE %s From `%s`' % ( colssql(src_cols), src['table'] )
     writesql = 'INSERT DELAYED IGNORE INTO `%s` (%s) VALUES ' % ( src['table'], colssql(dst_cols) )
     
-    if 'cond' in _src :
-        if _src['cond'] != None :
-            readsql += ('WHERE ' + _src['cond'])
-        del _src['cond']
-    elif cond != None :
+    if cond != None :
         readsql += ('WHERE ' + cond)
 
     r = {}
