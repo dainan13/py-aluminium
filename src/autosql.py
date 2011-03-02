@@ -128,7 +128,7 @@ def datamove( src, dst, src_cols = None, dst_cols = None, convert = None, cond =
     if 'cond' in _src :
         if _src['cond'] != None :
             readsql += ('WHERE ' + _src['cond'])
-        del _src[]
+        del _src['cond']
     elif cond != None :
         readsql += ('WHERE ' + cond)
 
