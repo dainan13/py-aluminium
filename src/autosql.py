@@ -92,7 +92,7 @@ def filler( dst, sql, q, xr={} ):
 def dmprint( r ):
     print r
 
-def datamove( src, dst, src_cols = None, dst_cols = None, convert = None, cb = None, t = 1 ):
+def datamove( src, dst, src_cols = None, dst_cols = None, convert = None, cond = None, cb = None, t = 1 ):
     
     _src = src.copy()
     _dst = dst.copy()
@@ -125,7 +125,11 @@ def datamove( src, dst, src_cols = None, dst_cols = None, convert = None, cb = N
     readsql = 'SELECT SQL_BIG_RESULT SQL_BUFFER_RESULT SQL_NO_CACHE %s From `%s`' % ( colssql(src_cols), src['table'] )
     writesql = 'INSERT DELAYED IGNORE INTO `%s` (%s) VALUES ' % ( src['table'], colssql(dst_cols) )
     
-    if 'cond' in src and src['cond'] != None :
+    if 'cond' in _src :
+        if _src['cond'] != None :
+            readsql += ('WHERE ' + _src['cond'])
+        del _src[]
+    elif cond != None :
         readsql += ('WHERE ' + cond)
 
     r = {}
