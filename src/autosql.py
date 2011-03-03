@@ -31,7 +31,7 @@ def colssql( cols ):
 
 
 
-def fetcher( datas, q, r={}, step = 50 ):
+def fetcher( datas, q, r={}, step = 50, threadnum = 1 ):
     
     try :
         
@@ -51,11 +51,15 @@ def fetcher( datas, q, r={}, step = 50 ):
         #    datas['fetchrows'] = i
         #q.put( datas.fetch_row( r['totalrows'] - i ) )
         #r['fetchrows'] = r['totalrows']
-        
-    finally :
+    
+    except Exception as e :
         
         r['error'] = True
-        q.put( None )
+    
+    finally :
+        
+        for i in range(threadnum) :
+            q.put( None )
     
     return
     
@@ -82,8 +86,10 @@ def filler( dst, sql, q, xr={} ):
             
             xr['fillrows'] += i 
     
-    finally :
+    except Exception as e :
+        
         xr['error'] = True
+        xr['traceback'].append(e)
     
     return
 
@@ -92,7 +98,10 @@ def filler( dst, sql, q, xr={} ):
 def dmprint( r ):
     print r
 
-def datamove( src, dst, src_cols = None, dst_cols = None, convert = None, cond = None, cb = None, t = 1 ):
+def datamove( src, dst, 
+              src_cols = None, dst_cols = None, 
+              convert = None, cond = None, 
+              threadnum = 3, cb = None, t = 1 ):
     
     _src = src.copy()
     _dst = dst.copy()
@@ -128,7 +137,7 @@ def datamove( src, dst, src_cols = None, dst_cols = None, convert = None, cond =
     writesql = 'INSERT DELAYED IGNORE INTO `%s` (%s) VALUES ' % ( src['table'], colssql(dst_cols) )
     
     if cond != None :
-        readsql += ('WHERE ' + cond)
+        readsql += (' WHERE ' + cond)
 
     r = {}
     q = Queue.Queue(200)
@@ -153,13 +162,18 @@ def datamove( src, dst, src_cols = None, dst_cols = None, convert = None, cond =
     r['fill'] = True
     r['fetch'] = True
     r['error'] = False
+    r['traceback'] = []
     r['fillrows'] = 0
     r['fetchrows'] = 0
     
     cb( r )
     
-    fe = threading.Thread( target = fetcher, args=( datas, q, r ) )
-    fis = [ threading.Thread( target = filler, args=( _dst, writesql, q, r ) ) for i in range(3) ]
+    fe = threading.Thread( target = fetcher, 
+                           args = ( datas, q, r ), 
+                           kwargs = {'threadnum':threadnum} 
+                         )
+    fis = [ threading.Thread( target = filler, args=( _dst, writesql, q, r ) ) 
+            for i in range(threadnum) ]
     
     fe.start()
     for fi in fis :
