@@ -165,6 +165,7 @@ def datamove( src, dst,
     r['traceback'] = []
     r['fillrows'] = 0
     r['fetchrows'] = 0
+    r['interrupted'] = False
     
     cb( r )
     
@@ -179,19 +180,24 @@ def datamove( src, dst,
     for fi in fis :
         fi.start()
     
-    while( True ):
-        
-        r['fetch'] = fe.isAlive()
-        r['fill'] = [ fi.isAlive() for fi in fis ]
-        
-        if cb :
-            r['usedtime'] = time.time() - s
-            cb( r )
-
-        if r['fetch'] == False and r['fill'] == False :
-            break
+    try :
+        while( True ):
             
-        time.sleep(t)
+            r['fetch'] = fe.isAlive()
+            r['fill'] = [ fi.isAlive() for fi in fis ]
+            
+            if cb :
+                r['usedtime'] = time.time() - s
+                cb( r )
+
+            if r['fetch'] == False and r['fill'] == False :
+                break
+                
+            time.sleep(t)
+    except Exception as e :
+        r['interrupted'] = True
+    finally :
+        cb(r)
         
     fe.join()
     for fi in fis :
