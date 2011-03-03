@@ -159,7 +159,7 @@ def datamove( src, dst,
     r['totalrows'] = datas.num_rows()
     #r['totalrows'] = src_conn.affected_rows()
     #r['info'] = src_conn.info()
-    r['fill'] = True
+    r['fill'] = [True]*threadnum
     r['fetch'] = True
     r['error'] = False
     r['traceback'] = []
