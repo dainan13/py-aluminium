@@ -190,7 +190,7 @@ def datamove( src, dst,
                 r['usedtime'] = time.time() - s
                 cb( r )
 
-            if r['fetch'] == False and r['fill'] == False :
+            if r['fetch'] == False and not any(r['fill']) :
                 break
                 
             time.sleep(t)
