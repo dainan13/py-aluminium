@@ -1399,7 +1399,7 @@ class Table ( object ) :
             nx += n
             rst = rst + r
             tlimit = ( tlimit - n ) if tlimit != None else tlimit
-            if tlimit <= 0 :
+            if tlimit != None and tlimit <= 0 :
                 break
             
         
