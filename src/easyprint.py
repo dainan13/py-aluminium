@@ -3,6 +3,7 @@
 
 import types
 import unicodedata
+import re
 
 from pprint import pprint
 
@@ -264,6 +265,129 @@ def easyformat( data, cols = None ):
 
 
 
+#
+#⠀ ⠁ ⠂ ⠃ ⠄ ⠅ ⠆ ⠇ ⠈ ⠉ ⠊ ⠋ ⠌ ⠍ ⠎ ⠏ ⠐ ⠑ ⠒ ⠓ ⠔ ⠕ ⠖ ⠗ ⠘ ⠙ ⠚ ⠛ ⠜ ⠝ ⠞ ⠟ 
+#⠠ ⠡ ⠢ ⠣ ⠤ ⠥ ⠦ ⠧ ⠨ ⠩ ⠪ ⠫ ⠬ ⠭ ⠮ ⠯ ⠰ ⠱ ⠲ ⠳ ⠴ ⠵ ⠶ ⠷ ⠸ ⠹ ⠺ ⠻ ⠼ ⠽ ⠾ ⠿ 
+#⡀ ⡁ ⡂ ⡃ ⡄ ⡅ ⡆ ⡇ ⡈ ⡉ ⡊ ⡋ ⡌ ⡍ ⡎ ⡏ ⡐ ⡑ ⡒ ⡓ ⡔ ⡕ ⡖ ⡗ ⡘ ⡙ ⡚ ⡛ ⡜ ⡝ ⡞ ⡟ 
+#⡠ ⡡ ⡢ ⡣ ⡤ ⡥ ⡦ ⡧ ⡨ ⡩ ⡪ ⡫ ⡬ ⡭ ⡮ ⡯ ⡰ ⡱ ⡲ ⡳ ⡴ ⡵ ⡶ ⡷ ⡸ ⡹ ⡺ ⡻ ⡼ ⡽ ⡾ ⡿ 
+#⢀ ⢁ ⢂ ⢃ ⢄ ⢅ ⢆ ⢇ ⢈ ⢉ ⢊ ⢋ ⢌ ⢍ ⢎ ⢏ ⢐ ⢑ ⢒ ⢓ ⢔ ⢕ ⢖ ⢗ ⢘ ⢙ ⢚ ⢛ ⢜ ⢝ ⢞ ⢟ 
+#⢠ ⢡ ⢢ ⢣ ⢤ ⢥ ⢦ ⢧ ⢨ ⢩ ⢪ ⢫ ⢬ ⢭ ⢮ ⢯ ⢰ ⢱ ⢲ ⢳ ⢴ ⢵ ⢶ ⢷ ⢸ ⢹ ⢺ ⢻ ⢼ ⢽ ⢾ ⢿ 
+#⣀ ⣁ ⣂ ⣃ ⣄ ⣅ ⣆ ⣇ ⣈ ⣉ ⣊ ⣋ ⣌ ⣍ ⣎ ⣏ ⣐ ⣑ ⣒ ⣓ ⣔ ⣕ ⣖ ⣗ ⣘ ⣙ ⣚ ⣛ ⣜ ⣝ ⣞ ⣟ 
+#⣠ ⣡ ⣢ ⣣ ⣤ ⣥ ⣦ ⣧ ⣨ ⣩ ⣪ ⣫ ⣬ ⣭ ⣮ ⣯ ⣰ ⣱ ⣲ ⣳ ⣴ ⣵ ⣶ ⣷ ⣸ ⣹ ⣺ ⣻ ⣼ ⣽ ⣾ ⣿ 
+#
+
+chartchar = [ u'\u2800\u2880\u28a0\u28b0\u28b8',
+              u'\u2840\u28C0\u28E0\u28F0\u28F8',
+              u'\u2844\u28C4\u28E4\u28F4\u28FC',
+              u'\u2846\u28C6\u28E6\u28F6\u28FE',
+              u'\u2847\u28C7\u28E7\u28F7\u28FF',
+            ]
+
+chartline = '⣀⠤⠒⠉'.decode('utf-8')
+chartlinex = '⡀⠄⠂⠁'.decode('utf-8')
+
+SIprefixes = " kMGTPEZY"
+IECprefixes = ["  ", "Ki","Mi","Gi","Ti","Pi","Ei","Zi","Yi"]
+
+def humanreadable( a, f=2, iec=False ):
+    
+    p = 1024 if iec else 1000
+    
+    s = '%%.%df%%s' % (f,)
+    
+    for i in range(8,0,-1):
+        z = float(a) / (p**i)
+        if z >= 1 :
+            return s % ( z, IECprefixes[i] if iec else SIprefixes[i]  )
+    
+    return s % ( float(a), '' )
+
+def show_chart( n, maxn = None, ratio = None):
+
+    maxn = maxn or max(n)
+
+    ratio = ratio or maxn/40
+    ratio = ratio or 1
+
+    maxh = maxn/ratio
+
+    hs = [ min(x/ratio, maxh) for x in n ]
+    hs = [ [x%4]+[4]*(x/4) for x in hs ]
+    hs = [ [0]*(maxh/4-len(x)) + x for x in hs ]
+
+    rs = zip(*hs)
+    rs = [ list(r)+[0] for r in rs ]
+    rs = [ zip(r[::2],r[1::2]) for r in rs ]
+
+    chrs = [ [ chartchar[a][b] for a, b in r ] for r in rs ]
+    chrs = [ ''.join(cs) for cs in chrs ]
+
+    for r in chrs :
+        print r
+
+    return
+
+
+def smart_show_chart( n, height=10, iec=False, color=True ):
+
+    maxn = max(n)
+
+    segmax = maxn
+    fix = 1
+    
+    if not iec :
+        while( segmax >= 100 ):
+            segmax = segmax/10
+            fix = fix*10
+        segmax = ((segmax/10)+1)*10
+        step = 10 if segmax <= 50 else 20
+        xpoints = [ (x*fix, x*4*height/segmax) for x in range(0,segmax,step) ]
+    else :
+        while( segmax >= 16 ):
+            segmax = segmax/16
+            fix = fix*16
+        segmax = segmax+1
+        step = 2 if segmax <= 8 else 4
+        xpoints = [ (x*fix, x*4*height/segmax) for x in range(0,segmax,step) ]
+    
+    maxn = segmax*fix
+    maxp = humanreadable(maxn, iec=iec)
+    
+    xpoints = [ ( humanreadable(p, iec=iec), x ) for p, x in xpoints ]
+    xpointslen = max( len(p) for p, x in xpoints )
+    xpointslen = max(xpointslen, len(maxp))
+    xpoints = dict( (x/4,(p,x%4)) for p, x in xpoints )
+
+    hs = [ min(x*4*height/maxn, 4*height) for x in n ]
+    hs = [ [x%4]+[4]*(x/4) for x in hs ]
+    hs = [ [0]*(height-len(x)) + x for x in hs ]
+
+    rs = zip(*hs)
+    rs = [ list(r)+[0] for r in rs ]
+    rs = [ zip(r[::2],r[1::2]) for r in rs ]
+
+    chrs = [ [ chartchar[a][b] for a, b in r ] for r in rs ]
+    chrs = [ ''.join(cs) for cs in chrs ]
+        
+    print maxp
+
+    for i, r in enumerate( chrs ) :
+        p, c = xpoints.get(height-i-1,('',None))
+        p = p.rjust(xpointslen)
+        if c is not None:
+            #r = re.sub("([ ]+)",r'<\1>',"abc   def    ghi")
+            r = re.sub(u"([\u2800]+)",u'\033[38;5;237m\\1\033[0m',r)
+            r = r.replace(u'\u2800', chartline[c])
+            c = chartlinex[c]
+        else :
+            c = ' '
+        print p+c+r
+    
+    return
+
+
+
+
 if __name__ == '__main__' :
     
     a = [ { 'colA' : ['A','B','C','D'], 'colB' : ['A','B','C'] },
@@ -294,3 +418,11 @@ if __name__ == '__main__' :
     
     print
     print easyformat(d)
+    
+    import cmath
+    print
+    smart_show_chart([ x*100 for x in range(100) ])
+    
+    print
+    smart_show_chart([ x*100 for x in range(100) ], iec=True)
+    
