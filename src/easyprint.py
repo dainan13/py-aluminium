@@ -300,6 +300,9 @@ def humanreadable( a, f=2, iec=False ):
         if z >= 1 :
             return s % ( z, IECprefixes[i] if iec else SIprefixes[i]  )
     
+    if type(a) in ( types.IntType , types.LongType ):
+        return str(a)
+    
     return s % ( float(a), '' )
 
 def show_chart( n, maxn = None, ratio = None):
@@ -328,7 +331,7 @@ def show_chart( n, maxn = None, ratio = None):
     return
 
 
-def smart_show_chart( n, height=10, iec=False, color=True ):
+def smart_show_chart( n, height=10, points=None, iec=False, unit='', color=True ):
 
     maxn = max(n)
 
@@ -339,21 +342,21 @@ def smart_show_chart( n, height=10, iec=False, color=True ):
         while( segmax >= 100 ):
             segmax = segmax/10
             fix = fix*10
-        segmax = ((segmax/10)+1)*10
-        step = 10 if segmax <= 50 else 20
+        segmax = ((segmax/10)+1)*10 if segmax >= 20 else ((segmax/5)+1)*5 
+        step = 5 if segmax <= 20 else 10 if segmax <= 50 else 20
         xpoints = [ (x*fix, x*4*height/segmax) for x in range(0,segmax,step) ]
     else :
         while( segmax >= 16 ):
-            segmax = segmax/16
-            fix = fix*16
+            segmax = segmax/4
+            fix = fix*4
         segmax = segmax+1
-        step = 2 if segmax <= 8 else 4
+        step = 1 if segmax <= 4 else 2 if segmax <= 8 else 4
         xpoints = [ (x*fix, x*4*height/segmax) for x in range(0,segmax,step) ]
-    
+        
     maxn = segmax*fix
-    maxp = humanreadable(maxn, iec=iec)
+    maxp = humanreadable(maxn, iec=iec)+unit
     
-    xpoints = [ ( humanreadable(p, iec=iec), x ) for p, x in xpoints ]
+    xpoints = [ ( humanreadable(p, iec=iec)+unit, x ) for p, x in xpoints ]
     xpointslen = max( len(p) for p, x in xpoints )
     xpointslen = max(xpointslen, len(maxp))
     xpoints = dict( (x/4,(p,x%4)) for p, x in xpoints )
@@ -368,8 +371,14 @@ def smart_show_chart( n, height=10, iec=False, color=True ):
 
     chrs = [ [ chartchar[a][b] for a, b in r ] for r in rs ]
     chrs = [ ''.join(cs) for cs in chrs ]
-        
-    print maxp
+    
+    maxp = maxp.rjust(xpointslen)
+    
+    if color :
+        print maxp+chartlinex[0]+\
+                    u'\033[38;5;237m'+chartline[0]*((len(n)+1)/2)+ u'\033[0m'
+    else :
+        print maxp+chartlinex[0]
 
     for i, r in enumerate( chrs ) :
         p, c = xpoints.get(height-i-1,('',None))
@@ -382,6 +391,25 @@ def smart_show_chart( n, height=10, iec=False, color=True ):
         else :
             c = ' '
         print p+c+r
+    
+    if points != None :
+        points = points+[None,]
+        points = [ (str(p) if p else None) for p in points ]
+        points = zip(points[::2],points[1::2])
+        points = [ ( a or b ) for a, b in points ]
+        points = [ (i, x) for i, x in enumerate(points) if x ]
+        pp, sp = zip(*points)
+        if pp[0] != 0 :
+            pplen = zip( [0]+list(pp), list(pp)+[0] )
+            sp = ['',]+list(sp)
+        else :
+            pplen = zip( list(pp), list(pp[1:])+[0] )
+        pplen = [ max( e-s, 0 ) for s, e in pplen ]
+        lp = [ '|' if spi else ' ' for spi in sp ]
+        lp = [ lpi.ljust(e) for lpi, e in zip(lp,pplen) ]
+        sp = [ spi[:(e or None)].ljust(e) for spi, e in zip(sp,pplen) ]
+        print ' '*(xpointslen+1)+''.join(lp)
+        print ' '*(xpointslen+1)+''.join(sp)
     
     return
 
@@ -421,8 +449,12 @@ if __name__ == '__main__' :
     
     import cmath
     print
-    smart_show_chart([ x*100 for x in range(100) ])
+    smart_show_chart([ x*123 for x in range(100) ])
     
     print
-    smart_show_chart([ x*100 for x in range(100) ], iec=True)
+    smart_show_chart(
+        [ x*123 for x in range(100) ],
+        points = [ ( x if x%10==0 else None ) for x in range(100)],
+        iec=True, unit='Byte',
+    )
     
