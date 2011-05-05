@@ -331,39 +331,51 @@ def show_chart( n, maxn = None, ratio = None):
     return
 
 
-def smart_show_chart( n, height=10, points=None, iec=False, unit='', rjust=0, color=True ):
+def smart_show_chart( data, height=10, points=None, iec=False, unit='', rjust=0, color=True ):
 
-    maxn = max(n)
+    maxdata = max(data)
 
-    segmax = maxn
-    fix = 1
+    segmax = maxdata
+    shrink = 1
+    enlarge = 1
     
-    if not iec :
+    if not iec or segmax < 1:
         while( segmax >= 100 ):
             segmax = segmax/10
-            fix = fix*10
+            shrink = shrink*10
+        while( segmax < 10 ):
+            segmax = segmax*10
+            enlarge = enlarge*10
         segmax = int(segmax)
         segmax = ((segmax/10)+1)*10 if segmax >= 20 else ((segmax/5)+1)*5 
         step = 5 if segmax <= 20 else 10 if segmax <= 50 else 20
-        xpoints = [ (x*fix, x*4*height/segmax) for x in range(0,segmax,step) ]
+        vpoints = [ (float(x)*shrink/enlarge, x*4*height/segmax) for x in range(0,segmax,step) ]
     else :
         while( segmax >= 16 ):
             segmax = segmax/4
-            fix = fix*4
+            shrink = shrink*4
+        while( segmax < 4 ):
+            segmax = segmax*4
+            enlarge = enlarge*4
         segmax = int(segmax)
         segmax = segmax+1
         step = 1 if segmax <= 4 else 2 if segmax <= 8 else 4
-        xpoints = [ (x*fix, x*4*height/segmax) for x in range(0,segmax,step) ]
+        vpoints = [ (float(x)*shrink/enlarge, x*4*height/segmax) for x in range(0,segmax,step) ]
         
-    maxn = segmax*fix
-    maxp = humanreadable(maxn, iec=iec)+unit
+    maxdata = float(segmax)*shrink/enlarge
     
-    xpoints = [ ( humanreadable(p, iec=iec)+unit, x ) for p, x in xpoints ]
-    xpointslen = max( len(p) for p, x in xpoints )
-    xpointslen = max(xpointslen, len(maxp))+rjust
-    xpoints = dict( (int(x)/4,(p,int(x)%4)) for p, x in xpoints )
+    if maxdata > 1 :
+        vpoints = [ ( humanreadable(p, iec=iec)+unit, x ) for p, x in vpoints ]
+        maxp = humanreadable(maxdata, iec=iec)+unit
+    else :
+        vpoints = [ ( str(p)+unit, x ) for p, x in vpoints ]
+        maxp = str(p)+unit
+        
+    vpointslen = max( len(p) for p, x in vpoints )
+    vpointslen = max(vpointslen, len(maxp))+rjust
+    vpoints = dict( (int(x)/4,(p,int(x)%4)) for p, x in vpoints )
 
-    hs = [ min(x*4*height/maxn, 4*height) for x in n ]
+    hs = [ min(x*4*height/maxdata, 4*height) for x in data ]
     hs = [ [int(x)%4]+[4]*(int(x)/4) for x in hs ]
     hs = [ [0]*(height-len(x)) + x for x in hs ]
 
@@ -374,17 +386,17 @@ def smart_show_chart( n, height=10, points=None, iec=False, unit='', rjust=0, co
     chrs = [ [ chartchar[a][b] for a, b in r ] for r in rs ]
     chrs = [ ''.join(cs) for cs in chrs ]
     
-    maxp = maxp.rjust(xpointslen)
+    maxp = maxp.rjust(vpointslen)
     
     if color :
         print maxp+chartlinex[0]+\
-                    u'\033[38;5;237m'+chartline[0]*((len(n)+1)/2)+ u'\033[0m'
+                    u'\033[38;5;237m'+chartline[0]*((len(data)+1)/2)+ u'\033[0m'
     else :
         print maxp+chartlinex[0]
 
     for i, r in enumerate( chrs ) :
-        p, c = xpoints.get(height-i-1,('',None))
-        p = p.rjust(xpointslen)
+        p, c = vpoints.get(height-i-1,('',None))
+        p = p.rjust(vpointslen)
         if c is not None:
             #r = re.sub("([ ]+)",r'<\1>',"abc   def    ghi")
             r = re.sub(u"([\u2800]+)",u'\033[38;5;237m\\1\033[0m',r)
@@ -410,8 +422,8 @@ def smart_show_chart( n, height=10, points=None, iec=False, unit='', rjust=0, co
         lp = [ '|' if spi else ' ' for spi in sp ]
         lp = [ lpi.ljust(e) for lpi, e in zip(lp,pplen) ]
         sp = [ spi[:(e or None)].ljust(e) for spi, e in zip(sp,pplen) ]
-        print ' '*(xpointslen+1)+''.join(lp)
-        print ' '*(xpointslen+1)+''.join(sp)
+        print ' '*(vpointslen+1)+''.join(lp)
+        print ' '*(vpointslen+1)+''.join(sp)
     
     return
 
@@ -458,5 +470,12 @@ if __name__ == '__main__' :
         [ x*123 for x in range(100) ],
         points = [ ( x if x%10==0 else None ) for x in range(100)],
         iec=True, unit='Byte',
+    )
+    
+    print
+    smart_show_chart(
+        [ x*0.000345 for x in range(100) ],
+        points = [ ( x if x%10==0 else None ) for x in range(100)],
+        iec=True, unit='$',
     )
     
