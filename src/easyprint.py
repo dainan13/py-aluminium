@@ -331,7 +331,7 @@ def show_chart( n, maxn = None, ratio = None):
     return
 
 
-def smart_show_chart( n, height=10, points=None, iec=False, unit='', color=True ):
+def smart_show_chart( n, height=10, points=None, iec=False, unit='', rjust=0, color=True ):
 
     maxn = max(n)
 
@@ -342,6 +342,7 @@ def smart_show_chart( n, height=10, points=None, iec=False, unit='', color=True 
         while( segmax >= 100 ):
             segmax = segmax/10
             fix = fix*10
+        segmax = int(segmax)
         segmax = ((segmax/10)+1)*10 if segmax >= 20 else ((segmax/5)+1)*5 
         step = 5 if segmax <= 20 else 10 if segmax <= 50 else 20
         xpoints = [ (x*fix, x*4*height/segmax) for x in range(0,segmax,step) ]
@@ -349,6 +350,7 @@ def smart_show_chart( n, height=10, points=None, iec=False, unit='', color=True 
         while( segmax >= 16 ):
             segmax = segmax/4
             fix = fix*4
+        segmax = int(segmax)
         segmax = segmax+1
         step = 1 if segmax <= 4 else 2 if segmax <= 8 else 4
         xpoints = [ (x*fix, x*4*height/segmax) for x in range(0,segmax,step) ]
@@ -358,11 +360,11 @@ def smart_show_chart( n, height=10, points=None, iec=False, unit='', color=True 
     
     xpoints = [ ( humanreadable(p, iec=iec)+unit, x ) for p, x in xpoints ]
     xpointslen = max( len(p) for p, x in xpoints )
-    xpointslen = max(xpointslen, len(maxp))
-    xpoints = dict( (x/4,(p,x%4)) for p, x in xpoints )
+    xpointslen = max(xpointslen, len(maxp))+rjust
+    xpoints = dict( (int(x)/4,(p,int(x)%4)) for p, x in xpoints )
 
     hs = [ min(x*4*height/maxn, 4*height) for x in n ]
-    hs = [ [x%4]+[4]*(x/4) for x in hs ]
+    hs = [ [int(x)%4]+[4]*(int(x)/4) for x in hs ]
     hs = [ [0]*(height-len(x)) + x for x in hs ]
 
     rs = zip(*hs)
