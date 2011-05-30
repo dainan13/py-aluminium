@@ -1,5 +1,8 @@
 
+import types
+import xml.sax.saxutils
 from Al import easydoc
+
 
 def makeuptree( l ):
     
@@ -10,9 +13,9 @@ def makeuptree( l ):
     return [ (k[1], makeuptree(v)) for k, v in r ]
     
 
-def xmltrans( node ):
+def xmltrans( node, datatrans, target='XML' ):
     
-    name = node[0]['XML'].strip()
+    name = node[0][target].strip()
     
     is_options = name.startswith('[')
     
@@ -22,94 +25,68 @@ def xmltrans( node ):
     
     name = name.strip('()')
     
-    childs = [ ( child[0]['XML'].strip(), child ) for child in node[1] ]
+    childs = [ ( child[0][target].strip(), child ) for child in node[1] ]
     
-    realchilds = [ ( ck, xmltrans(cv) ) 
+    realchilds = [ ( ck, xmltrans(cv, datatrans, target) ) 
                    for ck, cv in childs 
                    if not ck.startswith('(')
                  ]
                  
-    inlinechilds = [ ( ck.strip('()'), xmltrans(cv) ) 
+    inlinechilds = [ ( ck.strip('()'), xmltrans(cv, datatrans, target) ) 
                      for ck, cv in childs 
                      if ck.startswith('(')
                    ]
     
+    d = [ (k, v) for k, v in node[0].items() if v.strip() != '' and v!=target ]
+    
+    if len(d) != 1 :
+        raise Exception, 'doc error'
+    
+    k, v = d[k]
+        
+    
     if realchilds == [] :
         
-        if is_inline and node[0]['C'] :
-            _r = ' '+name+'='+'"'+node[0]['C']+'"'
-            def node_trans( r, s3c ):
-                return [_r,]
-        elif is_inline and node[0]['R']:
+        if is_inline :
+            
             _r = ' '+name + '="'
-            k, rn = ( node[0]['R'].strip().split('|',1) + [''] ) [:2]
-            k = k.strip()
-            k = None if k == '@' else k
-            k = int(k.strip('$')) if k and k.startswith('$') else k
+            xk, rn = ( v.strip().split('|',1) + [''] ) [:2]
+            xk = xk.strip()
+            xk = None if xk == '@' else xk
+            xk = int(xk.strip('$')) if xk and xk.startswith('$') else xk
             rn = datatrans.get( rn ) if rn.strip() else lambda x : x
-            def node_trans( r, s3c ):
-                if k is None :
-                    return [_r,unicode(rn(r)),'"']
-                return [_r,unicode(rn(r[k])),'"'] if ( not is_options ) or k in r else []
-        elif is_inline and node[0]['S3C']:
-            _r = ' '+name + '="'
-            k, s3cn = ( node[0]['S3C'].strip().split('|',1)+ [''] ) [:2]
-            k = k.strip()
-            k = None if k == '@' else k
-            k = int(k.strip('$')) if k and k.startswith('$') else k
-            s3cn = datatrans.get( s3cn ) if s3cn.strip() else lambda x : x
-            def node_trans( r, s3c ):
-                if k is None :
-                    return [_r,unicode(s3cn(s3c)),'"']
-                return [_r,unicode(s3cn(s3c[k])),'"'] if ( not is_options ) or k in s3c else []
-        elif (not is_inline) and node[0]['C']:
-            _r = '<'+name+'>'+node[0]['C']+'</'+name+'>'
-            def node_trans( r, s3c ):
-                return [_r,]
-        elif (not is_inline) and node[0]['R']:
+            
+            def node_trans( datas ):
+                if xk is None :
+                    return [_r,unicode(rn(datas[k])),'"']
+                return [_r,unicode(rn(datas[k][xk])),'"'] if ( not is_options ) or xk in datas[k] else []
+            
+        else :
+            
             _rl = '<'+name
             _rr = '</'+name+'>'
-            k, rn = ( node[0]['R'].strip().split('|',1) + [''] ) [:2]
-            k = k.strip()
-            k = None if k == '@' else k
-            k = int(k.strip('$')) if k and k.startswith('$') else k
+            xk, rn = ( v.strip().split('|',1) + [''] ) [:2]
+            xk = xk.strip()
+            xk = None if xk == '@' else xk
+            xk = int(xk.strip('$')) if xk and xk.startswith('$') else xk
             rn = datatrans.get( rn ) if rn.strip() else lambda x : x
-            def node_trans( r, s3c ):
+            
+            def node_trans( datas ):
                 
-                if k is None :
+                if xk is None :
                     return ( [_rl,] + \
-                             sum([ ic[1](r,s3c) for ic in inlinechilds ],[]) + \
-                             ['>',unicode(rn(r)),_rr] )
+                             sum([ ic[1](datas) for ic in inlinechilds ],[]) + \
+                             ['>',unicode(rn(datas[k])),_rr] )
                     
                 return ( [_rl,] + \
-                         sum([ ic[1](r,s3c) for ic in inlinechilds ],[]) + \
-                         ['>',unicode(rn(r[k])),_rr] ) if ( not is_options ) or k in r else []
-        elif (not is_inline) and node[0]['S3C']:
-            _rl = '<'+name
-            _rr = '</'+name+'>'
-            k, s3cn = ( node[0]['S3C'].strip().split('|',1)+ [''] ) [:2]
-            k = k.strip()
-            k = None if k == '@' else k
-            k = int(k.strip('$')) if k and k.startswith('$') else k
-            s3cn = datatrans.get( s3cn ) if s3cn.strip() else lambda x : x
-            def node_trans( r, s3c ):
-                
-                if k is None :
-                    return ( [_rl,] + \
-                             sum([ ic[1](r,s3c) for ic in inlinechilds ],[]) + \
-                             ['>',unicode(s3cn(s3c)),_rr] )
-                
-                return ( [_rl,] + \
-                         sum([ ic[1](r,s3c) for ic in inlinechilds ],[]) + \
-                         ['>',unicode(s3cn(s3c[k])),_rr] ) if ( not is_options ) or k in s3c else []
-        
-        else :
-            raise Exception, 'Can not reach here.'
+                         sum([ ic[1](datas) for ic in inlinechilds ],[]) + \
+                         ['>',unicode(rn(datas[k][xk])),_rr] ) if ( not is_options ) or xk in datas[k] else []
+                             
     
     else :
         
-        rf = node[0]['R'].startswith('%')
-        rk, rx = ( node[0]['R'].strip('%').split('|',1)+[' '] ) [:2]
+        rf = v.startswith('%')
+        rk, rx = ( v.strip('%').split('|',1)+[''] ) [:2]
         rk = rk.strip()
         rx = rx.strip()
         
@@ -124,65 +101,54 @@ def xmltrans( node ):
         else :
             rn = lambda x : [rx(x),]
         
-        s3cf = node[0]['S3C'].startswith('%')
-        s3ck, s3cx = ( node[0]['S3C'].strip('%').split('|',1)+[' '] ) [:2]
-        s3ck = s3ck.strip()
-        s3cx = s3cx.strip()
-        
-        s3cx = datatrans.get( s3cx ) if s3cx else lambda x : x
-        
-        if s3cf and s3ck :
-            s3cn = lambda x : s3cx(x[s3ck])
-        elif s3cf and not s3ck :
-            s3cn= lambda x : s3cx(x)
-        elif not s3cf and s3ck :
-            s3cn = lambda x : [s3cx(x[s3ck]),]
-        else :
-            s3cn = lambda x : [s3cx(x),]
-        
         _rl = '<'+name
         _rr = '</'+name+'>'
         
-        #def node_trans( r, s3c ):
         def node_trans( datas ):
             
             return  sum( [ [_rl,] + \
-                           sum([ ic[1](xr,xs3c) for ic in inlinechilds ],[]) + \
+                           sum([ ic[1](dict(datas.items()+[k,xr])) for ic in inlinechilds ],[]) + \
                            [ '>' ] + \
-                           sum( [ rc[1](xr,xs3c) 
+                           sum( [ rc[1](dict(datas.items()+[k,xr])) 
                                   for rc in realchilds 
                                 ], [] ) + \
                            [ _rr ]
-                          for xr in rn(r) 
-                          for xs3c in s3cn(s3c)
+                          for xr in rn(datas[k]) 
                          ], [] )
                     
     
     return node_trans
     
+class Consts(object):
+    def __getitem__( self, a ):
+        return xml.sax.saxutils.escape(a)
+    
+consts = Consts()
+
+def buildxmltrans( inp, datatrans=None, target='XML' ):
+    
+    if type(inp) in types.StringTypes :
+        inp = easydoc.DEFAULT_E.parse_table( inp.strip(' ').strip('\r\n').splitlines() )
+    
+    v = inp.todict()
+    v = [ ( i[target].rstrip().count(' '), i ) for i in v ]
+    t = makeuptree(v)
+    
+    trans = xmltrans( v, datatrans, target )
+    
+    return lambda **kwargs : trans(kwargs)
     
     
 if __name__ == "__main__" :
     
-    d = easydoc.parse ("""
-    ##!# test                                                             .Table
-    !XML                          !R                   !S3C            !C                                           !example-commnets
-    channel                          
-      title                                                            SinaStorage Statistics 
-      description                                      Project
-      lastBuildDate                                    Update
-      pubDate                                          Update
-      item                        %
-        title                                                          SinaStorage Statistics
-        description                 @|statweb
-        guid                        Log-Time|md5x_uuid
-        pubDate                     Log-Time
+    xt = buildxmltrans("""
+!XML    !A     !B     !C
+a              p
+  b     %
+    c    x
+    d    y
+    e                 h
     """)
     
-    v = d['test'].todict()
-    
-    v = [ ( i['XML'].rstrip().count(' '), i ) for i in v ]
-    from pprint import pprint
-    pprint( makeuptree(v) )
-    
+    print xt(A=[{'x':1,'y':2},{'x':3,'y':4}], B={'p':'hello'}, C=consts)
     
