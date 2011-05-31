@@ -94,7 +94,7 @@ def xmltrans( node, datatrans, target='XML' ):
                 if xk is False :
                     return sum( [ [_rl,] + \
                                   sum([ ic[1](dict(datas.items()+[(k,xr)])) for ic in inlinechilds ],[]) + \
-                                  ['>',_rr]
+                                  ['>', ( '' if type(xr)==type({}) else unicode(rn(xr)) ),_rr]
                                   for xr in rn(datas[k])
                                 ], [] )
                 
