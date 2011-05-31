@@ -37,13 +37,13 @@ def xmltrans( node, datatrans, target='XML' ):
                      if ck.startswith('(')
                    ]
     
-    d = [ (k, v) for k, v in node[0].items() if v.strip() != '' and v!=target ]
+    d = [ (k, v) for k, v in node[0].items() if v.strip() != '' and k!=target ]
     
     if len(d) != 1 :
-        raise Exception, 'doc error'
+        raise Exception, ( 'doc error', d )
     
-    k, v = d[k]
-        
+    k, v = d[0]
+    
     
     if realchilds == [] :
         
@@ -107,9 +107,9 @@ def xmltrans( node, datatrans, target='XML' ):
         def node_trans( datas ):
             
             return  sum( [ [_rl,] + \
-                           sum([ ic[1](dict(datas.items()+[k,xr])) for ic in inlinechilds ],[]) + \
+                           sum([ ic[1](dict(datas.items()+[(k,xr)])) for ic in inlinechilds ],[]) + \
                            [ '>' ] + \
-                           sum( [ rc[1](dict(datas.items()+[k,xr])) 
+                           sum( [ rc[1](dict(datas.items()+[(k,xr)])) 
                                   for rc in realchilds 
                                 ], [] ) + \
                            [ _rr ]
@@ -128,26 +128,29 @@ consts = Consts()
 def buildxmltrans( inp, datatrans=None, target='XML' ):
     
     if type(inp) in types.StringTypes :
-        inp = easydoc.DEFAULT_E.parse_table( inp.strip(' ').strip('\r\n').splitlines() )
+        lns = inp.strip(' ').strip('\r\n').splitlines()
+        z = len(lns[0]) - len(lns[0].lstrip())
+        lns = [ l[z:] for l in lns ]
+        inp = easydoc.DEFAULT_E.parse_table( lns )
     
     v = inp.todict()
     v = [ ( i[target].rstrip().count(' '), i ) for i in v ]
     t = makeuptree(v)
     
-    trans = xmltrans( v, datatrans, target )
+    trans = xmltrans( t[0], datatrans, target )
     
-    return lambda **kwargs : trans(kwargs)
+    return lambda **kwargs : ''.join( trans(kwargs) )
     
     
 if __name__ == "__main__" :
     
     xt = buildxmltrans("""
-!XML    !A     !B     !C
-a              p
-  b     %
-    c    x
-    d    y
-    e                 h
+    !XML    !A     !B     !C
+    a              p
+      b     %
+        c    x
+        d    y
+        e                 h
     """)
     
     print xt(A=[{'x':1,'y':2},{'x':3,'y':4}], B={'p':'hello'}, C=consts)
