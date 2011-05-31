@@ -148,10 +148,10 @@ if __name__ == "__main__" :
     !XML    !A     !B     !C
     a              p
       b     %
-        c    x
+        c    x|add
         d    y
         e                 h
-    """)
+    """, datatrans={ 'add': lambda x:x+10 } )
     
     print xt(A=[{'x':1,'y':2},{'x':3,'y':4}], B={'p':'hello'}, C=consts)
     
