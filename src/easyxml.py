@@ -162,14 +162,15 @@ def buildxmltrans( inp, datatrans=None, target='XML' ):
 if __name__ == "__main__" :
     
     xt = buildxmltrans("""
-    !XML    !A     !B     !C
+    !XML    !A      !B     !C
     a
-      (f)          p
+      (f)           p
       b     %
         c    x|add
         d    y
-        e                 h
-    """, datatrans={ 'add': lambda x:x+10 } )
+        e                  h
+        sum  @|sumv
+    """, datatrans={ 'add': lambda x:x+10, 'sumv': lambda x: sum(x.values()) } )
     
     print xt(A=[{'x':1,'y':2},{'x':3,'y':4}], B={'p':'hello'}, C=consts)
     
