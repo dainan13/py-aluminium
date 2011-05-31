@@ -39,6 +39,23 @@ def xmltrans( node, datatrans, target='XML' ):
     
     d = [ (k, v) for k, v in node[0].items() if v.strip() != '' and k!=target ]
     
+    if len(d) == 0 :
+        
+        _rl = '<'+name
+        _rr = '</'+name+'>'
+        
+        def node_trans( datas ):
+            
+            return  [_rl,] + \
+                    sum([ ic[1](datas) for ic in inlinechilds ],[]) + \
+                    [ '>' ] + \
+                    sum( [ rc[1](datas) 
+                             for rc in realchilds 
+                         ], [] ) + \
+                    [ _rr ]
+        
+        return node_trans
+    
     if len(d) != 1 :
         raise Exception, ( 'doc error', d )
     
@@ -146,7 +163,8 @@ if __name__ == "__main__" :
     
     xt = buildxmltrans("""
     !XML    !A     !B     !C
-    a              p
+    a
+      (f)          p
       b     %
         c    x|add
         d    y
