@@ -77,6 +77,16 @@ class MapableTuple( tuple ):
         
         return super( MapableTuple, self ).__getitem__( ind )
         
+    def get( self, ind, default ):
+        
+        if type(ind) in types.StringTypes :
+            if ind in self._keys :
+                ind = self._keys[ind]
+            else :
+                return default
+        
+        return super( MapableTuple, self ).__getitem__( ind )
+        
     def keys( self ):
         
         return self._keys.keys()
