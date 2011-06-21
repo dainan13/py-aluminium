@@ -1,0 +1,56 @@
+
+binlog   struct(.length)
+    
+    length       uint(3)
+    reserved1    byte
+    reserved2    byte
+    
+    event struct(auto)
+    
+        event_header struct[auto]
+    
+            timestamp      uint(4)
+            typecode       uint(1)
+            server_id      uint(4)
+            event_length   uint(4)
+            next_position  uint(4)
+            flags          byte[2]
+            extra_headers  byte[$extra_headers_length]
+            
+        event_data union{event_header.typecode}
+            
+            event_data_description struct(auto)
+            
+                binlog_version    uint(2)
+                server_version    char[50]
+                create_timestamp  uint(4)
+                header_length     uint(1)
+                post_header       byte[auto]
+            
+            event_data_table struct(auto)
+                
+                table_id          uint(6)
+                reserved          byte[2]
+                
+                dbname_length     uint(1)
+                dbname            byte[dbname_length]
+                tablename_length  uint(1)
+                tablename         byte[tablename_length]
+                columns_count     packint
+                columns_type      uint[columns_count]
+                metadata_length   packint
+                nullable          bit[round(columns_count,8)]
+                
+            event_data_event struct(auto)
+                
+                table_id          uint(6)
+                reserved          byte[2]
+                
+                columns_count     packint
+                flags1            bit[round(columns_count,8)]
+                flags2            bit[round(columns_count,8)]
+                isnull            bit[round(columns_count,8)]
+                row_image         byte[auto]
+                isnull2           bit[round(columns_count,8)]
+                row_image         byte[0]
+                
