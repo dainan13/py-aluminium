@@ -23,7 +23,23 @@ class ParseSyntaxError( EasyBinaryProtocolError ):
 class IndentSyntaxError( EasyBinaryProtocolError ):
     pass
     
+
+
+class ProtocolDataType( object ):
     
+    def __init__( self, name, members ):
+        
+        self.name = name
+        self.members = members
+        
+        return
+        
+    def build_c_types( self ):
+        
+        
+        
+        return
+
 
 class EasyBinaryProtocol( object ):
     
@@ -38,6 +54,31 @@ class EasyBinaryProtocol( object ):
         self.pat = '%s\s+%s(%s)?(%s)?(%s)?' % (var, name, length, array, arg)
 
     def parse( self, fname ):
+        
+        structs = []
+        
+        defines = self.parsecode()[2]
+        
+        for define in defines : 
+            self.parsedefine( structs, define )
+        
+        return
+    
+    def parsedefine( self, structs, define ):
+        
+        indent, declaration, children = define
+        
+        for child in children :
+            if child[2] :
+                self.parsedefine( structs, define )
+                
+        members = [ childdec for n, childdec, m in children ]
+        
+        structs.append()
+        
+        return
+    
+    def parsecode( self, fname ):
         
         rootnode = ( None, None, [] )
         stack = [rootnode,]
