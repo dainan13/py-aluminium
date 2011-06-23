@@ -1,14 +1,5 @@
 
-
-
 import re
-
-name = r'(?P<name>[a-zA-Z_]\w*)'
-length = r'\((?P<length>\s*\S+?\s*)\)'
-array = r'\[(?P<array>\s*\S+\s*)\]'
-arg = r'\{(?P<arg>\s*\S+\s*)\}'
-
-pat = '%s(%s)?(%s)?(%s)?' % (name, length, array, arg)
 
 
 class EasyBinaryProtocolError( Exception ):
@@ -25,23 +16,148 @@ class IndentSyntaxError( EasyBinaryProtocolError ):
     
 
 
-class ProtocolDataType( object ):
+class TypeStruct( object ):
     
     def __init__( self, name, members ):
         
         self.name = name
+        self.cname = name
         self.members = members
         
-        return
-        
-    def build_c_types( self ):
-        
-        
+        self.autoposition = None
         
         return
+        
+    def read( self, namespace, fp, lens ):
+        
+        r = {}
+        
+        l = 0
+        
+        for m in members :
+            
+            t = namespace[m['name']]
+            
+            if m['array'] == None :
+                r0, l0 = t.read( namespace, fp, lens )
+            elif m['array'] == 'auto' :
+                r0, l0 = t.read_multi( namespace, fp, lens-l, m['array'] )
+            else :
+                r0, l0 = t.read_multi( namespace, fp, m['length'], m['array'] )
+            
+            l += l0
+            r[m['var']] = r0
+            
+        return r, l
 
+class TypeUnion( object ):
+    
+    def __init__( self, name, members ):
+        
+        self.name = name
+        self.cname = name
+        self.members = members
+        
+        self.autoposition = None
+        
+    def read( self, namespace, fp, lens, args ):
+        
+        r = {}
+        
+        l = 0
+        
+        m = members[args]
+        
+        t = namespace[m['name']]
+        
+        if m['array'] == None :
+            r0, l0 = t.read( namespace, fp, lens )
+        elif m['array'] == 'auto' :
+            r0, l0 = t.read_multi( namespace, fp, lens-l, m['array'] )
+        else :
+            r0, l0 = t.read_multi( namespace, fp, m['length'], m['array'] )
+        
+        l += l0
+        r[m['var']] = r0
+            
+        return r, l
+
+class BuildinTypeUINT( object ):
+    
+    def __init__( self ):
+        
+        self.name = 'uint'
+        self.cname = 'long'
+        self.identifiable = True
+        
+    def read( self, fp, lens ):
+        
+        chrs = fp.read(lens)
+        
+        i = 0
+        
+        for i, c in enumerate(chrs) :
+            i = ord(c) * ( 256**i )
+        
+        return i, lens
+
+class BuildinTypePACKINT( object ):
+    
+    def __init__( self ):
+        
+        self.name = 'packint'
+        self.cname = 'long'
+        self.identifiable = True
+        
+    def read( self, namespace, fp, lens ):
+        
+        c = ord(fp.read(1))
+        
+        if c < 251 :
+            return c, 1
+        
+        if c == 251 :
+            return None, 1
+        
+        i = 0
+        
+        if c == 252 :
+            chrs = fp.read(2)
+        elif c == 253 :
+            chrs = fp.read(3)
+        else :
+            chrs = fp.read(8)
+            
+        for i, c in enumerate(chrs) :
+            i = ord(c) * ( 256**i )
+        
+        return i, len(chrs)+1
+
+class BuildinTypeCHAR( object )
+    
+    def __init__( self ):
+        
+        self.name = 'char'
+        self.cname = 'char'
+        
+        self.identifiable = True
+    
+    def read( self, namespace, fp, lens ):
+        
+        return fp.read(1), 1
+        
+    def read_multi( self, namespace, fp, lens, mlens ):
+        
+        s = fp.read(mlens)
+        
+        return s, mlens
 
 class EasyBinaryProtocol( object ):
+    
+    buildintypes = [ BuildinTypeCHAR(),
+                     BuildinTypePACKINT(),
+                     BuildinTypeUINT(),
+                   ]
     
     def __init__( self ):
         
