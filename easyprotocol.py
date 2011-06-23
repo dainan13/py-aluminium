@@ -14,21 +14,28 @@ class ParseSyntaxError( EasyBinaryProtocolError ):
 class IndentSyntaxError( EasyBinaryProtocolError ):
     pass
     
-
+class UnkownLengthError( EasyBinaryProtocolError ):
+    pass
+    
 
 class TypeStruct( object ):
     
-    def __init__( self, name, members ):
+    def __init__( self, name, members, namespace ):
         
         self.name = name
         self.cname = name
         self.members = members
         
-        self.autoposition = None
+        idt = sum( 1 for m in members if m['array'] == 'auto' or namespace[m['name']].identifiable == False )
+        
+        if idt > 1 :
+            raise UnkownLengthError, 'more than one auto lengt in struct %s' % (self,name)
+        
+        self.identifiable = (idt == 0)
         
         return
         
-    def read( self, namespace, fp, lens ):
+    def read( self, namespace, fp, lens, args ):
         
         r = {}
         
@@ -52,13 +59,17 @@ class TypeStruct( object ):
 
 class TypeUnion( object ):
     
-    def __init__( self, name, members ):
+    def __init__( self, name, members, namespace ):
         
         self.name = name
         self.cname = name
         self.members = members
         
-        self.autoposition = None
+        idt = sum( 1 for m in members if m['array'] == 'auto' or namespace[m['name']].identifiable == False )
+        
+        self.identifiable = (idt == 0)
+        
+        return
         
     def read( self, namespace, fp, lens, args ):
         
@@ -88,9 +99,10 @@ class BuildinTypeUINT( object ):
         
         self.name = 'uint'
         self.cname = 'long'
+        
         self.identifiable = True
         
-    def read( self, fp, lens ):
+    def read( self, namespace, fp, lens, args ):
         
         chrs = fp.read(lens)
         
@@ -109,7 +121,7 @@ class BuildinTypePACKINT( object ):
         self.cname = 'long'
         self.identifiable = True
         
-    def read( self, namespace, fp, lens ):
+    def read( self, namespace, fp, lens, args ):
         
         c = ord(fp.read(1))
         
@@ -142,11 +154,11 @@ class BuildinTypeCHAR( object )
         
         self.identifiable = True
     
-    def read( self, namespace, fp, lens ):
+    def read( self, namespace, fp, lens, args ):
         
         return fp.read(1), 1
         
-    def read_multi( self, namespace, fp, lens, mlens ):
+    def read_multi( self, namespace, fp, lens, mlens, args ):
         
         s = fp.read(mlens)
         
