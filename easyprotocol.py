@@ -18,6 +18,55 @@ class UnkownLengthError( EasyBinaryProtocolError ):
     pass
     
 
+class AutoLength( object ):
+    pass
+
+autolength = AutoLength()
+
+
+def parse_expr( e ):
+    
+    e = e.strip()
+    
+    try :
+        return int(e)
+    except :
+        pass
+    
+    if e == 'auto' :
+        return autolength
+    
+    if '(' and ')' in e :
+        
+        function = r'(?P<function>[a-zA-Z_]\w*)'
+        #argument = r'(?P<arg>[a-zA-Z_]\w*)'
+        arguments = r'(?P<args>.*)'
+        
+        m = re.match(r'%s\(%s\)' % (function, arguments), e)
+        
+        if m == None :
+            raise ParseSyntaxError, ( 'Line: %d %s' % (i,li) )
+        
+        m = m.groupdict()
+        
+        f = m['function']
+        args = [ a.strip() for a in m['args'].split(',') ]
+        
+        args = [ ( (1,a[1:]) if a.startswith('$') else \
+                      ( (0, int(a)) if a.isnumeric() else (2,a.split('.')) )
+                 ) for a in args ]
+        
+        return function, args
+    
+    if e.isnumeric() :
+        return 0, int(e)
+    
+    if e.startswith('$') :
+        return 1, e[1:]
+        
+    return 2, e.split('.')
+
+
 class TypeStruct( object ):
     
     def __init__( self, name, members, namespace ):
@@ -32,6 +81,8 @@ class TypeStruct( object ):
             raise UnkownLengthError, 'more than one auto lengt in struct %s' % (self,name)
         
         self.identifiable = (idt == 0)
+        
+        self.variables = sum( for m in members if m[] , [] )
         
         return
         
