@@ -34,7 +34,7 @@ def parse_expr( e ):
         pass
     
     if e == 'auto' :
-        return autolength
+        return -1, autolength
     
     if '(' and ')' in e :
         
@@ -56,7 +56,7 @@ def parse_expr( e ):
                       ( (0, int(a)) if a.isnumeric() else (2,a.split('.')) )
                  ) for a in args ]
         
-        return function, args
+        return 3, function, args
     
     if e.isnumeric() :
         return 0, int(e)
@@ -66,6 +66,16 @@ def parse_expr( e ):
         
     return 2, e.split('.')
 
+
+def find_var( e ):
+    
+    if e[0] == 1 :
+        return [e[1]]
+        
+    if e[0] == 3 :
+        return [ a[1] for a in e[2] if a[0] == 1 ]
+            
+    return []
 
 class TypeStruct( object ):
     
@@ -82,7 +92,9 @@ class TypeStruct( object ):
         
         self.identifiable = (idt == 0)
         
-        self.variables = sum( for m in members if m[] , [] )
+        self.variables = sum( find_var(m['array']) for m in members if m['array'] , [] )
+        self.variables += sum( find_var(m['arg']) for m in members if m['arg'] , [] )
+        self.variables += sum( for m in members if m['name'] , [] )
         
         return
         
@@ -120,6 +132,10 @@ class TypeUnion( object ):
         
         self.identifiable = (idt == 0)
         
+        self.variables = sum( find_var(m['array']) for m in members if m['array'] , [] )
+        self.variables += sum( find_var(m['arg']) for m in members if m['arg'] , [] )
+        self.variables += sum( for m in members if m['name'] , [] )
+        
         return
         
     def read( self, namespace, fp, lens, args ):
@@ -153,6 +169,11 @@ class BuildinTypeUINT( object ):
         
         self.identifiable = True
         
+        self.variables = []
+        
+    def itemlength( self, lens ):
+        return lens
+        
     def read( self, namespace, fp, lens, args ):
         
         chrs = fp.read(lens)
@@ -171,6 +192,11 @@ class BuildinTypePACKINT( object ):
         self.name = 'packint'
         self.cname = 'long'
         self.identifiable = True
+        
+        self.variables = []
+        
+    def itemlength( self, lens ):
+        return None
         
     def read( self, namespace, fp, lens, args ):
         
@@ -204,6 +230,11 @@ class BuildinTypeCHAR( object )
         self.cname = 'char'
         
         self.identifiable = True
+        
+        self.variables = []
+        
+    def itemlength( self, lens ):
+        return 1
     
     def read( self, namespace, fp, lens, args ):
         
