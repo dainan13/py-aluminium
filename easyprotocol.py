@@ -104,14 +104,15 @@ class TypeStruct( object ):
         
         l = 0
         
-        for m in members :
+        for i, m in enumerate(members) :
             
             t = namespace[m['name']]
             
             if m['array'] == None :
                 r0, l0 = t.read( namespace, fp, lens )
             elif m['array'] == 'auto' :
-                r0, l0 = t.read_multi( namespace, fp, lens-l, m['array'] )
+                lx = ( _m['name'].length( _m['len'], _m['array'] ) for _m in members[i:] )
+                r0, l0 = t.read_multi( namespace, fp, lens-l-lx, m['array'] )
             else :
                 r0, l0 = t.read_multi( namespace, fp, m['length'], m['array'] )
             
@@ -171,8 +172,8 @@ class BuildinTypeUINT( object ):
         
         self.variables = []
         
-    def itemlength( self, lens ):
-        return lens
+    def length( self, lens, array ):
+        return lens*array
         
     def read( self, namespace, fp, lens, args ):
         
@@ -195,7 +196,7 @@ class BuildinTypePACKINT( object ):
         
         self.variables = []
         
-    def itemlength( self, lens ):
+    def length( self, lens, array ):
         return None
         
     def read( self, namespace, fp, lens, args ):
@@ -233,8 +234,8 @@ class BuildinTypeCHAR( object )
         
         self.variables = []
         
-    def itemlength( self, lens ):
-        return 1
+    def length( self, lens, array ):
+        return array
     
     def read( self, namespace, fp, lens, args ):
         
