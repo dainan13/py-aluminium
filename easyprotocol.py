@@ -91,7 +91,7 @@ class TypeStruct( object ):
         
         self.variables = sum( find_var(m['array']) for m in members , [] )
         self.variables += sum( find_var(m['arg']) for m in members , [] )
-        self.variables += sum( for m in members if m['name'] , [] )
+        self.variables += sum( m['object'].variables for m in members , [] )
         
         return
         
