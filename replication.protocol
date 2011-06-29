@@ -7,7 +7,7 @@ binlog  BINLOG(.length)
     
     event        EVENT(auto)
     
-        header      EVENT_HEADER[auto]
+        header      EVENT_HEADER
     
             timestamp      uint(4)
             typecode       uint(1)
@@ -17,7 +17,7 @@ binlog  BINLOG(.length)
             flags          byte[2]
             extra_headers  byte[$extra_headers_length]
             
-        data        EVENT_DATA{event_header.typecode}
+        data        EVENT_DATA(auto){header.typecode}
             
             desciption     EVENT_DATA_DESCRIPTION(auto)
             
@@ -27,7 +27,7 @@ binlog  BINLOG(.length)
                 header_length     uint(1)
                 post_header       byte[auto]
             
-            table          EVENT_DATA_TABLE(auto)
+            table          EVENT_DATA_TABLE
                 
                 table_id          uint(6)
                 reserved          byte[2]

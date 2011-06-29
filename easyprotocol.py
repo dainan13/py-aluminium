@@ -18,23 +18,21 @@ class UnkownLengthError( EasyBinaryProtocolError ):
     pass
     
 
-class AutoLength( object ):
-    pass
-
 autolength = AutoLength()
 
 
 def parse_expr( e ):
     
+    if e == None :
+        return (0, None)
+    
     e = e.strip()
     
-    try :
-        return int(e)
-    except :
-        pass
-    
     if e == 'auto' :
-        return -1, autolength
+        return (1, None)
+    
+    if e.isnumeric() :
+        return (2, int(e))
     
     if '(' and ')' in e :
         
@@ -52,48 +50,47 @@ def parse_expr( e ):
         f = m['function']
         args = [ a.strip() for a in m['args'].split(',') ]
         
-        args = [ ( (1,a[1:]) if a.startswith('$') else \
-                      ( (0, int(a)) if a.isnumeric() else (2,a.split('.')) )
+        args = [ ( (4,a[1:]) if a.startswith('$') else \
+                      ( (2, int(a)) if a.isnumeric() else (5,a.split('.')) )
                  ) for a in args ]
         
-        return 3, function, args
+        return (3, (function, args))
     
-    if e.isnumeric() :
-        return 0, int(e)
     
     if e.startswith('$') :
-        return 1, e[1:]
+        return (4, e[1:])
         
-    return 2, e.split('.')
+    return (5, e.split('.'))
 
 
 def find_var( e ):
     
-    if e[0] == 1 :
+    if e[0] == 4 :
         return [e[1]]
         
     if e[0] == 3 :
-        return [ a[1] for a in e[2] if a[0] == 1 ]
+        return [ a[1] for a in e[2] if a[0] == 4 ]
             
     return []
 
 class TypeStruct( object ):
     
-    def __init__( self, name, members, namespace ):
+    def __init__( self, name, members ):
         
         self.name = name
         self.cname = name
         self.members = members
         
-        idt = sum( 1 for m in members if m['array'] == 'auto' or namespace[m['name']].identifiable == False )
+        idt = sum( 1 for m in members if m['array'] == 'auto' or m['object'].identifiable == False )
         
         if idt > 1 :
             raise UnkownLengthError, 'more than one auto lengt in struct %s' % (self,name)
         
         self.identifiable = (idt == 0)
+        self.stretch = False
         
-        self.variables = sum( find_var(m['array']) for m in members if m['array'] , [] )
-        self.variables += sum( find_var(m['arg']) for m in members if m['arg'] , [] )
+        self.variables = sum( find_var(m['array']) for m in members , [] )
+        self.variables += sum( find_var(m['arg']) for m in members , [] )
         self.variables += sum( for m in members if m['name'] , [] )
         
         return
@@ -169,6 +166,7 @@ class BuildinTypeUINT( object ):
         self.cname = 'long'
         
         self.identifiable = True
+        self.stretch = False
         
         self.variables = []
         
@@ -192,7 +190,9 @@ class BuildinTypePACKINT( object ):
         
         self.name = 'packint'
         self.cname = 'long'
+        
         self.identifiable = True
+        self.stretch = True
         
         self.variables = []
         
@@ -231,6 +231,7 @@ class BuildinTypeCHAR( object )
         self.cname = 'char'
         
         self.identifiable = True
+        self.stretch = False
         
         self.variables = []
         
