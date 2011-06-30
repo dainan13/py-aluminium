@@ -63,6 +63,30 @@ def parse_expr( e ):
     return (5, e.split('.'))
 
 
+def complength( e, vs, namespace ):
+    
+    t = e[0]
+    
+    if t == 0 :
+        return 1
+    
+    if t == 1 :
+        return
+    
+    if t == 2 :
+        return e[1]
+    
+    if t == 3 :
+        args = [ a for a in e[1][1] ]
+        return 
+        
+    if t == 4 :
+        return namespace[e[1]]
+        
+    if t == 5 :
+        return 
+        
+
 def find_var( e ):
     
     if e[0] == 4 :
@@ -103,15 +127,21 @@ class TypeStruct( object ):
         
         for i, m in enumerate(members) :
             
-            t = namespace[m['name']]
-            
-            if m['array'] == None :
-                r0, l0 = t.read( namespace, fp, lens )
-            elif m['array'] == 'auto' :
-                lx = ( _m['name'].length( _m['len'], _m['array'] ) for _m in members[i:] )
-                r0, l0 = t.read_multi( namespace, fp, lens-l-lx, m['array'] )
+            if m['array'][0] == 0 : #None
+                
+                if m['length'][0] == 1 :
+                    lx = sum( _m['object'].length( _m['length'], _m['array'] ) for _m in members[i:] )
+                else :
+                    lx = 0
+                
+                le = m['length'][1] if 
+                
+                r0, l0 = m['object'].read( namespace, fp, m['length'] )
+            elif m['array'][0] == 1 : #auto
+                lx = sum( _m['object'].length( _m['length'], _m['array'] ) for _m in members[i:] )
+                r0, l0 = m['object'].read_multi( namespace, fp, lens-l-lx, m['array'] )
             else :
-                r0, l0 = t.read_multi( namespace, fp, m['length'], m['array'] )
+                r0, l0 = m['object'].read_multi( namespace, fp, m['length'], m['array'] )
             
             l += l0
             r[m['var']] = r0
