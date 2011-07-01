@@ -84,7 +84,7 @@ def complength( e, vs, namespace ):
         return namespace[e[1]]
         
     if t == 5 :
-        return 
+        return re
         
 
 def find_var( e ):
@@ -129,12 +129,13 @@ class TypeStruct( object ):
             
             if m['array'][0] == 0 : #None
                 
-                if m['length'][0] == 1 :
+                if m['length'][0] == 0 :
+                    le = None
+                elif m['length'][0] == 1 :
                     lx = sum( _m['object'].length( _m['length'], _m['array'] ) for _m in members[i:] )
-                else :
-                    lx = 0
+                    le = lens - l - lx
                 
-                le = m['length'][1] if 
+                le = m['length'][1] if m['length'][0] == 1 else 
                 
                 r0, l0 = m['object'].read( namespace, fp, m['length'] )
             elif m['array'][0] == 1 : #auto
