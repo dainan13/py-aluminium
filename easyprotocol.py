@@ -1,6 +1,6 @@
 
 import re
-
+import types
 
 class EasyBinaryProtocolError( Exception ):
     pass
@@ -17,6 +17,8 @@ class IndentSyntaxError( EasyBinaryProtocolError ):
 class UnkownLengthError( EasyBinaryProtocolError ):
     pass
     
+class AutoArrayError( EasyBinaryProtocolError ):
+    pass
 
 autolength = AutoLength()
 
@@ -50,17 +52,18 @@ def parse_expr( e ):
         f = m['function']
         args = [ a.strip() for a in m['args'].split(',') ]
         
-        args = [ ( (4,a[1:]) if a.startswith('$') else \
-                      ( (2, int(a)) if a.isnumeric() else (5,a.split('.')) )
-                 ) for a in args ]
+        args = [ parse_expr(a) for a in args ]
         
         return (3, (function, args))
     
     
     if e.startswith('$') :
         return (4, e[1:])
-        
-    return (5, e.split('.'))
+    
+    if not e.starswith('.'):
+        return (5, e.split('.'))
+    
+    return (6, e.split('.')[1:])
 
 
 def complength( e, vs, namespace ):
@@ -71,21 +74,23 @@ def complength( e, vs, namespace ):
         return 1
     
     if t == 1 :
-        return
+        return None
     
     if t == 2 :
         return e[1]
     
     if t == 3 :
-        args = [ a for a in e[1][1] ]
-        return 
+        args = [ complength(a, vs, namespace) for a in e[1][1] ]
+        return namespace[e[1][0]](*args)
         
     if t == 4 :
         return namespace[e[1]]
         
     if t == 5 :
-        return re
-        
+        return reduce( (lambda x,y : x[y]), e[1], vs )
+    
+    if t == 6 :
+        return reduce( (lambda x,y : x[y]), e[1], vs )
 
 def find_var( e ):
     
@@ -129,20 +134,39 @@ class TypeStruct( object ):
             
             if m['array'][0] == 0 : #None
                 
-                if m['length'][0] == 0 :
-                    le = None
-                elif m['length'][0] == 1 :
+                if m['length'][0] == 1 :
                     lx = sum( _m['object'].length( _m['length'], _m['array'] ) for _m in members[i:] )
+                    if type(lens) != types.Intiger :
+                        lens = complength( lens, r, namespace )
                     le = lens - l - lx
+                else :
+                    le = complength( m['length'], r, namespace )
                 
-                le = m['length'][1] if m['length'][0] == 1 else 
+                r0, l0 = m['object'].read( namespace, fp, le )
                 
-                r0, l0 = m['object'].read( namespace, fp, m['length'] )
             elif m['array'][0] == 1 : #auto
+                
+                le = complength( m['length'], r, namespace )
+
                 lx = sum( _m['object'].length( _m['length'], _m['array'] ) for _m in members[i:] )
-                r0, l0 = m['object'].read_multi( namespace, fp, lens-l-lx, m['array'] )
+                if type(lens) != types.Intiger :
+                    lens = complength( lens, r, namespace )
+                
+                xle = lens - l - lx
+                
+                if xle % lx != 0 :
+                    raise AutoArrayError, 'auto array error'
+                
+                array = (lens - l - lx)/lx
+                
+                r0, l0 = m['object'].read_multi( namespace, fp, le, array )
+                
             else :
-                r0, l0 = m['object'].read_multi( namespace, fp, m['length'], m['array'] )
+                
+                array = complength( m['array'], r, namespace )
+                le = complength( m['length'], r, namespace )
+                
+                r0, l0 = m['object'].read_multi( namespace, fp, le, array )
             
             l += l0
             r[m['var']] = r0
