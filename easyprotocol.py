@@ -20,8 +20,6 @@ class UnkownLengthError( EasyBinaryProtocolError ):
 class AutoArrayError( EasyBinaryProtocolError ):
     pass
 
-autolength = AutoLength()
-
 
 def parse_expr( e ):
     
@@ -118,9 +116,9 @@ class TypeStruct( object ):
         self.identifiable = (idt == 0)
         self.stretch = False
         
-        self.variables = sum( find_var(m['array']) for m in members , [] )
-        self.variables += sum( find_var(m['arg']) for m in members , [] )
-        self.variables += sum( m['object'].variables for m in members , [] )
+        self.variables = sum( (find_var(m['array']) for m in members) , [] )
+        self.variables += sum( (find_var(m['arg']) for m in members) , [] )
+        self.variables += sum( (m['object'].variables for m in members) , [] )
         
         return
         
@@ -175,19 +173,19 @@ class TypeStruct( object ):
 
 class TypeUnion( object ):
     
-    def __init__( self, name, members, namespace ):
+    def __init__( self, name, members ):
         
         self.name = name
         self.cname = name
         self.members = members
         
-        idt = sum( 1 for m in members if m['array'] == 'auto' or namespace[m['name']].identifiable == False )
+        idt = sum( 1 for m in members if m['array'] == 'auto' or m['object'].identifiable == False )
         
         self.identifiable = (idt == 0)
         
-        self.variables = sum( find_var(m['array']) for m in members if m['array'] , [] )
-        self.variables += sum( find_var(m['arg']) for m in members if m['arg'] , [] )
-        self.variables += sum( for m in members if m['name'] , [] )
+        self.variables = sum( (find_var(m['array']) for m in members if m['array']) , [] )
+        self.variables += sum( (find_var(m['arg']) for m in members if m['arg']) , [] )
+        self.variables += sum( (m['object'].variables for m in members) , [] )
         
         return
         
@@ -278,11 +276,36 @@ class BuildinTypePACKINT( object ):
         
         return i, len(chrs)+1
 
-class BuildinTypeCHAR( object )
+class BuildinTypeCHAR( object ):
     
     def __init__( self ):
         
         self.name = 'char'
+        self.cname = 'char'
+        
+        self.identifiable = True
+        self.stretch = False
+        
+        self.variables = []
+        
+    def length( self, lens, array ):
+        return array
+    
+    def read( self, namespace, fp, lens, args ):
+        
+        return fp.read(1), 1
+        
+    def read_multi( self, namespace, fp, lens, mlens, args ):
+        
+        s = fp.read(mlens)
+        
+        return s, mlens
+
+class BuildinTypeBYTE( object ):
+    
+    def __init__( self ):
+        
+        self.name = 'byte'
         self.cname = 'char'
         
         self.identifiable = True
@@ -308,6 +331,7 @@ class EasyBinaryProtocol( object ):
     buildintypes = [ BuildinTypeCHAR(),
                      BuildinTypePACKINT(),
                      BuildinTypeUINT(),
+                     BuildinTypeBYTE(),
                    ]
     
     def __init__( self ):
@@ -319,29 +343,34 @@ class EasyBinaryProtocol( object ):
         arg = r'\{(?P<arg>\s*\S+\s*)\}'
 
         self.pat = '%s\s+%s(%s)?(%s)?(%s)?' % (var, name, length, array, arg)
+        
+        self.namespaces = dict( (bt.name, bt) for bt in self.buildintypes )
 
     def parse( self, fname ):
         
-        structs = []
+        defines = self.parsecode( fname )[2]
         
-        defines = self.parsecode()[2]
+        print defines
         
         for define in defines : 
-            self.parsedefine( structs, define )
+            self.parsedefine( define )
         
         return
     
-    def parsedefine( self, structs, define ):
+    def parsedefine( self, define ):
         
         indent, declaration, children = define
         
         for child in children :
             if child[2] :
-                self.parsedefine( structs, define )
+                self.parsedefine( child )
                 
         members = [ childdec for n, childdec, m in children ]
         
-        structs.append()
+        for m in members :
+            m['object'] = self.namespaces[m['name']]
+        
+        self.namespaces[declaration] = TypeStruct( declaration, members )
         
         return
     
