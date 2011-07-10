@@ -1,0 +1,10 @@
+
+test1  TEST1(10)
+    
+    name   char(5)
+    type   char(5)
+    
+test2  TEST2(.length)
+    
+    length   uint(1)
+    name     char[auto]

@@ -31,7 +31,8 @@ def parse_expr( e ):
     if e == 'auto' :
         return (1, None)
     
-    if e.isnumeric() :
+    #if e.isnumeric() :
+    if e.isdigit() :
         return (2, int(e))
     
     if '(' and ')' in e :
@@ -92,6 +93,9 @@ def complength( e, vs, namespace ):
 
 def find_var( e ):
     
+    if e == None :
+        return []
+    
     if e[0] == 4 :
         return [e[1]]
         
@@ -111,6 +115,9 @@ class TypeStruct( object ):
         idt = sum( 1 for m in members if m['array'] == 'auto' or m['object'].identifiable == False )
         
         if idt > 1 :
+            print
+            print self.name
+            print members
             raise UnkownLengthError, 'more than one auto lengt in struct %s' % (self,name)
         
         self.identifiable = (idt == 0)
@@ -128,25 +135,25 @@ class TypeStruct( object ):
         
         l = 0
         
-        for i, m in enumerate(members) :
+        for i, m in enumerate(self.members) :
             
             if m['array'][0] == 0 : #None
                 
                 if m['length'][0] == 1 :
-                    lx = sum( _m['object'].length( _m['length'], _m['array'] ) for _m in members[i:] )
+                    lx = sum( _m['object'].length( _m['length'], _m['array'] ) for _m in self.members[i:] )
                     if type(lens) != types.Intiger :
                         lens = complength( lens, r, namespace )
                     le = lens - l - lx
                 else :
                     le = complength( m['length'], r, namespace )
                 
-                r0, l0 = m['object'].read( namespace, fp, le )
+                r0, l0 = m['object'].read( namespace, fp, le, None )
                 
             elif m['array'][0] == 1 : #auto
                 
                 le = complength( m['length'], r, namespace )
 
-                lx = sum( _m['object'].length( _m['length'], _m['array'] ) for _m in members[i:] )
+                lx = sum( _m['object'].length( _m['length'], _m['array'] ) for _m in self.members[i:] )
                 if type(lens) != types.Intiger :
                     lens = complength( lens, r, namespace )
                 
@@ -157,14 +164,14 @@ class TypeStruct( object ):
                 
                 array = (lens - l - lx)/lx
                 
-                r0, l0 = m['object'].read_multi( namespace, fp, le, array )
+                r0, l0 = m['object'].read_multi( namespace, fp, le, array, None )
                 
             else :
                 
                 array = complength( m['array'], r, namespace )
                 le = complength( m['length'], r, namespace )
                 
-                r0, l0 = m['object'].read_multi( namespace, fp, le, array )
+                r0, l0 = m['object'].read_multi( namespace, fp, le, array, None )
             
             l += l0
             r[m['var']] = r0
@@ -326,12 +333,42 @@ class BuildinTypeBYTE( object ):
         
         return s, mlens
 
+class BuildinTypeBIT( object ):
+    
+    def __init__( self ):
+        
+        self.name = 'bit'
+        self.cname = 'char'
+        
+        self.identifiable = True
+        self.stretch = False
+        
+        self.variables = []
+        
+    def length( self, lens, array ):
+        return array
+    
+    def read( self, namespace, fp, lens, args ):
+        
+        r = fp.read(1)
+        
+        return [ ( (r>>i) & 1 ) for i in range(8) ], 1
+        
+    def read_multi( self, namespace, fp, lens, mlens, args ):
+        
+        s = fp.read(mlens)
+        
+        s = [ ( (r>>i) & 1 ) for r in s for i in range(8) ]
+        
+        return s, mlens
+
 class EasyBinaryProtocol( object ):
     
     buildintypes = [ BuildinTypeCHAR(),
                      BuildinTypePACKINT(),
                      BuildinTypeUINT(),
                      BuildinTypeBYTE(),
+                     BuildinTypeBIT(),
                    ]
     
     def __init__( self ):
@@ -350,7 +387,7 @@ class EasyBinaryProtocol( object ):
         
         defines = self.parsecode( fname )[2]
         
-        print defines
+        #print defines
         
         for define in defines : 
             self.parsedefine( define )
@@ -368,9 +405,14 @@ class EasyBinaryProtocol( object ):
         members = [ childdec for n, childdec, m in children ]
         
         for m in members :
+            m['array'] = parse_expr( m['array'] )
+            m['length'] = parse_expr( m['length'] )
             m['object'] = self.namespaces[m['name']]
         
-        self.namespaces[declaration] = TypeStruct( declaration, members )
+        if declaration['arg'] == None :
+            self.namespaces[declaration['name']] = TypeStruct( declaration['name'], members )
+        else :
+            self.namespaces[declaration['name']] = TypeUnion( declaration['name'], members )
         
         return
     
@@ -420,11 +462,21 @@ class EasyBinaryProtocol( object ):
         
         return rootnode
         
+    def read( self, name, io, **spaces ):
+        
+        self.namespaces[name].read( spaces, io, None, None )
+        
+        return
+        
 ebp = EasyBinaryProtocol()
 
 if __name__ == '__main__' :
     
     import pprint
+    import cStringIO
     
-    pprint.pprint( ebp.parse( 'replication.protocol' ) )
+    ebp.parse( 'test.protocol' )
+    
+    pprint.pprint( ebp.read('TEST1', cStringIO.StringIO('abcdefghij') )  )
+    pprint.pprint( ebp.read('TEST2', cStringIO.StringIO(chr(2)+'ab') )  )
     
