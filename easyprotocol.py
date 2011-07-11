@@ -139,9 +139,10 @@ class TypeStruct( object ):
             
             if m['array'][0] == 0 : #None
                 
-                if m['length'][0] == 1 :
-                    lx = sum( _m['object'].length( _m['length'], _m['array'] ) for _m in self.members[i:] )
-                    if type(lens) != types.Intiger :
+                if m['length'][0] == 1 : #auto
+                    lx = sum( _m['object'].length( _m['length'], _m['array'] ) for _m in self.members[i+1:] )
+                    #lx = sum( )
+                    if type(lens) not in ( types.IntType, types.LongType ) :
                         lens = complength( lens, r, namespace )
                     le = lens - l - lx
                 else :
@@ -152,9 +153,13 @@ class TypeStruct( object ):
             elif m['array'][0] == 1 : #auto
                 
                 le = complength( m['length'], r, namespace )
+                
+                #print i, self.members
+                #print self.members[i:]
+                #print [_m['object'].length( _m['length'], _m['array'] ) for _m in self.members[i:]]
 
-                lx = sum( _m['object'].length( _m['length'], _m['array'] ) for _m in self.members[i:] )
-                if type(lens) != types.Intiger :
+                lx = sum( _m['object'].length( _m['length'], _m['array'] ) for _m in self.members[i+1:] )
+                if type(lens) not in ( types.IntType, types.LongType ) :
                     lens = complength( lens, r, namespace )
                 
                 xle = lens - l - lx
@@ -464,9 +469,8 @@ class EasyBinaryProtocol( object ):
         
     def read( self, name, io, **spaces ):
         
-        self.namespaces[name].read( spaces, io, None, None )
+        return self.namespaces[name].read( spaces, io, None, None )
         
-        return
         
 ebp = EasyBinaryProtocol()
 
