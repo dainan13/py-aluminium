@@ -59,7 +59,7 @@ def parse_expr( e ):
     if e.startswith('$') :
         return (4, e[1:])
     
-    if not e.starswith('.'):
+    if not e.startswith('.'):
         return (5, e.split('.'))
     
     return (6, e.split('.')[1:])
@@ -140,7 +140,7 @@ class TypeStruct( object ):
             if m['array'][0] == 0 : #None
                 
                 if m['length'][0] == 1 : #auto
-                    lx = sum( _m['object'].length( _m['length'], _m['array'] ) for _m in self.members[i+1:] )
+                    lx = sum( _m['object'].length( complength(_m['length'], r, namespace), complength(_m['array'], r, namespace) ) for _m in self.members[i+1:] )
                     #lx = sum( )
                     if type(lens) not in ( types.IntType, types.LongType ) :
                         lens = complength( lens, r, namespace )
@@ -148,35 +148,37 @@ class TypeStruct( object ):
                 else :
                     le = complength( m['length'], r, namespace )
                 
-                r0, l0 = m['object'].read( namespace, fp, le, None )
+                a = complength( m['arg'], r, namespace )
+                
+                r0, l0 = m['object'].read( namespace, fp, le, a )
                 
             elif m['array'][0] == 1 : #auto
                 
                 le = complength( m['length'], r, namespace )
                 
-                #print i, self.members
-                #print self.members[i:]
-                #print [_m['object'].length( _m['length'], _m['array'] ) for _m in self.members[i:]]
-
-                lx = sum( _m['object'].length( _m['length'], _m['array'] ) for _m in self.members[i+1:] )
+                lx = sum( _m['object'].length( complength(_m['length'], r, namespace), complength(_m['array'], r, namespace) ) for _m in self.members[i+1:] )
                 if type(lens) not in ( types.IntType, types.LongType ) :
                     lens = complength( lens, r, namespace )
                 
                 xle = lens - l - lx
                 
-                if xle % lx != 0 :
+                if xle % le != 0 :
                     raise AutoArrayError, 'auto array error'
                 
-                array = (lens - l - lx)/lx
+                array = xle/le
                 
-                r0, l0 = m['object'].read_multi( namespace, fp, le, array, None )
+                a = complength( m['arg'], r, namespace )
+                
+                r0, l0 = m['object'].read_multi( namespace, fp, le, array, a )
                 
             else :
                 
                 array = complength( m['array'], r, namespace )
                 le = complength( m['length'], r, namespace )
                 
-                r0, l0 = m['object'].read_multi( namespace, fp, le, array, None )
+                a = complength( m['arg'], r, namespace )
+                
+                r0, l0 = m['object'].read_multi( namespace, fp, le, array, a )
             
             l += l0
             r[m['var']] = r0
@@ -207,16 +209,51 @@ class TypeUnion( object ):
         
         l = 0
         
-        m = members[args]
+        m = self.members[args]
         
-        t = namespace[m['name']]
+        #t = namespace[m['name']]
         
-        if m['array'] == None :
-            r0, l0 = t.read( namespace, fp, lens )
-        elif m['array'] == 'auto' :
-            r0, l0 = t.read_multi( namespace, fp, lens-l, m['array'] )
+        if m['array'][0] == 0 : #None
+            
+            if m['length'][0] == 1 : #auto
+
+                if type(lens) not in ( types.IntType, types.LongType ) :
+                    lens = complength( lens, r, namespace )
+                le = lens - l
+                
+            else :
+                le = complength( m['length'], r, namespace )
+            
+            a = complength( m['arg'], r, namespace )
+            
+            r0, l0 = m['object'].read( namespace, fp, le, a )
+            
+        elif m['array'][0] == 1 : #auto
+            
+            le = complength( m['length'], r, namespace )
+
+            if type(lens) not in ( types.IntType, types.LongType ) :
+                lens = complength( lens, r, namespace )
+            
+            xle = lens - l
+            
+            if xle % le != 0 :
+                raise AutoArrayError, 'auto array error'
+            
+            array = xle/le
+            
+            a = complength( m['arg'], r, namespace )
+            
+            r0, l0 = m['object'].read_multi( namespace, fp, le, array, a )
+            
         else :
-            r0, l0 = t.read_multi( namespace, fp, m['length'], m['array'] )
+            
+            array = complength( m['array'], r, namespace )
+            le = complength( m['length'], r, namespace )
+            
+            a = complength( m['arg'], r, namespace )
+            
+            r0, l0 = m['object'].read_multi( namespace, fp, le, array, a )
         
         l += l0
         r[m['var']] = r0
@@ -387,6 +424,7 @@ class EasyBinaryProtocol( object ):
         self.pat = '%s\s+%s(%s)?(%s)?(%s)?' % (var, name, length, array, arg)
         
         self.namespaces = dict( (bt.name, bt) for bt in self.buildintypes )
+        self.p_globals = {}
 
     def parse( self, fname ):
         
@@ -396,6 +434,12 @@ class EasyBinaryProtocol( object ):
         
         for define in defines : 
             self.parsedefine( define )
+            declaration = define[1].copy()
+            v = declaration.pop('var')
+            declaration['length'] = parse_expr( declaration['length'] )
+            declaration['array'] = parse_expr( declaration['array'] )
+            declaration['arg'] = parse_expr( declaration['arg'] )
+            self.p_globals[v] = declaration
         
         return
     
@@ -403,17 +447,21 @@ class EasyBinaryProtocol( object ):
         
         indent, declaration, children = define
         
+        if not children :
+            return
+        
         for child in children :
             if child[2] :
                 self.parsedefine( child )
-                
+        
         members = [ childdec for n, childdec, m in children ]
         
         for m in members :
             m['array'] = parse_expr( m['array'] )
             m['length'] = parse_expr( m['length'] )
+            m['arg'] = parse_expr( m['arg'] )
             m['object'] = self.namespaces[m['name']]
-        
+    
         if declaration['arg'] == None :
             self.namespaces[declaration['name']] = TypeStruct( declaration['name'], members )
         else :
@@ -469,7 +517,10 @@ class EasyBinaryProtocol( object ):
         
     def read( self, name, io, **spaces ):
         
-        return self.namespaces[name].read( spaces, io, None, None )
+        v = self.p_globals[name]
+        stt = self.namespaces[v['name']]
+        
+        return stt.read( spaces, io, v['length'], v['array'] )[0]
         
         
 ebp = EasyBinaryProtocol()
@@ -481,6 +532,9 @@ if __name__ == '__main__' :
     
     ebp.parse( 'test.protocol' )
     
-    pprint.pprint( ebp.read('TEST1', cStringIO.StringIO('abcdefghij') )  )
-    pprint.pprint( ebp.read('TEST2', cStringIO.StringIO(chr(2)+'ab') )  )
-    
+    pprint.pprint( ebp.read('test1', cStringIO.StringIO('abcdefghij') ) )
+    pprint.pprint( ebp.read('test2', cStringIO.StringIO(chr(3)+'abcdefghij') ) )
+    pprint.pprint( ebp.read('test3', cStringIO.StringIO(chr(3)+'abcdefghij') ) )
+    pprint.pprint( ebp.read('test4', cStringIO.StringIO(chr(10)+'abcdefghij') ) )
+    pprint.pprint( ebp.read('test5', cStringIO.StringIO('abcdefghij') ) )
+    pprint.pprint( ebp.read('test6', cStringIO.StringIO(chr(10)+chr(1)+'abcdefghij') ) )

@@ -1,10 +1,41 @@
 
 test1  TEST1(10)
     
-    name   char(5)
-    type   char(5)
+    name   char[5]
+    type   char[5]
+    
     
 test2  TEST2(.length)
     
     length   uint(1)
     name     char[auto]
+    
+    
+test3  TEST3(auto)
+    
+    length   uint(1)
+    name     char[length]
+    
+    
+test4  TEST4(auto)
+    
+    length   uint(1)
+    t        TEST5(length)
+        name     char[3]
+        type     char[auto]
+        
+test5  TEST5(10)
+
+test6  TEST6(auto)
+    
+    len    uint(1)
+    type   uint(1)
+    t      TEST6_1(len){type}
+    
+        a      TEST6_2(auto)
+            name    char[3]
+            type    char[auto]
+            
+        b      TEST6_3(auto)
+            name    char[auto]
+            type    char[3]
