@@ -19,7 +19,13 @@ binlog  BINLOG(.length)
             
         data        EVENT_DATA(auto){header.typecode}
             
-            desciption     EVENT_DATA_DESCRIPTION(auto)
+            # ROTATE_EVENT  4
+            # TABLE_MAP_EVENT 19
+            # WRITE_ROWS_EVENT 23
+            # UPDATE_ROWS_EVENT 24
+            # DELETE_ROWS_EVENT 25
+            
+            15:desciption     EVENT_DATA_DESCRIPTION(auto)
             
                 binlog_version    uint(2)
                 server_version    char[50]
@@ -27,7 +33,7 @@ binlog  BINLOG(.length)
                 header_length     uint(1)
                 post_header       byte[auto]
             
-            table          EVENT_DATA_TABLE
+            19:table          EVENT_DATA_TABLE
                 
                 table_id          uint(6)
                 reserved          byte[2]

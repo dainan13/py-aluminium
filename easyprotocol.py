@@ -100,7 +100,8 @@ def find_var( e ):
         return [e[1]]
         
     if e[0] == 3 :
-        return [ a[1] for a in e[2] if a[0] == 4 ]
+        #print '>>>',e
+        return [ a[1] for a in e[1][1] if a[0] == 4 ]
             
     return []
 
