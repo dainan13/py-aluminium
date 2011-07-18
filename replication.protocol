@@ -19,9 +19,9 @@ binlog  BINLOG(.length)
             
         data        EVENT_DATA(auto){header.typecode}
             
-            # ROTATE_EVENT  4
-            # TABLE_MAP_EVENT 19
-            # WRITE_ROWS_EVENT 23
+            # ROTATE_EVENT      4
+            # TABLE_MAP_EVENT   19
+            # WRITE_ROWS_EVENT  23
             # UPDATE_ROWS_EVENT 24
             # DELETE_ROWS_EVENT 25
             
@@ -47,7 +47,7 @@ binlog  BINLOG(.length)
                 metadata_length   packint
                 nullable          bit[round(columns_count,8)]
                 
-            event          EVENT_DATA_EVENT(auto)
+            23,24,25:event          EVENT_DATA_EVENT(auto)
                 
                 table_id          uint(6)
                 reserved          byte[2]

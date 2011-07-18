@@ -480,13 +480,13 @@ class EasyBinaryProtocol( object ):
             for i, li in enumerate(fp.readlines()):
                 
                 if '\t' in li :
-                    raise InvalidCharactorFound, 'ABCDEF'
+                    raise InvalidCharactorFound, 'tab founded'
             
                 indent = len(li) - len(li.lstrip())
             
                 li = li.strip()
                 
-                if not li :
+                if ( not li ) or li.startswith('#'):
                     continue
                 
                 m = re.match(self.pat,li)
