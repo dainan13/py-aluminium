@@ -40,6 +40,10 @@ binlog  BINLOG(.packet.length)
                 # UPDATE_ROWS_EVENT 24
                 # DELETE_ROWS_EVENT 25
                 
+                4:rotate          EVENT_ROTATE(auto)
+                    position          uint(8)
+                    binlog            char[auto]
+                
                 15:desciption     EVENT_DATA_DESCRIPTION(auto)
                 
                     binlog_version    uint(2)

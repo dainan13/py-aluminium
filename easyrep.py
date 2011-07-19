@@ -44,7 +44,8 @@ if __name__ == '__main__':
          }
     
     #erep = EasyReplication( 'ker106-bin.000121', 801523535, db )
-    erep = EasyReplication( 'mysql-relay-bin-m.000002', 658, db )
+    #erep = EasyReplication( 'mysql-relay-bin-m.000002', 658, db )
+    erep = EasyReplication( 'mysql-bin.000080', 556, db )
     pprint.pprint(erep.read())
     
     #'D\x00\x00\x01\xff\xd4\x04#HY000Could not find first log file name in binary log index '
