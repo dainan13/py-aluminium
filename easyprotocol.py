@@ -303,12 +303,12 @@ class BuildinTypeUINT( object ):
         
         chrs = fp.read(lens)
         
-        i = 0
+        r = 0
         
         for i, c in enumerate(chrs) :
-            i = ord(c) * ( 256**i )
+            r += ord(c) * ( 256**i )
         
-        return i, lens
+        return r, lens
 
 class BuildinTypePACKINT( object ):
     
@@ -335,7 +335,7 @@ class BuildinTypePACKINT( object ):
         if c == 251 :
             return None, 1
         
-        i = 0
+        r = 0
         
         if c == 252 :
             chrs = fp.read(2)
@@ -345,9 +345,9 @@ class BuildinTypePACKINT( object ):
             chrs = fp.read(8)
             
         for i, c in enumerate(chrs) :
-            i = ord(c) * ( 256**i )
+            r += ord(c) * ( 256**i )
         
-        return i, len(chrs)+1
+        return r, len(chrs)+1
 
 class BuildinTypeCHAR( object ):
     
