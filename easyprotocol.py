@@ -20,6 +20,9 @@ class UnkownLengthError( EasyBinaryProtocolError ):
 class AutoArrayError( EasyBinaryProtocolError ):
     pass
 
+class UndefinedValueInUnion( EasyBinaryProtocolError ):
+    pass
+
 
 def parse_expr( e ):
     
@@ -193,10 +196,16 @@ class TypeUnion( object ):
         self.name = name
         self.cname = name
         self.members = {}
+        self.defaultmember = None
         
         i = 0
         for m in members :
-            if 'seg' in m :
+            if 'seg' in m and m['seg']:
+                
+                if m['seg'] == '*:' :
+                    self.defaultmember = m
+                    continue
+                    
                 keys = [ int(i) for i in m['seg'].strip(':').split(',') if i ]
                 for k in keys :
                     self.members[k] = m
@@ -223,9 +232,10 @@ class TypeUnion( object ):
         
         l = 0
         
-        m = self.members[args]
+        m = self.members.get(args, self.defaultmember )
         
-        #t = namespace[m['name']]
+        if not m :
+            raise UndefinedValueInUnion, args
         
         if m['array'][0] == 0 : #None
             
@@ -429,7 +439,7 @@ class EasyBinaryProtocol( object ):
     
     def __init__( self ):
         
-        seg = r'(?P<seg>[0-9,]*:)'
+        seg = r'(?P<seg>[0-9,*]*:)'
         var = r'(?P<var>[a-zA-Z_]\w*)'
         name = r'(?P<name>[a-zA-Z_]\w*)'
         length = r'\((?P<length>\s*\S+?\s*)\)'
@@ -553,3 +563,4 @@ if __name__ == '__main__' :
     pprint.pprint( ebp.read('test4', cStringIO.StringIO(chr(10)+'abcdefghij') ) )
     pprint.pprint( ebp.read('test5', cStringIO.StringIO('abcdefghij') ) )
     pprint.pprint( ebp.read('test6', cStringIO.StringIO(chr(10)+chr(1)+'abcdefghij') ) )
+    pprint.pprint( ebp.read('test7', cStringIO.StringIO(chr(1)+chr(2)+chr(3)) ) )

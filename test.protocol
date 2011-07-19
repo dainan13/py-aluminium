@@ -39,3 +39,6 @@ test6  TEST6(auto)
         b      TEST6_3(auto)
             name    char[auto]
             type    char[3]
+
+test7  TEST7(auto)
+    i      uint(3)
