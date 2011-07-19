@@ -192,7 +192,20 @@ class TypeUnion( object ):
         
         self.name = name
         self.cname = name
-        self.members = members
+        self.members = {}
+        
+        i = 0
+        for m in members :
+            if 'seg' in m :
+                keys = [ int(i) for i in m['seg'].strip(':').split(',') if i ]
+                for k in keys :
+                    self.members[k] = m
+                i = max(keys)
+            else :
+                self.members[i] = m
+            i += 1
+        
+        #print 'u', self.members.keys()
         
         idt = sum( 1 for m in members if m['array'] == 'auto' or m['object'].identifiable == False )
         
@@ -416,13 +429,14 @@ class EasyBinaryProtocol( object ):
     
     def __init__( self ):
         
+        seg = r'(?P<seg>[0-9,]*:)'
         var = r'(?P<var>[a-zA-Z_]\w*)'
         name = r'(?P<name>[a-zA-Z_]\w*)'
         length = r'\((?P<length>\s*\S+?\s*)\)'
         array = r'\[(?P<array>\s*\S+\s*)\]'
         arg = r'\{(?P<arg>\s*\S+\s*)\}'
 
-        self.pat = '%s\s+%s(%s)?(%s)?(%s)?' % (var, name, length, array, arg)
+        self.pat = '%s?%s\s+%s(%s)?(%s)?(%s)?' % (seg,var, name, length, array, arg)
         
         self.namespaces = dict( (bt.name, bt) for bt in self.buildintypes )
         self.p_globals = {}
