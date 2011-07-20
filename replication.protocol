@@ -28,91 +28,92 @@ binlog  BINLOG
             
                 header        EVENT_HEADER
             
-                    timestamp      uint(4)
-                    typecode       uint(1)
-                    server_id      uint(4)
-                    event_length   uint(4)
-                    next_position  uint(4)
-                    flags          byte[2]
-                    extra_headers  byte[$extra_headers_length]
+                    timestamp             uint(4)
+                    typecode              uint(1)
+                    server_id             uint(4)
+                    event_length          uint(4)
+                    next_position         uint(4)
+                    flags                 byte[2]
+                    extra_headers         byte[$extra_headers_length]
                     
                 data          EVENT_DATA(auto){header.typecode}
                     
                     # http://forge.mysql.org/w/index.php?title=MySQL_Internals_Binary_Log&printable=yes
                     
-                    # ROTATE_EVENT      4
-                    # TABLE_MAP_EVENT   19
-                    # WRITE_ROWS_EVENT  23
-                    # UPDATE_ROWS_EVENT 24
-                    # DELETE_ROWS_EVENT 25
+                    # ROTATE_EVENT        4
+                    # TABLE_MAP_EVENT     19
+                    # WRITE_ROWS_EVENT    23
+                    # UPDATE_ROWS_EVENT   24
+                    # DELETE_ROWS_EVENT   25
                     
-                    0:unkown          byte[auto]
-                    1:start_v3        byte[auto]
-                    2:query           byte[auto]
-                    3:stop            byte[auto]
+                    0:unkown              byte[auto]
+                    1:start_v3            byte[auto]
+                    2:query               byte[auto]
+                    3:stop                byte[auto]
                     
-                    4:rotate          EVENT_ROTATE(auto)
-                        position          uint(8)
-                        binlog            char[auto]
+                    4:rotate              EVENT_ROTATE(auto)
+                        position              uint(8)
+                        binlog                char[auto]
                     
-                    5:intvar          byte[auto]
-                    6:load            byte[auto]
-                    7:slave           byte[auto]
-                    8:create_file     byte[auto]
-                    9:append_block    byte[auto]
-                    10:exec_load      byte[auto]
-                    11:delete_file    byte[auto]
-                    12:new_load       byte[auto]
-                    13:rand           byte[auto]
-                    14:user_var       byte[auto]
+                    5:intvar              byte[auto]
+                    6:load                byte[auto]
+                    7:slave               byte[auto]
+                    8:create_file         byte[auto]
+                    9:append_block        byte[auto]
+                    10:exec_load          byte[auto]
+                    11:delete_file        byte[auto]
+                    12:new_load           byte[auto]
+                    13:rand               byte[auto]
+                    14:user_var           byte[auto]
                     
-                    15:desciption     EVENT_DATA_DESCRIPTION(auto)
+                    15:desciption         EVENT_DATA_DESCRIPTION(auto)
                     
-                        binlog_version    uint(2)
-                        server_version    char[50]
-                        create_timestamp  uint(4)
-                        header_length     uint(1)
-                        post_header       byte[auto]
+                        binlog_version        uint(2)
+                        server_version        char[50]
+                        create_timestamp      uint(4)
+                        header_length         uint(1)
+                        post_header           byte[auto]
                     
                     16:xid                byte[auto]
                     17:begin_load_query   byte[auto]
                     18:execute_load_query byte[auto]
                     
-                    19:table          EVENT_DATA_TABLE
+                    19:table              EVENT_DATA_TABLE
                         
-                        table_id          uint(6)
-                        reserved          byte[2]
+                        table_id              uint(6)
+                        reserved              byte[2]
                         
-                        dbname_length     uint(1)
-                        dbname            byte[dbname_length]
-                        tablename_length  uint(1)
-                        tablename         byte[tablename_length]
-                        columns_count     packint
-                        columns_type      uint[columns_count]
-                        metadata_length   packint
-                        nullable          bit[round(columns_count,8)]
+                        dbname_length         uint(1)
+                        dbname                byte[dbname_length]
+                        tablename_length      uint(1)
+                        tablename             byte[tablename_length]
+                        columns_count         packint
+                        columns_type          uint[columns_count]
+                        metadata_length       packint
+                        nullable              bit[round(columns_count,8)]
                     
                     20:pre_ga_write_rows  byte[auto]
                     21:pre_ga_update_rows byte[auto]
                     22:pre_ga_delete_rows byte[auto]
                     
-                    23:write_rows     EVENT_DATA_EVENT(auto)
+                    23:write_rows         EVENT_DATA_EVENT(auto)
                         
-                        table_id          uint(6)
-                        reserved          byte[2]
+                        table_id              uint(6)
+                        reserved              byte[2]
                         
-                        columns_count     packint
-                        flags1            bit[round(columns_count,8)]
-                        flags2            bit[round(columns_count,8)]
-                        isnull            bit[round(columns_count,8)]
-                        row_image         byte[auto]
-                        isnull2           bit[round(columns_count,8)]
-                        row_image         byte[0]
+                        columns_count         packint
+                        flags1                bit[round(columns_count,8)]
+                        flags2                bit[round(columns_count,8)]
+                        isnull                bit[round(columns_count,8)]
+                        row_image             byte[auto]
+                        isnull2               bit[round(columns_count,8)]
+                        row_image             byte[0]
                     
-                    24:update_rows    EVENT_DATA_EVENT(auto)
-                    25:delete_rows    EVENT_DATA_EVENT(auto)
+                    24:update_rows        EVENT_DATA_EVENT(auto)
+                    25:delete_rows        EVENT_DATA_EVENT(auto)
                     
-                    26:incident_evnet byte[auto]
-                    27:heartbeat      byte[auto]
+                    26:incident_evnet     byte[auto]
+                    27:heartbeat          byte[auto]
                     
-                    *:undefined       byte[auto]
+                    *:undefined           byte[auto]
+                    
