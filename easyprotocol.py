@@ -56,7 +56,7 @@ def parse_expr( e ):
         
         args = [ parse_expr(a) for a in args ]
         
-        return (3, (function, args))
+        return (3, (f, args))
     
     
     if e.startswith('$') :
@@ -83,6 +83,7 @@ def complength( e, vs, namespace ):
     
     if t == 3 :
         args = [ complength(a, vs, namespace) for a in e[1][1] ]
+        print '@',e
         return namespace[e[1][0]](*args)
         
     if t == 4 :
@@ -108,7 +109,18 @@ def find_var( e ):
             
     return []
 
-class TypeStruct( object ):
+
+class ProtocolType( object ):
+    
+    def read_multi( self, namespace, fp, lens, mlens, args ):
+        
+        r = [ self.read( namespace, fp, lens, args ) for i in range(mlens) ]
+        
+        r, le = zip( *r )
+        
+        return r, sum(le)
+
+class TypeStruct( ProtocolType ):
     
     def __init__( self, name, members ):
         
@@ -189,7 +201,7 @@ class TypeStruct( object ):
             
         return r, l
 
-class TypeUnion( object ):
+class TypeUnion( ProtocolType ):
     
     def __init__( self, name, members ):
         
@@ -284,7 +296,7 @@ class TypeUnion( object ):
             
         return r, l
 
-class BuildinTypeUINT( object ):
+class BuildinTypeUINT( ProtocolType ):
     
     def __init__( self ):
         
@@ -310,7 +322,7 @@ class BuildinTypeUINT( object ):
         
         return r, lens
 
-class BuildinTypePACKINT( object ):
+class BuildinTypePACKINT( ProtocolType ):
     
     def __init__( self ):
         
@@ -349,7 +361,7 @@ class BuildinTypePACKINT( object ):
         
         return r, len(chrs)+1
 
-class BuildinTypeCHAR( object ):
+class BuildinTypeCHAR( ProtocolType ):
     
     def __init__( self ):
         
@@ -374,7 +386,7 @@ class BuildinTypeCHAR( object ):
         
         return s, mlens
 
-class BuildinTypeBYTE( object ):
+class BuildinTypeBYTE( ProtocolType ):
     
     def __init__( self ):
         
@@ -399,7 +411,7 @@ class BuildinTypeBYTE( object ):
         
         return s, mlens
 
-class BuildinTypeBIT( object ):
+class BuildinTypeBIT( ProtocolType ):
     
     def __init__( self ):
         
@@ -410,9 +422,13 @@ class BuildinTypeBIT( object ):
         self.stretch = False
         
         self.variables = []
-        
+    
+    @staticmethod
+    def roundlen( l ):
+        return (l+7) / 8
+    
     def length( self, lens, array ):
-        return array
+        return self.roundlen(array)
     
     def read( self, namespace, fp, lens, args ):
         
@@ -422,11 +438,16 @@ class BuildinTypeBIT( object ):
         
     def read_multi( self, namespace, fp, lens, mlens, args ):
         
-        s = fp.read(mlens)
+        le = self.roundlen(mlens)
         
-        s = [ ( (r>>i) & 1 ) for r in s for i in range(8) ]
+        s = fp.read( le )
         
-        return s, mlens
+        s = [ ( (ord(r)>>i) & 1 ) for r in s for i in range(8) ]
+        
+        return s[:mlens], le
+
+def roundbin( a, b ):
+    return a + b - ( a - 1 ) % b - 1
 
 class EasyBinaryProtocol( object ):
     
@@ -450,25 +471,38 @@ class EasyBinaryProtocol( object ):
         
         self.namespaces = dict( (bt.name, bt) for bt in self.buildintypes )
         self.p_globals = {}
-
+    
+    def parsefile( self, fname ):
+        
+        with open(fname,'r') as fp :
+            defines = self._parsecode( fp.readlines() )[2]
+        
+        self._parse( defines )
+        
+        return
+    
     def parse( self, fname ):
         
-        defines = self.parsecode( fname )[2]
+        defines = self._parsecode( fname )[2]
         
-        #print defines
+        self._parse( defines )
         
+        return
+    
+    def _parse( self, defines ):
+    
         for define in defines : 
-            self.parsedefine( define )
+            self._parsedefine( define )
             declaration = define[1].copy()
             v = declaration.pop('var')
             declaration['length'] = parse_expr( declaration['length'] )
             declaration['array'] = parse_expr( declaration['array'] )
             declaration['arg'] = parse_expr( declaration['arg'] )
             self.p_globals[v] = declaration
-        
+            
         return
     
-    def parsedefine( self, define ):
+    def _parsedefine( self, define ):
         
         indent, declaration, children = define
         
@@ -477,7 +511,7 @@ class EasyBinaryProtocol( object ):
         
         for child in children :
             if child[2] :
-                self.parsedefine( child )
+                self._parsedefine( child )
         
         members = [ childdec for n, childdec, m in children ]
         
@@ -494,52 +528,50 @@ class EasyBinaryProtocol( object ):
         
         return
     
-    def parsecode( self, fname ):
+    def _parsecode( self, lines ):
         
         rootnode = ( None, None, [] )
         stack = [rootnode,]
         
-        with open(fname,'r') as fp :
+        for i, li in enumerate(lines):
             
-            for i, li in enumerate(fp.readlines()):
-                
-                if '\t' in li :
-                    raise InvalidCharactorFound, 'tab founded'
+            if '\t' in li :
+                raise InvalidCharactorFound, 'tab founded'
+        
+            indent = len(li) - len(li.lstrip())
+        
+            li = li.strip()
             
-                indent = len(li) - len(li.lstrip())
+            if ( not li ) or li.startswith('#'):
+                continue
             
-                li = li.strip()
+            m = re.match(self.pat,li)
+            
+            if m == None :
+                raise ParseSyntaxError, ( 'Line: %d %s' % (i,li) )
+            
+            node = ( indent, m.groupdict(), [] )
+            
+            if indent > stack[-1][0] :
                 
-                if ( not li ) or li.startswith('#'):
-                    continue
+                stack[-1][2].append( node )
+                stack.append( node )
                 
-                m = re.match(self.pat,li)
-                
-                if m == None :
-                    raise ParseSyntaxError, ( 'Line: %d %s' % (i,li) )
-                
-                node = ( indent, m.groupdict(), [] )
-                
-                if indent > stack[-1][0] :
-                    
-                    stack[-1][2].append( node )
-                    stack.append( node )
-                    
-                    continue
-                
-                while( stack[-1][0] > indent ):
-                    stack.pop()
-                
-                if indent != stack[-1][0] :
-                    raise IndentSyntaxError, ( 'Line: %d %s %d %d' % (i,li) )
-                
+                continue
+            
+            while( stack[-1][0] > indent ):
                 stack.pop()
-                
-                stack[-1][2].append(node)
-                stack.append(node)
+            
+            if indent != stack[-1][0] :
+                raise IndentSyntaxError, ( 'Line: %d %s %d %d' % (i,li) )
+            
+            stack.pop()
+            
+            stack[-1][2].append(node)
+            stack.append(node)
         
         return rootnode
-        
+    
     def read( self, name, io, **spaces ):
         
         v = self.p_globals[name]
@@ -555,7 +587,7 @@ if __name__ == '__main__' :
     import pprint
     import cStringIO
     
-    ebp.parse( 'test.protocol' )
+    ebp.parsefile( 'test.protocol' )
     
     pprint.pprint( ebp.read('test1', cStringIO.StringIO('abcdefghij') ) )
     pprint.pprint( ebp.read('test2', cStringIO.StringIO(chr(3)+'abcdefghij') ) )

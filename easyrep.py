@@ -9,7 +9,7 @@ class EasyReplication:
     COM_BINLOG_DUMP = 18
     
     ebp = ezp.EasyBinaryProtocol()
-    ebp.parse( 'replication.protocol' )
+    ebp.parsefile( 'replication.protocol' )
     
     def __init__( self, logname, pos, db ):
         
@@ -48,7 +48,7 @@ if __name__ == '__main__':
     #erep = EasyReplication( 'mysql-bin.000000', 556, db )
     #erep = EasyReplication( 'mysql-bin.000080', 0, db )
     erep = EasyReplication( 'mysql-bin.000080', 187, db )
-    for i in erep.readloop()
-        pprint.pprint(r)
+    for i in erep.readloop():
+        pprint.pprint(i)
         print
-    
+        

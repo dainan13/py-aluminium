@@ -85,12 +85,15 @@ binlog  BINLOG
                         
                         dbname_length         uint(1)
                         dbname                byte[dbname_length]
+                        terminator1           byte
                         tablename_length      uint(1)
                         tablename             byte[tablename_length]
+                        terminator2           byte
                         columns_count         packint
                         columns_type          uint[columns_count]
                         metadata_length       packint
-                        nullable              bit[round(columns_count,8)]
+                        metadata              byte[metadata_length]
+                        nullable              bit[columns_count]
                     
                     20:pre_ga_write_rows  byte[auto]
                     21:pre_ga_update_rows byte[auto]
@@ -102,11 +105,11 @@ binlog  BINLOG
                         reserved              byte[2]
                         
                         columns_count         packint
-                        flags1                bit[round(columns_count,8)]
-                        flags2                bit[round(columns_count,8)]
-                        isnull                bit[round(columns_count,8)]
+                        flags1                bit[columns_count]
+                        flags2                bit[columns_count]
+                        isnull                bit[columns_count]
                         row_image             byte[auto]
-                        isnull2               bit[round(columns_count,8)]
+                        isnull2               bit[columns_count]
                         row_image             byte[0]
                     
                     24:update_rows        EVENT_DATA_EVENT(auto)
