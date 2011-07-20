@@ -19,7 +19,7 @@ class EasyReplication:
         self.logname = logname
         self.pos = pos
         
-    def read( self ):
+    def readloop( self ):
 
         #arg = struct.pack('<LHLs',self.pos,0,self.serverid,self.logname)
         
@@ -30,8 +30,10 @@ class EasyReplication:
         
         self.conn._execute_command(self.COM_BINLOG_DUMP, arg)
         
-        return self.ebp.read('binlog',self.conn.socket.makefile(),extra_headers_length=0)
-        #return self.conn.socket.makefile().read(68)
+        while(True):
+            yield self.ebp.read('binlog',self.conn.socket.makefile(),extra_headers_length=0)
+
+        return
         
         
 if __name__ == '__main__':
@@ -43,10 +45,10 @@ if __name__ == '__main__':
            'user' : 'repl',
          }
     
-    #erep = EasyReplication( 'ker106-bin.000121', 801523535, db )
-    #erep = EasyReplication( 'mysql-relay-bin-m.000002', 658, db )
-    erep = EasyReplication( 'mysql-bin.000080', 556, db )
-    pprint.pprint(erep.read())
+    #erep = EasyReplication( 'mysql-bin.000000', 556, db )
+    #erep = EasyReplication( 'mysql-bin.000080', 0, db )
+    erep = EasyReplication( 'mysql-bin.000080', 187, db )
+    for i in erep.readloop()
+        pprint.pprint(r)
+        print
     
-    #'D\x00\x00\x01\xff\xd4\x04#HY000Could not find first log file name in binary log index '
-    # ---len---  r1  r2 -errno-
