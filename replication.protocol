@@ -95,25 +95,68 @@ binlog  BINLOG
                         metadata              byte[metadata_length]
                         nullable              bit[columns_count]
                     
+                        # MYSQL_TYPE_DECIMAL = 0,
+                        # MYSQL_TYPE_TINY = 1,
+                        # MYSQL_TYPE_SHORT = 2,
+                        # MYSQL_TYPE_LONG = 3,
+                        # MYSQL_TYPE_FLOAT = 4,
+                        # MYSQL_TYPE_DOUBLE = 5,
+                        # MYSQL_TYPE_NULL = 6,
+                        # MYSQL_TYPE_TIMESTAMP = 7, // 4 from_unixtime(0x)
+                        # MYSQL_TYPE_LONGLONG = 8,
+                        # MYSQL_TYPE_INT24 = 9, //field_medium
+                        # MYSQL_TYPE_DATE = 10,
+                        # MYSQL_TYPE_TIME = 11,
+                        # MYSQL_TYPE_DATETIME = 12,
+                        # MYSQL_TYPE_YEAR = 13,
+                        # MYSQL_TYPE_NEWDATE = 14,
+                        # MYSQL_TYPE_VARCHAR = 15, //field_varstring
+                        # MYSQL_TYPE_BIT = 16,
+                        # MYSQL_TYPE_NEWDECIMAL = 246,
+                        # MYSQL_TYPE_ENUM = 247,
+                        # MYSQL_TYPE_SET = 248,
+                        # MYSQL_TYPE_TINY_BLOB = 249,
+                        # MYSQL_TYPE_MEDIUM_BLOB = 250,
+                        # MYSQL_TYPE_LONG_BLOB = 251,
+                        # MYSQL_TYPE_BLOB = 252,
+                        # MYSQL_TYPE_VAR_STRING = 253,
+                        # MYSQL_TYPE_STRING = 254,
+                        # MYSQL_TYPE_GEOMETRY = 255,
+                    
                     20:pre_ga_write_rows  byte[auto]
                     21:pre_ga_update_rows byte[auto]
                     22:pre_ga_delete_rows byte[auto]
                     
-                    23:write_rows         EVENT_DATA_EVENT(auto)
+                    23:write_rows         EVENT_DATA_WRITE(auto)
                         
                         table_id              uint(6)
-                        reserved              byte[2]
+                        m_flags               byte[2]
                         
                         columns_count         packint
-                        flags1                bit[columns_count]
-                        flags2                bit[columns_count]
-                        isnull                bit[columns_count]
+                        bitmap                bit[columns_count]
                         row_image             byte[auto]
-                        isnull2               bit[columns_count]
-                        row_image             byte[0]
                     
-                    24:update_rows        EVENT_DATA_EVENT(auto)
-                    25:delete_rows        EVENT_DATA_EVENT(auto)
+                    24:update_rows        EVENT_DATA_UPDATE(auto)
+
+                        table_id              uint(6)
+                        m_flags               byte[2]
+                        
+                        columns_count         packint
+                        bitmap                bit[columns_count]
+                        bitmap_ai             bit[columns_count]
+                        # isnull                bit[columns_count]
+                        row_image             byte[auto]
+                        # isnull2               bit[columns_count]
+                        # row_image             byte[0]
+
+                    25:delete_rows        EVENT_DATA_DELETE(auto)
+                    
+                        table_id              uint(6)
+                        m_flags               byte[2]
+                        
+                        columns_count         packint
+                        bitmap                bit[columns_count]
+                        row_image             byte[auto]
                     
                     26:incident_evnet     byte[auto]
                     27:heartbeat          byte[auto]

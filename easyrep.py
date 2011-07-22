@@ -40,12 +40,14 @@ if __name__ == '__main__':
     
     import pprint
     
+    # mysql -h10.210.74.143 -urepl
+    
     db = { 'host' : '10.210.74.143', 
            'port' : 3306, 
            'user' : 'repl',
          }
     
-    #erep = EasyReplication( 'mysql-bin.000000', 556, db )
+    #erep = EasyReplication( 'mysql-bin.000080', 556, db )
     #erep = EasyReplication( 'mysql-bin.000080', 0, db )
     erep = EasyReplication( 'mysql-bin.000080', 187, db )
     for i in erep.readloop():
