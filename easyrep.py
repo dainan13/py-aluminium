@@ -1,23 +1,405 @@
 import easyprotocol as ezp
 import pymysql
 import struct
+import datetime
 
-class EasyReplication:
+
+
+
+# MYSQL_TYPE_DECIMAL = 0, // decimal numeric 4 byte
+# MYSQL_TYPE_TINY = 1, tinyint 1
+# MYSQL_TYPE_SHORT = 2, smallint 2
+# MYSQL_TYPE_LONG = 3, int 4
+# MYSQL_TYPE_FLOAT = 4, 
+# MYSQL_TYPE_DOUBLE = 5, 
+# MYSQL_TYPE_NULL = 6, 
+# MYSQL_TYPE_TIMESTAMP = 7, // 4 from_unixtime(0x)
+# MYSQL_TYPE_LONGLONG = 8, bigint 8
+# MYSQL_TYPE_INT24 = 9, //field_medium mediumint
+# MYSQL_TYPE_DATE = 10,
+# MYSQL_TYPE_TIME = 11,
+# MYSQL_TYPE_DATETIME = 12,
+# MYSQL_TYPE_YEAR = 13,
+# MYSQL_TYPE_NEWDATE = 14,
+# MYSQL_TYPE_VARCHAR = 15, //field_varstring
+# MYSQL_TYPE_BIT = 16,
+# MYSQL_TYPE_NEWDECIMAL = 246, new decimal mumeric
+# MYSQL_TYPE_ENUM = 247, 
+# MYSQL_TYPE_SET = 248,
+# MYSQL_TYPE_TINY_BLOB = 249,
+# MYSQL_TYPE_MEDIUM_BLOB = 250,
+# MYSQL_TYPE_LONG_BLOB = 251,
+# MYSQL_TYPE_BLOB = 252,
+# MYSQL_TYPE_VAR_STRING = 253,
+# MYSQL_TYPE_STRING = 254,
+# MYSQL_TYPE_GEOMETRY = 255,
+        
+        
+
+class RowValueType( ezp.ProtocolType ):
+    
+    def __init__( self ):
+        
+        self.name = 'rowvalue'
+        self.cname = 'rowvalue'
+        
+        self.identifiable = True
+        self.stretch = True
+        
+        self.variables = []
+        
+    def length( self, lens, array ):
+        return None
+        
+    def read( self, namespace, fp, lens, args ):
+        
+        raise Exception, 'can\'t read single rowtype'
+        
+    def readint( self, fp, lens ):
+        
+        chrs = fp.read(lens)
+        
+        r = 0
+        
+        for i, c in enumerate(chrs) :
+            r += ord(c) * ( 256**i )
+            
+        return r
+        
+    def readchar( self, fp, lens ):
+        
+        return fp.read(lens)
+        
+    def readfloat( self, fp, lens ):
+        
+        if lens == 4 :
+            return struct.unpack('<f', fp.read(lens) )[0]
+        elif lens == 8 :
+            return struct.unpack('<d', fp.read(lens) )[0]
+        
+        raise Exception, 'float read error'
+        
+    def read_multi( self, namespace, fp, lens, mlens, args ):
+        
+
+        
+        l = 0
+        r = []
+        
+        args = zip(*args)
+        
+        #print args
+        
+        for coltype, isnull in args[:mlens] :
+            
+            if isnull == 1 :
+                r.append( None )
+                continue
+                
+            if coltype == 1 : # tiny int
+                r.append( self.readint(fp,1) )
+                l += 1
+            elif coltype == 2 : # small int
+                r.append( self.readint(fp,2) )
+                l += 2
+            elif coltype == 3 : # int
+                r.append( self.readint(fp,4) )
+                l += 4
+            elif coltype == 4 : # float
+                r.append( self.readfloat(fp,4) )
+                l += 4
+            elif coltype == 5 : # double
+                r.append( self.readfloat(fp,8) )
+                l += 8
+            elif coltype == 7 : # timestamp
+                r.append( datetime.datetime.fromtimestamp(self.readint(fp,4)) )
+                l += 4
+            elif coltype == 8 : # bigint
+                r.append( self.readint(fp,8) )
+                l += 8
+            elif coltype == 9 : # medium int
+                r.append( self.readint(fp,3) )
+                l += 3
+            elif coltype == 12 : # datetime
+                d = str(self.readint(fp,8))
+                r.append( datetime.datetime.strptime(d,'%Y%m%d%H%M%S') )
+                l += 8
+            elif coltype == 15 : # varchar
+                chrlen = self.readint(fp,2)
+                r.append( self.readchar(fp,chrlen) )
+                l += 2+chrlen
+            elif coltype == 249 : # tiny blob / text
+                chrlen = self.readint(fp,1)
+                r.append( self.readchar(fp,chrlen) )
+                l += 1+chrlen
+            elif coltype == 250 : # medium blob / text
+                chrlen = self.readint(fp,3)
+                r.append( self.readchar(fp,chrlen) )
+                l += 3+chrlen
+            elif coltype == 251 : # long blob / text
+                chrlen = self.readint(fp,4)
+                r.append( self.readchar(fp,chrlen) )
+                l += 4+chrlen
+            elif coltype == 252 : # blob / text
+                chrlen = self.readint(fp,2)
+                r.append( self.readchar(fp,chrlen) )
+                l += 2+chrlen
+            elif coltype == 253 : # varbinary
+                chrlen = self.readint(fp,2)
+                r.append( self.readchar(fp,chrlen) )
+                l += 2+chrlen
+            elif coltype == 254 : # binary
+                chrlen = self.readint(fp,1)
+                r.append( self.readchar(fp,chrlen) )
+                l += 1+chrlen
+            else :
+                raise Exception, ('unkown type',coltype)
+        
+        return r, mlens
+
+
+class RowType( ezp.ProtocolType ):
+    
+    def __init__( self ):
+        
+        self.name = 'rows'
+        self.cname = 'rows'
+        
+        self.identifiable = True
+        self.stretch = True
+        
+        self.variables = []
+        
+        self.dbarg = None
+        
+    def length( self, lens, array ):
+        return None
+        
+    def read_multi( self, namespace, fp, lens, mlens, args ):
+
+        raise Exception, 'can\'t read single rowtype'
+        
+    @staticmethod
+    def roundlen( l ):
+        return (l+7) / 8
+        
+    def readbit( self, x, l, mlens ):
+        
+        le = self.roundlen(mlens)
+        s = x[l:l+le]
+        s = [ ( (ord(r)>>i) & 1 ) for r in s for i in range(8) ]
+        
+        return s[:mlens], l+le
+        
+    def readint( self, x, l, lens, ca=True ):
+        
+        chrs = x[l:l+lens]
+        
+        r = 0
+        
+        for i, c in enumerate(chrs) :
+            r += ord(c) * ( 256**i )
+            
+        if ca == False and ord(chrs[-1]) & 128 :
+            r -= 2**(len(chrs)*8)
+            #pass
+            
+        return r, l+lens
+        
+    def readchar( self, x, l, lens ):
+        
+        return x[l:l+lens], l+lens
+        
+    def readfloat( self, x, l, lens ):
+        
+        if lens == 4 :
+            return struct.unpack('<f', x[l:l+lens] )[0], l+lens
+        elif lens == 8 :
+            return struct.unpack('<d', x[l:l+lens] )[0], l+lens
+        
+        raise Exception, 'float read error'
+        
+    def read( self, namespace, fp, lens, args ):
+        
+        x = fp.read(lens)
+
+        l = 0
+        r = []
+
+        columns_count, coltypes, tst, idt, tid = args
+        
+        tname = idt.get(tid, None)
+        
+        if tname == None :
+            raise Exception, ('table id error', tid)
+        
+        cols = tst.get(tname, None)
+        if not cols :
+            conn = pymysql.connect( **self.dbarg )
+            cur = conn.cursor()
+            cur.execute( 'DESCRIBE '+'.'.join(tname) )
+            rst = cur.fetchall()
+            dsc = cur.description 
+            cur.close()
+            conn.close()
+            #print '>'*50
+            #print dsc
+            #print rst
+            #print '>'*50
+            dsc = [ d[0] for d in dsc ]
+            rst = [ dict(zip(dsc,row)) for row in rst ]
+            rst = [ (row['Field'], row['Type'].endswith('unsigned')) for row in rst ]
+            
+            cols = zip(*rst)
+            tst[tname] = cols
+            
+        fieldnames, cola = cols
+        
+        if columns_count != len(coltypes) :
+            raise Exception, ('columns error', columns_count, coltypes)
+
+        while l < lens :
+            
+            isnull, l = self.readbit( x, l, columns_count )
+            cols = zip( coltypes, isnull, cola )
+            
+            rr = []
+            
+            for coltype, isnull, ca in cols :
+                
+                if isnull == 1 :
+                    rr.append( None )
+                    continue
+                    
+                if coltype == 1 : # tiny int
+                    _r, l = self.readint(x,l,1,ca)
+                    rr.append( _r )
+                elif coltype == 2 : # small int
+                    _r, l = self.readint(x,l,2,ca)
+                    rr.append( _r )
+                elif coltype == 3 : # int
+                    _r, l = self.readint(x,l,4,ca)
+                    rr.append( _r )
+                elif coltype == 4 : # float
+                    _r, l = self.readfloat(x,l,4)
+                    rr.append( _r )
+                elif coltype == 5 : # double
+                    _r, l = self.readfloat(x,l,8)
+                    rr.append( _r )
+                elif coltype == 7 : # timestamp
+                    _r, l = self.readint(x,l,4)
+                    rr.append( datetime.datetime.fromtimestamp(_r) )
+                elif coltype == 8 : # bigint
+                    _r, l = self.readint(x,l,8,ca)
+                    rr.append( _r )
+                elif coltype == 9 : # medium int
+                    _r, l = self.readint(x,l,3,ca)
+                    rr.append( _r )
+                elif coltype == 12 : # datetime
+                    _r, l = self.readint(x,l,8)
+                    rr.append( datetime.datetime.strptime(str(_r),'%Y%m%d%H%M%S') )
+                    d = str(self.readint(fp,8))
+                elif coltype == 15 : # varchar
+                    _r, l = self.readint(x,l,2)
+                    _r, l = self.readchar(x,l,_r)
+                    rr.append( _r )
+                elif coltype == 249 : # tiny blob / text
+                    _r, l = self.readint(x,l,1)
+                    _r, l = self.readchar(x,l,_r)
+                    rr.append( _r )
+                elif coltype == 250 : # medium blob / text
+                    _r, l = self.readint(x,l,3)
+                    _r, l = self.readchar(x,l,_r)
+                    rr.append( _r )
+                elif coltype == 251 : # long blob / text
+                    _r, l = self.readint(x,l,4)
+                    _r, l = self.readchar(x,l,_r)
+                    rr.append( _r )
+                elif coltype == 252 : # blob / text
+                    _r, l = self.readint(x,l,2)
+                    _r, l = self.readchar(x,l,_r)
+                    rr.append( _r )
+                elif coltype == 253 : # varbinary
+                    _r, l = self.readint(x,l,2)
+                    _r, l = self.readchar(x,l,_r)
+                    rr.append( _r )
+                elif coltype == 254 : # binary
+                    _r, l = self.readint(x,l,1)
+                    _r, l = self.readchar(x,l,_r)
+                    rr.append( _r )
+                else :
+                    raise Exception, ('unkown type',coltype)
+            
+            r.append(dict(zip(fieldnames,rr)))
+        
+        return r, lens
+
+
+
+class PACKINTType( ezp.ProtocolType ):
+    
+    def __init__( self ):
+        
+        self.name = 'packint'
+        self.cname = 'long'
+        
+        self.identifiable = True
+        self.stretch = True
+        
+        self.variables = []
+        
+    def length( self, lens, array ):
+        return None
+    
+    def read( self, namespace, fp, lens, args ):
+        
+        c = ord(fp.read(1))
+        
+        if c < 251 :
+            return c, 1
+        
+        if c == 251 :
+            return None, 1
+        
+        r = 0
+        
+        if c == 252 :
+            chrs = fp.read(2)
+        elif c == 253 :
+            chrs = fp.read(3)
+        else :
+            chrs = fp.read(8)
+            
+        for i, c in enumerate(chrs) :
+            r += ord(c) * ( 256**i )
+        
+        return r, len(chrs)+1
+        
+
+
+class EasyReplication(object):
     
     #dbargsort = ('host', 'port', 'user', 'passwd', 'db',)
     
     COM_BINLOG_DUMP = 18
     
     ebp = ezp.EasyBinaryProtocol()
+    ebp.buildintypes.append(RowValueType())
+    ebp.buildintypes.append(RowType())
+    ebp.buildintypes.append(PACKINTType())
+    ebp.namespaces = dict( (bt.name, bt) for bt in ebp.buildintypes )
     ebp.parsefile( 'replication.protocol' )
     
     def __init__( self, logname, pos, db ):
         
         #self.conn = pymysql.connect( *[ db[dba] for dba in self.dbargsort if dba in db ] )
         self.conn = pymysql.connect( **db )
+        #self.dbarg = db
         self.serverid = 1
         self.logname = logname
         self.pos = pos
+        
+        self.ebp.namespaces['rows'].dbarg = db
         
     def readloop( self ):
 
@@ -30,17 +412,37 @@ class EasyReplication:
         
         self.conn._execute_command(self.COM_BINLOG_DUMP, arg)
         
+        coltype = ()
+        tst = {}
+        idt = {}
+        
         while(True):
-            yield self.ebp.read('binlog',self.conn.socket.makefile(),extra_headers_length=0)
+            r = self.ebp.read( 'binlog', self.conn.socket.makefile(), 
+                                         extra_headers_length=0,
+                                         coltype=coltype, 
+                                         tst = tst, idt=idt )
+            try :
+                coltype = r['body']['content']['event']['data']['table']['columns_type']
+                idt[r['body']['content']['event']['data']['table']['table_id']] = \
+                    (r['body']['content']['event']['data']['table']['dbname'],
+                     r['body']['content']['event']['data']['table']['tablename'])
+            except KeyError, e :
+                pass
+            except :
+                print '-'*50
+                print r
+                raise
+            yield r
 
         return
         
-        
+
+
 if __name__ == '__main__':
     
     import pprint
     
-    # mysql -h10.210.74.143 -urepl
+    # mysql -h10.210.74.143 -urepl test
     
     db = { 'host' : '10.210.74.143', 
            'port' : 3306, 
@@ -49,7 +451,9 @@ if __name__ == '__main__':
     
     #erep = EasyReplication( 'mysql-bin.000080', 556, db )
     #erep = EasyReplication( 'mysql-bin.000080', 0, db )
-    erep = EasyReplication( 'mysql-bin.000080', 187, db )
+    #erep = EasyReplication( 'mysql-bin.000080', 187, db )
+    erep = EasyReplication( 'mysql-bin.000080', 2996, db )
+    
     for i in erep.readloop():
         pprint.pprint(i)
         print

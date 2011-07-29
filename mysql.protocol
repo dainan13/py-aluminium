@@ -1,4 +1,10 @@
 
+def packint{.f}
+    f     int(1)
+    
+    
+
+
 binlog  BINLOG
     
     packet       PACKET
@@ -106,10 +112,36 @@ binlog  BINLOG
                         
                         columns_count         packint
                         bitmap                bit[columns_count]
-                        #isnull                bit[columns_count]
-                        #value                 rowvalue[columns_count]{$coltype,isnull}
-                        #row_image             byte[auto]
-                        value                 rows(auto){columns_count,$coltype,$tst,$idt,table_id}
+                        isnull                bit[columns_count]
+                        value                 rowvalue[columns_count]{$coltype,isnull}
+                            
+                        # MYSQL_TYPE_DECIMAL = 0, // decimal numeric 4 byte
+                        # MYSQL_TYPE_TINY = 1, tinyint 1
+                        # MYSQL_TYPE_SHORT = 2, smallint 2
+                        # MYSQL_TYPE_LONG = 3, int 4
+                        # MYSQL_TYPE_FLOAT = 4, 
+                        # MYSQL_TYPE_DOUBLE = 5, 
+                        # MYSQL_TYPE_NULL = 6, 
+                        # MYSQL_TYPE_TIMESTAMP = 7, // 4 from_unixtime(0x)
+                        # MYSQL_TYPE_LONGLONG = 8, bigint 8
+                        # MYSQL_TYPE_INT24 = 9, //field_medium mediumint
+                        # MYSQL_TYPE_DATE = 10,
+                        # MYSQL_TYPE_TIME = 11,
+                        # MYSQL_TYPE_DATETIME = 12,
+                        # MYSQL_TYPE_YEAR = 13,
+                        # MYSQL_TYPE_NEWDATE = 14,
+                        # MYSQL_TYPE_VARCHAR = 15, //field_varstring
+                        # MYSQL_TYPE_BIT = 16,
+                        # MYSQL_TYPE_NEWDECIMAL = 246, new decimal mumeric
+                        # MYSQL_TYPE_ENUM = 247, 
+                        # MYSQL_TYPE_SET = 248,
+                        # MYSQL_TYPE_TINY_BLOB = 249,
+                        # MYSQL_TYPE_MEDIUM_BLOB = 250,
+                        # MYSQL_TYPE_LONG_BLOB = 251,
+                        # MYSQL_TYPE_BLOB = 252,
+                        # MYSQL_TYPE_VAR_STRING = 253,
+                        # MYSQL_TYPE_STRING = 254,
+                        # MYSQL_TYPE_GEOMETRY = 255,
                     
                     24:update_rows        EVENT_DATA_UPDATE(auto)
 
@@ -120,12 +152,10 @@ binlog  BINLOG
                         bitmap                bit[columns_count]
                         bitmap_ai             bit[columns_count]
                         #row_image             byte[auto]
-                        #isnull                bit[columns_count]
-                        #value                 rowvalue[columns_count]{$coltype,isnull}
-                        #row_image             byte[auto]
-                        #isnull_ai             bit[columns_count]
-                        #value_ai              rowvalue[columns_count]{$coltype,isnull_ai}
-                        value                 rows(auto){columns_count,$coltype,$tst,$idt,table_id}
+                        isnull                bit[columns_count]
+                        value                 rowvalue[columns_count]{$coltype,isnull}
+                        isnull_ai             bit[columns_count]
+                        value_ai              rowvalue[columns_count]{$coltype,isnull_ai}
 
 
                     25:delete_rows        EVENT_DATA_DELETE(auto)
@@ -135,9 +165,8 @@ binlog  BINLOG
                         
                         columns_count         packint
                         bitmap                bit[columns_count]
-                        #isnull                bit[columns_count]
-                        #value                 rowvalue[columns_count]{$coltype,isnull}
-                        value                 rows(auto){columns_count,$coltype,$tst,$idt,table_id}
+                        isnull                bit[columns_count]
+                        value                 rowvalue[columns_count]{$coltype,isnull}
                     
                     26:incident_evnet     byte[auto]
                     27:heartbeat          byte[auto]

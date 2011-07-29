@@ -58,6 +58,13 @@ def parse_expr( e ):
         
         return (3, (f, args))
     
+    if ',' in e :
+        
+        args = [ a.strip() for a in e.split(',') ]
+        
+        args = [ parse_expr(a) for a in args ]
+        
+        return (3, ('tuple', args))
     
     if e.startswith('$') :
         return (4, e[1:])
@@ -83,7 +90,7 @@ def complength( e, vs, namespace ):
     
     if t == 3 :
         args = [ complength(a, vs, namespace) for a in e[1][1] ]
-        print '@',e
+        #print '@',e
         return namespace[e[1][0]](*args)
         
     if t == 4 :
@@ -321,45 +328,7 @@ class BuildinTypeUINT( ProtocolType ):
             r += ord(c) * ( 256**i )
         
         return r, lens
-
-class BuildinTypePACKINT( ProtocolType ):
-    
-    def __init__( self ):
         
-        self.name = 'packint'
-        self.cname = 'long'
-        
-        self.identifiable = True
-        self.stretch = True
-        
-        self.variables = []
-        
-    def length( self, lens, array ):
-        return None
-        
-    def read( self, namespace, fp, lens, args ):
-        
-        c = ord(fp.read(1))
-        
-        if c < 251 :
-            return c, 1
-        
-        if c == 251 :
-            return None, 1
-        
-        r = 0
-        
-        if c == 252 :
-            chrs = fp.read(2)
-        elif c == 253 :
-            chrs = fp.read(3)
-        else :
-            chrs = fp.read(8)
-            
-        for i, c in enumerate(chrs) :
-            r += ord(c) * ( 256**i )
-        
-        return r, len(chrs)+1
 
 class BuildinTypeCHAR( ProtocolType ):
     
@@ -452,7 +421,6 @@ def roundbin( a, b ):
 class EasyBinaryProtocol( object ):
     
     buildintypes = [ BuildinTypeCHAR(),
-                     BuildinTypePACKINT(),
                      BuildinTypeUINT(),
                      BuildinTypeBYTE(),
                      BuildinTypeBIT(),
@@ -471,6 +439,8 @@ class EasyBinaryProtocol( object ):
         
         self.namespaces = dict( (bt.name, bt) for bt in self.buildintypes )
         self.p_globals = {}
+        
+        self.buildintypes = self.buildintypes[:]
     
     def parsefile( self, fname ):
         
@@ -576,6 +546,8 @@ class EasyBinaryProtocol( object ):
         
         v = self.p_globals[name]
         stt = self.namespaces[v['name']]
+        
+        spaces['tuple'] = lambda *args : args
         
         return stt.read( spaces, io, v['length'], v['array'] )[0]
         
