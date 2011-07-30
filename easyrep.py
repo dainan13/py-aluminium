@@ -3,7 +3,17 @@ import pymysql
 import struct
 import datetime
 
+class EasyRepError(Exception):
+    pass
 
+class UnkownDBArgs(EasyRepError):
+    pass
+
+class UnknowTableDefine(EasyRepError):
+    pass
+
+class UnknowColumnType(EasyRepError):
+    pass
 
 
 # MYSQL_TYPE_DECIMAL = 0, // decimal numeric 4 byte
@@ -35,129 +45,6 @@ import datetime
 # MYSQL_TYPE_GEOMETRY = 255,
         
         
-
-class RowValueType( ezp.ProtocolType ):
-    
-    def __init__( self ):
-        
-        self.name = 'rowvalue'
-        self.cname = 'rowvalue'
-        
-        self.identifiable = True
-        self.stretch = True
-        
-        self.variables = []
-        
-    def length( self, lens, array ):
-        return None
-        
-    def read( self, namespace, fp, lens, args ):
-        
-        raise Exception, 'can\'t read single rowtype'
-        
-    def readint( self, fp, lens ):
-        
-        chrs = fp.read(lens)
-        
-        r = 0
-        
-        for i, c in enumerate(chrs) :
-            r += ord(c) * ( 256**i )
-            
-        return r
-        
-    def readchar( self, fp, lens ):
-        
-        return fp.read(lens)
-        
-    def readfloat( self, fp, lens ):
-        
-        if lens == 4 :
-            return struct.unpack('<f', fp.read(lens) )[0]
-        elif lens == 8 :
-            return struct.unpack('<d', fp.read(lens) )[0]
-        
-        raise Exception, 'float read error'
-        
-    def read_multi( self, namespace, fp, lens, mlens, args ):
-        
-
-        
-        l = 0
-        r = []
-        
-        args = zip(*args)
-        
-        #print args
-        
-        for coltype, isnull in args[:mlens] :
-            
-            if isnull == 1 :
-                r.append( None )
-                continue
-                
-            if coltype == 1 : # tiny int
-                r.append( self.readint(fp,1) )
-                l += 1
-            elif coltype == 2 : # small int
-                r.append( self.readint(fp,2) )
-                l += 2
-            elif coltype == 3 : # int
-                r.append( self.readint(fp,4) )
-                l += 4
-            elif coltype == 4 : # float
-                r.append( self.readfloat(fp,4) )
-                l += 4
-            elif coltype == 5 : # double
-                r.append( self.readfloat(fp,8) )
-                l += 8
-            elif coltype == 7 : # timestamp
-                r.append( datetime.datetime.fromtimestamp(self.readint(fp,4)) )
-                l += 4
-            elif coltype == 8 : # bigint
-                r.append( self.readint(fp,8) )
-                l += 8
-            elif coltype == 9 : # medium int
-                r.append( self.readint(fp,3) )
-                l += 3
-            elif coltype == 12 : # datetime
-                d = str(self.readint(fp,8))
-                r.append( datetime.datetime.strptime(d,'%Y%m%d%H%M%S') )
-                l += 8
-            elif coltype == 15 : # varchar
-                chrlen = self.readint(fp,2)
-                r.append( self.readchar(fp,chrlen) )
-                l += 2+chrlen
-            elif coltype == 249 : # tiny blob / text
-                chrlen = self.readint(fp,1)
-                r.append( self.readchar(fp,chrlen) )
-                l += 1+chrlen
-            elif coltype == 250 : # medium blob / text
-                chrlen = self.readint(fp,3)
-                r.append( self.readchar(fp,chrlen) )
-                l += 3+chrlen
-            elif coltype == 251 : # long blob / text
-                chrlen = self.readint(fp,4)
-                r.append( self.readchar(fp,chrlen) )
-                l += 4+chrlen
-            elif coltype == 252 : # blob / text
-                chrlen = self.readint(fp,2)
-                r.append( self.readchar(fp,chrlen) )
-                l += 2+chrlen
-            elif coltype == 253 : # varbinary
-                chrlen = self.readint(fp,2)
-                r.append( self.readchar(fp,chrlen) )
-                l += 2+chrlen
-            elif coltype == 254 : # binary
-                chrlen = self.readint(fp,1)
-                r.append( self.readchar(fp,chrlen) )
-                l += 1+chrlen
-            else :
-                raise Exception, ('unkown type',coltype)
-        
-        return r, mlens
-
-
 class RowType( ezp.ProtocolType ):
     
     def __init__( self ):
@@ -218,7 +105,23 @@ class RowType( ezp.ProtocolType ):
             return struct.unpack('<d', x[l:l+lens] )[0], l+lens
         
         raise Exception, 'float read error'
+    
+    def executesql( self, query ):
         
+        if self.dbarg is None :
+            raise UnkownDBArgs, 'unkown db arg'
+        
+        conn = pymysql.connect( **self.dbarg )
+        cur = conn.cursor()
+        cur.execute( query )
+        rst = cur.fetchall()
+        dsc = cur.description 
+        cur.close()
+        conn.close()
+        
+        return dsc, rst
+        
+    
     def read( self, namespace, fp, lens, args ):
         
         x = fp.read(lens)
@@ -234,18 +137,14 @@ class RowType( ezp.ProtocolType ):
             raise Exception, ('table id error', tid)
         
         cols = tst.get(tname, None)
+        
         if not cols :
-            conn = pymysql.connect( **self.dbarg )
-            cur = conn.cursor()
-            cur.execute( 'DESCRIBE '+'.'.join(tname) )
-            rst = cur.fetchall()
-            dsc = cur.description 
-            cur.close()
-            conn.close()
-            #print '>'*50
-            #print dsc
-            #print rst
-            #print '>'*50
+            
+            try :
+                dsc, rst = self.executesql( 'DESCRIBE '+'.'.join(tname) )
+            except UnkownDBArgs:
+                raise UnknowTableDefine, '.'.join(tname)
+            
             dsc = [ d[0] for d in dsc ]
             rst = [ dict(zip(dsc,row)) for row in rst ]
             rst = [ (row['Field'], row['Type'].endswith('unsigned')) for row in rst ]
@@ -328,7 +227,7 @@ class RowType( ezp.ProtocolType ):
                     _r, l = self.readchar(x,l,_r)
                     rr.append( _r )
                 else :
-                    raise Exception, ('unkown type',coltype)
+                    raise UnknowColumnType, ('unkown column type',coltype)
             
             r.append(dict(zip(fieldnames,rr)))
         
@@ -384,13 +283,12 @@ class EasyReplication(object):
     COM_BINLOG_DUMP = 18
     
     ebp = ezp.EasyBinaryProtocol()
-    ebp.buildintypes.append(RowValueType())
     ebp.buildintypes.append(RowType())
     ebp.buildintypes.append(PACKINTType())
     ebp.namespaces = dict( (bt.name, bt) for bt in ebp.buildintypes )
     ebp.parsefile( 'replication.protocol' )
     
-    def __init__( self, logname, pos, db ):
+    def __init__( self, logname, pos, db, tablefilter = None ):
         
         #self.conn = pymysql.connect( *[ db[dba] for dba in self.dbargsort if dba in db ] )
         self.conn = pymysql.connect( **db )
@@ -398,12 +296,91 @@ class EasyReplication(object):
         self.serverid = 1
         self.logname = logname
         self.pos = pos
+        self.tablefilter = tablefilter or lambda x : x
         
         self.ebp.namespaces['rows'].dbarg = db
         
-    def readloop( self ):
+    def executesql( self, conn, query ):
 
+        if self.dbarg is None :
+            raise UnkownDBArgs, 'unkown db arg'
+        
+        cur = self.conn.cursor()
+        cur.execute( query )
+        dsc = cur.description
+        dsc = [ d[0] for d in dsc ]
+        
+        rst = cur.fetchall()
+        cur.close()
+        
+        return rst
+        
+    def executesqllarge( self, conn, query ):
+        
+        if self.dbarg is None :
+            raise UnkownDBArgs, 'unkown db arg'
+        
+        cur = self.conn.cursor()
+        cur.execute( query )
+        dsc = cur.description
+        dsc = [ d[0] for d in dsc ]
+        
+        rst = cur.fetchone()
+        while rst :
+            yield dict(zip(d[0],rst))
+        
+        cur.close()
+        
+        return
+        
+    def firstdump( self ):
+        
+        self.conn.execute( "FLUSH TABLES WITH READ LOCK" )
+        
+        mst = self.executesql( "SHOW MASTER STATUS" )[0]
+        
+        dodbs = mst['Binlog_Do_DB'].split(',') if mst['Binlog_Do_DB'] else None
+        igndb = mst['Binlog_Ignore_DB'].split(',') if mst['Binlog_Ignore_DB'] else []
+        
+        dbs = self.executesql( "SHOW DATABASES" )
+        
+        dbs = [ db['Database'] for db in dbs ]
+        dbs = [ db for db in dbs if ( (not dodbs) or db in dodbs ) and db not in igndb ]
+        
+        tbls = []
+        for db in dbs :
+            tbls += [ ( db, tbs.values()[0] ) 
+                      for tbs in self.executesql( "SHOW TABLES IN `%s`" % (db,) ) ]
+        
+        for tbl in tbls :
+            
+            if not self.tablefilter(tbl):
+                continue
+            
+            rst = self.conn.executesqllarge( 
+                "SELECT SQL_BIG_RESULT SQL_BUFFER_RESULT SQL_NO_CACHE "\
+                "* FROM `%s`.`%s` " % tbl
+            )
+            
+            for r in rst :
+                yield None, tbl, r, None
+        
+        self.conn.execute( "UNLOCK TABLES" )
+        
+        self.logname = mst['File']
+        self.pos = mst['Position']
+        
+        yield (mst['File'], mst['Position']), None, None, None
+        
+        return
+        
+    def readloop( self ):
+        
         #arg = struct.pack('<LHLs',self.pos,0,self.serverid,self.logname)
+        
+        if self.logname = None and self.pos = None :
+            for r in self.firstdump():
+                yield r
         
         arg = struct.pack('<L',self.pos)
         arg = arg + struct.pack('<H',0)
@@ -417,6 +394,7 @@ class EasyReplication(object):
         idt = {}
         
         while(True):
+            
             r = self.ebp.read( 'binlog', self.conn.socket.makefile(), 
                                          extra_headers_length=0,
                                          coltype=coltype, 
@@ -428,14 +406,12 @@ class EasyReplication(object):
                      r['body']['content']['event']['data']['table']['tablename'])
             except KeyError, e :
                 pass
-            except :
-                print '-'*50
-                print r
-                raise
+            
             yield r
-
-        return
         
+        return
+    
+    
 
 
 if __name__ == '__main__':
