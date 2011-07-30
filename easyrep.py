@@ -57,7 +57,7 @@ class RowType( ezp.ProtocolType ):
         
         self.variables = []
         
-        self.dbarg = None
+        self.sqlquery = None
         
     def length( self, lens, array ):
         return None
@@ -105,21 +105,6 @@ class RowType( ezp.ProtocolType ):
             return struct.unpack('<d', x[l:l+lens] )[0], l+lens
         
         raise Exception, 'float read error'
-    
-    def executesql( self, query ):
-        
-        if self.dbarg is None :
-            raise UnkownDBArgs, 'unkown db arg'
-        
-        conn = pymysql.connect( **self.dbarg )
-        cur = conn.cursor()
-        cur.execute( query )
-        rst = cur.fetchall()
-        dsc = cur.description 
-        cur.close()
-        conn.close()
-        
-        return dsc, rst
         
     
     def read( self, namespace, fp, lens, args ):
@@ -140,13 +125,14 @@ class RowType( ezp.ProtocolType ):
         
         if not cols :
             
+            if not self.sqlquery :
+                raise UnknowTableDefine, '.'.join(tname)
+            
             try :
-                dsc, rst = self.executesql( 'DESCRIBE '+'.'.join(tname) )
+                rst = self.sqlquery( 'DESCRIBE `%s`.`%s`' % tname )
             except UnkownDBArgs:
                 raise UnknowTableDefine, '.'.join(tname)
             
-            dsc = [ d[0] for d in dsc ]
-            rst = [ dict(zip(dsc,row)) for row in rst ]
             rst = [ (row['Field'], row['Type'].endswith('unsigned')) for row in rst ]
             
             cols = zip(*rst)
@@ -288,22 +274,22 @@ class EasyReplication(object):
     ebp.namespaces = dict( (bt.name, bt) for bt in ebp.buildintypes )
     ebp.parsefile( 'replication.protocol' )
     
-    def __init__( self, logname, pos, db, tablefilter = None ):
+    def __init__( self, logname, pos, db, 
+                        tablefilter=None, dbfilter=None,
+                        autodesc=False ):
         
-        #self.conn = pymysql.connect( *[ db[dba] for dba in self.dbargsort if dba in db ] )
         self.conn = pymysql.connect( **db )
-        #self.dbarg = db
+        self.dbarg = db
         self.serverid = 1
         self.logname = logname
         self.pos = pos
-        self.tablefilter = tablefilter or lambda x : x
+        self.tablefilter = tablefilter or ( lambda x : True )
+        self.dbfilter = dbfilter or ( lambda x : True )
         
-        self.ebp.namespaces['rows'].dbarg = db
+        if autodesc :
+            self.ebp.namespaces['rows'].sqlquery = self.executesqlone
         
-    def executesql( self, conn, query ):
-
-        if self.dbarg is None :
-            raise UnkownDBArgs, 'unkown db arg'
+    def executesql( self, query ):
         
         cur = self.conn.cursor()
         cur.execute( query )
@@ -313,12 +299,9 @@ class EasyReplication(object):
         rst = cur.fetchall()
         cur.close()
         
-        return rst
+        return [ dict(zip(dsc,r)) for r in rst ]
         
-    def executesqllarge( self, conn, query ):
-        
-        if self.dbarg is None :
-            raise UnkownDBArgs, 'unkown db arg'
+    def executesqllarge( self, query ):
         
         cur = self.conn.cursor()
         cur.execute( query )
@@ -327,15 +310,34 @@ class EasyReplication(object):
         
         rst = cur.fetchone()
         while rst :
-            yield dict(zip(d[0],rst))
+            yield dict(zip(dsc,rst))
+            rst = cur.fetchone()
         
         cur.close()
         
         return
         
+    def executesqlone( self, query ):
+        
+        if self.dbarg is None :
+            raise UnkownDBArgs, 'unkown db arg'
+            
+        conn = pymysql.connect( **self.dbarg )
+        
+        cur = conn.cursor()
+        cur.execute( query )
+        dsc = cur.description
+        dsc = [ d[0] for d in dsc ]
+        
+        rst = cur.fetchall()
+        cur.close()
+        conn.close()
+        
+        return [ dict(zip(dsc,r)) for r in rst ]
+        
     def firstdump( self ):
         
-        self.conn.execute( "FLUSH TABLES WITH READ LOCK" )
+        self.conn.query( "FLUSH TABLES WITH READ LOCK" )
         
         mst = self.executesql( "SHOW MASTER STATUS" )[0]
         
@@ -349,6 +351,10 @@ class EasyReplication(object):
         
         tbls = []
         for db in dbs :
+            
+            if not self.dbfilter(db):
+                continue
+                
             tbls += [ ( db, tbs.values()[0] ) 
                       for tbs in self.executesql( "SHOW TABLES IN `%s`" % (db,) ) ]
         
@@ -357,7 +363,7 @@ class EasyReplication(object):
             if not self.tablefilter(tbl):
                 continue
             
-            rst = self.conn.executesqllarge( 
+            rst = self.executesqllarge( 
                 "SELECT SQL_BIG_RESULT SQL_BUFFER_RESULT SQL_NO_CACHE "\
                 "* FROM `%s`.`%s` " % tbl
             )
@@ -365,12 +371,12 @@ class EasyReplication(object):
             for r in rst :
                 yield None, tbl, r, None
         
-        self.conn.execute( "UNLOCK TABLES" )
+        self.conn.query( "UNLOCK TABLES" )
         
         self.logname = mst['File']
         self.pos = mst['Position']
         
-        yield (mst['File'], mst['Position']), None, None, None
+        yield (self.logname, self.pos), None, None, None
         
         return
         
@@ -378,14 +384,14 @@ class EasyReplication(object):
         
         #arg = struct.pack('<LHLs',self.pos,0,self.serverid,self.logname)
         
-        if self.logname = None and self.pos = None :
+        if self.logname == None and self.pos == None :
             for r in self.firstdump():
                 yield r
         
         arg = struct.pack('<L',self.pos)
         arg = arg + struct.pack('<H',0)
         arg = arg + struct.pack('<L',self.serverid)
-        arg = arg + self.logname
+        arg = arg + str(self.logname)
         
         self.conn._execute_command(self.COM_BINLOG_DUMP, arg)
         
@@ -407,7 +413,56 @@ class EasyReplication(object):
             except KeyError, e :
                 pass
             
-            yield r
+            try :
+                rot = r['body']['content']['event']['data']['rotate']
+                self.logname, self.pos = rot['binlog'], rot['position']
+                yield (self.logname, self.pos), None, None, None
+                continue
+            except KeyError, e :
+                pass
+            
+            try :
+                op, d = r['body']['content']['event']['data'].items()[0]
+            except KeyError, e :
+                yield None, None, None, None
+                continue
+            
+            if op not in ('write_row','update_rows','delete_row') :
+                yield None, None, None, None
+                continue
+                
+            self.pos = r['body']['content']['event']['header']['next_position']
+            t = idt[d['table_id']]
+            
+            if not self.tablefilter(t) :
+                yield None, None, None, None
+                continue
+            
+            if op == 'write_row' :
+                
+                for x in d['value'][:-1] :
+                    yield None, t, x, None
+            
+                yield (self.logname, self.pos), t, d['value'][-1], None
+            
+            elif op == 'update_rows' :
+                
+                v = zip( d['value'][::2], d['value'][1::2] )
+                for a, b in v[:-1] :
+                    yield None, t, a, b
+                    
+                yield (self.logname, self.pos), t, v[-1][0], v[-1][1]
+                
+            elif op == 'delete_row' :
+                
+                for x in d['value'][:-1] :
+                    yield None, t, x, None
+            
+                yield (self.logname, self.pos), t, None, d['value'][-1]
+                
+            else :
+                
+                yield None, None, None, None
         
         return
     
@@ -428,7 +483,8 @@ if __name__ == '__main__':
     #erep = EasyReplication( 'mysql-bin.000080', 556, db )
     #erep = EasyReplication( 'mysql-bin.000080', 0, db )
     #erep = EasyReplication( 'mysql-bin.000080', 187, db )
-    erep = EasyReplication( 'mysql-bin.000080', 2996, db )
+    #erep = EasyReplication( 'mysql-bin.000080', 2996, db, autodesc=True )
+    erep = EasyReplication( None, None, db, tablefilter=( lambda x: ( x[0] == 'test' ) ), dbfilter=( lambda x: ( x != 'log' ) ), autodesc=True )
     
     for i in erep.readloop():
         pprint.pprint(i)
