@@ -2,6 +2,7 @@ import easyprotocol as ezp
 import pymysql
 import struct
 import datetime
+import types
 
 class EasyRepError(Exception):
     pass
@@ -15,6 +16,8 @@ class UnknowTableDefine(EasyRepError):
 class UnknowColumnType(EasyRepError):
     pass
 
+class MySQLBinLogError(EasyRepError):
+    pass
 
 # MYSQL_TYPE_DECIMAL = 0, // decimal numeric 4 byte
 # MYSQL_TYPE_TINY = 1, tinyint 1
@@ -58,6 +61,7 @@ class RowType( ezp.ProtocolType ):
         self.variables = []
         
         self.sqlquery = None
+        self.tablefilter = None
         
     def length( self, lens, array ):
         return None
@@ -107,10 +111,25 @@ class RowType( ezp.ProtocolType ):
         raise Exception, 'float read error'
         
     
+    def colparse( self, t ):
+        
+        if t.startswith('int'):
+            return t.endswith('unsigned')
+        
+        if t.startswith('varchar') or t.startswith('char') :
+            r = int( t.split('(',1)[1].split(')')[0] )
+            return 1 if r <= 64 else 2
+                
+        if t.startswith('varbinary') or t.startswith('binary') :
+            r = int( t.split('(',1)[1].split(')')[0] )
+            return 1 if r < 256 else 2
+            
+        return
+        
     def read( self, namespace, fp, lens, args ):
         
         x = fp.read(lens)
-
+        
         l = 0
         r = []
 
@@ -120,6 +139,9 @@ class RowType( ezp.ProtocolType ):
         
         if tname == None :
             raise Exception, ('table id error', tid)
+        
+        if self.tablefilter and not self.tablefilter(tname) :
+            return x, lens
         
         cols = tst.get(tname, None)
         
@@ -133,7 +155,7 @@ class RowType( ezp.ProtocolType ):
             except UnkownDBArgs:
                 raise UnknowTableDefine, '.'.join(tname)
             
-            rst = [ (row['Field'], row['Type'].endswith('unsigned')) for row in rst ]
+            rst = [ (row['Field'], self.colparse(row['Type'])) for row in rst ]
             
             cols = zip(*rst)
             tst[tname] = cols
@@ -142,15 +164,26 @@ class RowType( ezp.ProtocolType ):
         
         if columns_count != len(coltypes) :
             raise Exception, ('columns error', columns_count, coltypes)
-
+        
+        #print 'x'*10
+        #print 'lens:', lens
+        #print 'columns_count:', columns_count
+        #print 'coltypes:', coltypes
+        #print 'fieldnames:', fieldnames
+        #print repr(x)
+        #print 'x'*10
+        
         while l < lens :
             
             isnull, l = self.readbit( x, l, columns_count )
+            #print 'isnull:', isnull
             cols = zip( coltypes, isnull, cola )
             
             rr = []
             
             for coltype, isnull, ca in cols :
+                
+                #_debug_l = l
                 
                 if isnull == 1 :
                     rr.append( None )
@@ -183,9 +216,8 @@ class RowType( ezp.ProtocolType ):
                 elif coltype == 12 : # datetime
                     _r, l = self.readint(x,l,8)
                     rr.append( datetime.datetime.strptime(str(_r),'%Y%m%d%H%M%S') )
-                    d = str(self.readint(fp,8))
                 elif coltype == 15 : # varchar
-                    _r, l = self.readint(x,l,2)
+                    _r, l = self.readint(x,l,ca)
                     _r, l = self.readchar(x,l,_r)
                     rr.append( _r )
                 elif coltype == 249 : # tiny blob / text
@@ -204,16 +236,20 @@ class RowType( ezp.ProtocolType ):
                     _r, l = self.readint(x,l,2)
                     _r, l = self.readchar(x,l,_r)
                     rr.append( _r )
-                elif coltype == 253 : # varbinary
+                elif coltype == 253 : # varbinary, may not correct, varbinary is 15 instead
                     _r, l = self.readint(x,l,2)
                     _r, l = self.readchar(x,l,_r)
                     rr.append( _r )
-                elif coltype == 254 : # binary
-                    _r, l = self.readint(x,l,1)
+                elif coltype == 254 : # binary / char
+                    _r, l = self.readint(x,l,ca)
                     _r, l = self.readchar(x,l,_r)
                     rr.append( _r )
                 else :
                     raise UnknowColumnType, ('unkown column type',coltype)
+                
+                #print '.'*10
+                #print coltype, ca, repr(rr[-1])
+                #print repr(x[_debug_l:l])
             
             r.append(dict(zip(fieldnames,rr)))
         
@@ -274,20 +310,36 @@ class EasyReplication(object):
     ebp.namespaces = dict( (bt.name, bt) for bt in ebp.buildintypes )
     ebp.parsefile( 'replication.protocol' )
     
-    def __init__( self, logname, pos, db, 
-                        tablefilter=None, dbfilter=None,
-                        autodesc=False ):
+    def __init__( self, db, location,
+                        tablefilter=None, ):
         
         self.conn = pymysql.connect( **db )
         self.dbarg = db
         self.serverid = 1
-        self.logname = logname
-        self.pos = pos
-        self.tablefilter = tablefilter or ( lambda x : True )
-        self.dbfilter = dbfilter or ( lambda x : True )
         
-        if autodesc :
+        self.logname, self.pos, self.tablest = location or (None,None,None)
+        
+        if self.tablest == None :
+            self.tablest = {}
             self.ebp.namespaces['rows'].sqlquery = self.executesqlone
+        
+        if type(tablefilter) == types.TupleType :
+            
+            if len(tablefilter) != 2 or tablefilter[0] == None :
+                raise TypeError, 'tablefilter argument type error'
+            
+            if tablefilter[1] == None :
+                tf = tablefilter[0]
+                tablefilter = lambda x : ( x[0] == tf )
+            else :
+                tf = tablefilter
+                tablefilter = lambda x : ( x == tf )
+        
+        self.tablefilter = tablefilter or ( lambda x : True )
+        self.ebp.namespaces['rows'].tablefilter = self.tablefilter
+        #self.dbfilter = dbfilter or ( lambda x : True )
+        
+        self.run_pos = None
         
     def executesql( self, query ):
         
@@ -335,7 +387,7 @@ class EasyReplication(object):
         
         return [ dict(zip(dsc,r)) for r in rst ]
         
-    def firstdump( self ):
+    def firstdump( self, nodump = False ):
         
         self.conn.query( "FLUSH TABLES WITH READ LOCK" )
         
@@ -352,7 +404,7 @@ class EasyReplication(object):
         tbls = []
         for db in dbs :
             
-            if not self.dbfilter(db):
+            if not self.tablefilter((db,None)):
                 continue
                 
             tbls += [ ( db, tbs.values()[0] ) 
@@ -362,6 +414,12 @@ class EasyReplication(object):
             
             if not self.tablefilter(tbl):
                 continue
+            
+            rst = self.executesql( 'DESCRIBE `%s`.`%s`' % tbl )
+            rst = [ (row['Field'], row['Type'].endswith('unsigned')) for row in rst ]
+            
+            cols = zip(*rst)
+            self.tablest[tbl] = cols
             
             rst = self.executesqllarge( 
                 "SELECT SQL_BIG_RESULT SQL_BUFFER_RESULT SQL_NO_CACHE "\
@@ -376,7 +434,7 @@ class EasyReplication(object):
         self.logname = mst['File']
         self.pos = mst['Position']
         
-        yield (self.logname, self.pos), None, None, None
+        yield (self.logname, self.pos, self.tablest), None, None, None
         
         return
         
@@ -384,7 +442,7 @@ class EasyReplication(object):
         
         #arg = struct.pack('<LHLs',self.pos,0,self.serverid,self.logname)
         
-        if self.logname == None and self.pos == None :
+        if (self.logname == None and self.pos == None) or self.tablest == None :
             for r in self.firstdump():
                 yield r
         
@@ -396,16 +454,41 @@ class EasyReplication(object):
         self.conn._execute_command(self.COM_BINLOG_DUMP, arg)
         
         coltype = ()
-        tst = {}
+        #tst = {}
         idt = {}
+        
+        self.run_pos = self.pos
         
         while(True):
             
             r = self.ebp.read( 'binlog', self.conn.socket.makefile(), 
                                          extra_headers_length=0,
                                          coltype=coltype, 
-                                         tst = tst, idt=idt )
+                                         tst = self.tablest, idt=idt )
+            
+            
+            #if "'query'" in str(r):
+            #    print '>', r
+            
+            #print '-'*50
+            #print r
+            #print '-'*50
+            
             try :
+                self.run_pos = r['body']['content']['event']['header']['next_position']
+            except :
+                pass
+            
+            try :
+                if 'error' in r['body']['content'] :
+                    err = r['body']['content']['error']
+                    print err
+                    raise MySQLBinLogError, (err['state'],err['code'],err['message'])
+            except KeyError, e :
+                pass
+            
+            try :
+                
                 coltype = r['body']['content']['event']['data']['table']['columns_type']
                 idt[r['body']['content']['event']['data']['table']['table_id']] = \
                     (r['body']['content']['event']['data']['table']['dbname'],
@@ -416,7 +499,7 @@ class EasyReplication(object):
             try :
                 rot = r['body']['content']['event']['data']['rotate']
                 self.logname, self.pos = rot['binlog'], rot['position']
-                yield (self.logname, self.pos), None, None, None
+                yield (self.logname, self.pos, self.tablest), None, None, None
                 continue
             except KeyError, e :
                 pass
@@ -427,7 +510,23 @@ class EasyReplication(object):
                 yield None, None, None, None
                 continue
             
-            if op not in ('write_row','update_rows','delete_row') :
+            if op == 'query':
+                
+                _q = d['query'].strip().split()
+                qtype = [ q.lower() for q in _q[:2] ]
+                if q == ['create','table'] :
+                    table = [ x.strip('`') for x in _q[3].split('.',1)]
+                    table = [dbname] + table if dbname else table  
+                    yield None, table[0], self.stablest, None
+                elif q == ['alter','table'] :
+                    table = [ x.strip('`') for x in _q[3].split('.',1)]
+                    table = [dbname] + table if dbname else table  
+                    yield None, table[0], self.stablest, None
+                else :
+                    yield None, None, None, None
+                continue
+            
+            if op not in ('write_rows','update_rows','delete_rows') :
                 yield None, None, None, None
                 continue
                 
@@ -438,12 +537,12 @@ class EasyReplication(object):
                 yield None, None, None, None
                 continue
             
-            if op == 'write_row' :
+            if op == 'write_rows' :
                 
                 for x in d['value'][:-1] :
                     yield None, t, x, None
             
-                yield (self.logname, self.pos), t, d['value'][-1], None
+                yield (self.logname, self.pos, self.tablest), t, d['value'][-1], None
             
             elif op == 'update_rows' :
                 
@@ -451,14 +550,14 @@ class EasyReplication(object):
                 for a, b in v[:-1] :
                     yield None, t, a, b
                     
-                yield (self.logname, self.pos), t, v[-1][0], v[-1][1]
+                yield (self.logname, self.pos, self.tablest), t, v[-1][0], v[-1][1]
                 
-            elif op == 'delete_row' :
+            elif op == 'delete_rows' :
                 
                 for x in d['value'][:-1] :
                     yield None, t, x, None
             
-                yield (self.logname, self.pos), t, None, d['value'][-1]
+                yield (self.logname, self.pos, self.tablest), t, None, d['value'][-1]
                 
             else :
                 
@@ -480,11 +579,9 @@ if __name__ == '__main__':
            'user' : 'repl',
          }
     
-    #erep = EasyReplication( 'mysql-bin.000080', 556, db )
-    #erep = EasyReplication( 'mysql-bin.000080', 0, db )
-    #erep = EasyReplication( 'mysql-bin.000080', 187, db )
-    #erep = EasyReplication( 'mysql-bin.000080', 2996, db, autodesc=True )
-    erep = EasyReplication( None, None, db, tablefilter=( lambda x: ( x[0] == 'test' ) ), dbfilter=( lambda x: ( x != 'log' ) ), autodesc=True )
+    #erep = EasyReplication( db, ('mysql-bin.000080', 2996, None) )
+    erep = EasyReplication( db, ('mysql-bin.000080', 19865, None) )
+    #erep = EasyReplication( db, None, tablefilter=( lambda x: ( x[0] == 'test' ) ), dbfilter=( lambda x: ( x != 'log' ) ) )
     
     for i in erep.readloop():
         pprint.pprint(i)

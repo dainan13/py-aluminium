@@ -22,7 +22,7 @@ binlog  BINLOG
                 code          uint(2)
                 reserved      char[1]
                 state         char[5]
-                massage       char[auto]
+                message       char[auto]
                 
             *:event        EVENT(auto)
             
@@ -48,14 +48,33 @@ binlog  BINLOG
                     
                     0:unkown              byte[auto]
                     1:start_v3            byte[auto]
-                    2:query               byte[auto]
+                    2:query               EVENT_DATA_QUERY(auto)
+                    
+                        thread_id         uint(4)
+                        exec_time         uint(4)
+                        db_name_len       uint
+                        err_code          uint(2)
+                        
+                        # just needed for 5.0 after
+                        moreflags_len     uint(2)
+                        moreflags         byte[moreflags_len]
+                        
+                        db_name           char[db_name_len]
+                        terminator        byte
+                        query             char[auto]
+                        
+                        
+                    # stop event is empty event
                     3:stop                byte[auto]
                     
                     4:rotate              EVENT_ROTATE(auto)
                         position              uint(8)
                         binlog                char[auto]
                     
-                    5:intvar              byte[auto]
+                    5:intvar              EVENT_INTVAR(auto)
+                        type                  uint
+                        value                 uint(8)
+                        
                     6:load                byte[auto]
                     7:slave               byte[auto]
                     8:create_file         byte[auto]
@@ -74,7 +93,8 @@ binlog  BINLOG
                         header_length         uint(1)
                         post_header           byte[auto]
                     
-                    16:xid                byte[auto]
+                    16:xid                uint(8)
+                    
                     17:begin_load_query   byte[auto]
                     18:execute_load_query byte[auto]
                     
@@ -84,10 +104,10 @@ binlog  BINLOG
                         reserved              byte[2]
                         
                         dbname_length         uint(1)
-                        dbname                byte[dbname_length]
+                        dbname                char[dbname_length]
                         terminator1           byte
                         tablename_length      uint(1)
-                        tablename             byte[tablename_length]
+                        tablename             char[tablename_length]
                         terminator2           byte
                         columns_count         packint
                         columns_type          uint[columns_count]
