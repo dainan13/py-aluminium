@@ -3,6 +3,9 @@ import pymysql
 import struct
 import datetime
 import types
+import easysqllite as esql
+
+CnL = esql.ConnLite
 
 class EasyRepError(Exception):
     pass
@@ -18,6 +21,11 @@ class UnknowColumnType(EasyRepError):
 
 class MySQLBinLogError(EasyRepError):
     pass
+
+
+class EventWait(object):
+    pass
+
 
 # MYSQL_TYPE_DECIMAL = 0, // decimal numeric 4 byte
 # MYSQL_TYPE_TINY = 1, tinyint 1
@@ -127,6 +135,8 @@ class RowType( ezp.ProtocolType ):
         return
         
     def read( self, namespace, fp, lens, args ):
+        
+        #print '!', lens
         
         x = fp.read(lens)
         
@@ -298,6 +308,7 @@ class PACKINTType( ezp.ProtocolType ):
         
 
 
+
 class EasyReplication(object):
     
     #dbargsort = ('host', 'port', 'user', 'passwd', 'db',)
@@ -336,6 +347,7 @@ class EasyReplication(object):
                 tablefilter = lambda x : ( x == tf )
         
         self.tablefilter = tablefilter or ( lambda x : True )
+        self.dumpfilter = lambda x : True
         self.ebp.namespaces['rows'].tablefilter = self.tablefilter
         #self.dbfilter = dbfilter or ( lambda x : True )
         
@@ -412,7 +424,7 @@ class EasyReplication(object):
         
         for tbl in tbls :
             
-            if not self.tablefilter(tbl):
+            if (not self.tablefilter(tbl)) or (not self.dumpfilter(tbl)) :
                 continue
             
             rst = self.executesql( 'DESCRIBE `%s`.`%s`' % tbl )
@@ -437,14 +449,113 @@ class EasyReplication(object):
         yield (self.logname, self.pos, self.tablest), None, None, None
         
         return
+    
+    def tofetchrow( self, datas, q ):
         
-    def readloop( self ):
+        try :
+            while(True):
+                rs = datas.fetch_row( 50 )
+                if len(rs) != 0 :
+                    q.put(rs)
+                else :
+                    q.put(True)
+                    return
+                
+        except Exception as e :
+            q.put(False)
+            q.put(e)
         
-        #arg = struct.pack('<LHLs',self.pos,0,self.serverid,self.logname)
+    def firstdumpbetter( self, nodump = False ):
         
-        if (self.logname == None and self.pos == None) or self.tablest == None :
-            for r in self.firstdump():
-                yield r
+        import MySQLdb
+        import threading
+        import Queue
+        
+        conn = MySQLdb.connect( **self.dbarg )
+        
+        locktable = False
+        
+        slv = CnL(conn).read( "SHOW SLAVE STATUS" )[0]
+        if slv['Slave_IO_Running'] == 'YES' or slv['Slave_SQL_Running'] == 'YES':
+            
+            locktable = True
+            CnL(conn).write( "FLUSH TABLES WITH READ LOCK" )
+            
+        
+        mst = CnL(conn).read( "SHOW MASTER STATUS" )[0]
+        
+        dodbs = mst['Binlog_Do_DB'].split(',') if mst['Binlog_Do_DB'] else None
+        igndb = mst['Binlog_Ignore_DB'].split(',') if mst['Binlog_Ignore_DB'] else []
+        
+        dbs = CnL(conn).getdatabases()
+        
+        dbs = [ db for db in dbs if ( (not dodbs) or db in dodbs ) and db not in igndb ]
+        
+        tbls = []
+        for db in dbs :
+            
+            tbls += [ ( db, tb ) for tb in CnL(conn).gettables(db) ]
+        
+        self.run_pos = 0
+        
+        for tbl in tbls :
+            
+            if (not self.tablefilter(tbl)) or (not self.dumpfilter(tbl)) :
+                continue
+            
+            cols = [ col['Field'] for col in CnL(conn).getcols( tbl )]
+            
+            readsql = 'SELECT SQL_BIG_RESULT SQL_NO_CACHE %s FROM %s' % \
+                               ( esql.formatcols(cols), esql.formattable(tbl) )
+            
+            conn.query( readsql )
+            datas = conn.use_result()
+            
+            q = Queue.Queue(500)
+            
+            fe = threading.Thread( target = self.tofetchrow, 
+                                   args = ( datas, q ), 
+                                   kwargs = {} 
+                                 )
+            
+            fe.start()
+            
+            while( True ):
+                
+                #rs = datas.fetch_row( 50 )
+                
+                #if len(rs) == 0 :
+                #    break
+                
+                rs = q.get()
+                
+                if rs == True :
+                    break
+                if rs == False :
+                    raise q.get()
+                
+                for r in rs :
+                    self.run_pos += 1
+                    yield None, tbl, dict(zip(cols,r)), None
+            
+            fe.join()
+        
+        mst2 = CnL(conn).read( "SHOW MASTER STATUS" )[0]
+        
+        if mst['File'] != mst2['File'] or mst['Position'] != mst2['Position'] :
+            raise Exception, ( 'lock table error', mst, mst2 )
+        
+        if locktable :
+            CnL(conn).write( "UNLOCK TABLES" )
+        
+        self.logname = mst['File']
+        self.pos = mst['Position']
+        
+        yield (self.logname, self.pos, self.tablest), None, None, None
+        
+        return
+        
+    def querybinlog( self ):
         
         arg = struct.pack('<L',self.pos)
         arg = arg + struct.pack('<H',0)
@@ -453,26 +564,41 @@ class EasyReplication(object):
         
         self.conn._execute_command(self.COM_BINLOG_DUMP, arg)
         
+        return
+        
+    def readloop( self, onconn=None, evyield=False ):
+        
+        #arg = struct.pack('<LHLs',self.pos,0,self.serverid,self.logname)
+        
+        #if (self.logname == None and self.pos == None) or self.tablest == None :
+        #    for r in self.firstdump():
+        #        yield r
+        
+        self.querybinlog()
+        if onconn != None :
+            onconn(self.conn, self.logname, self.pos, self.tablest)
+            
         coltype = ()
-        #tst = {}
         idt = {}
         
         self.run_pos = self.pos
         
         while(True):
             
-            r = self.ebp.read( 'binlog', self.conn.socket.makefile(), 
+            if evyield :
+                yield EventWait
+            
+            try :
+                r = self.ebp.read( 'binlog', self.conn.socket.makefile(), 
                                          extra_headers_length=0,
                                          coltype=coltype, 
                                          tst = self.tablest, idt=idt )
-            
-            
-            #if "'query'" in str(r):
-            #    print '>', r
-            
-            #print '-'*50
-            #print r
-            #print '-'*50
+            except ezp.ConnectionError, e:
+                self.conn = pymysql.connect( **self.dbarg )
+                self.querybinlog()
+                if onconn != None :
+                    onconn(self.conn, self.logname, self.pos, self.tablest)
+                continue
             
             try :
                 self.run_pos = r['body']['content']['event']['header']['next_position']
@@ -565,8 +691,6 @@ class EasyReplication(object):
         
         return
     
-    
-
 
 if __name__ == '__main__':
     
@@ -578,9 +702,9 @@ if __name__ == '__main__':
            'port' : 3306, 
            'user' : 'repl',
          }
+
+    erep = EasyReplication( db, ('apollo112-bin.000006', 587360945, None), tablefilter = ('SinaStore','Key') )
     
-    #erep = EasyReplication( db, ('mysql-bin.000080', 2996, None) )
-    erep = EasyReplication( db, ('mysql-bin.000080', 19865, None) )
     #erep = EasyReplication( db, None, tablefilter=( lambda x: ( x[0] == 'test' ) ), dbfilter=( lambda x: ( x != 'log' ) ) )
     
     for i in erep.readloop():

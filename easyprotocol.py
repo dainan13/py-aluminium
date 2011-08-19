@@ -23,6 +23,8 @@ class AutoArrayError( EasyBinaryProtocolError ):
 class UndefinedValueInUnion( EasyBinaryProtocolError ):
     pass
 
+class ConnectionError( EasyBinaryProtocolError ):
+    pass
 
 def parse_expr( e ):
     
@@ -418,6 +420,20 @@ class BuildinTypeBIT( ProtocolType ):
 def roundbin( a, b ):
     return a + b - ( a - 1 ) % b - 1
 
+
+class SafeIO( object ):
+    
+    def __init__( self, io ):
+        self.io = io
+        
+    def read( self, lens ):
+        r = self.io.read(lens)
+        if len(r) != lens :
+            raise ConnectionError, 'Connection Error'
+        return r
+        
+        
+
 class EasyBinaryProtocol( object ):
     
     buildintypes = [ BuildinTypeCHAR(),
@@ -549,7 +565,7 @@ class EasyBinaryProtocol( object ):
         
         spaces['tuple'] = lambda *args : args
         
-        return stt.read( spaces, io, v['length'], v['array'] )[0]
+        return stt.read( spaces, SafeIO(io), v['length'], v['array'] )[0]
         
         
 ebp = EasyBinaryProtocol()
