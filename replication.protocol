@@ -112,7 +112,8 @@ binlog  BINLOG
                         columns_count         packint
                         columns_type          uint[columns_count]
                         metadata_length       packint
-                        metadata              byte[metadata_length]
+                        #metadata              byte[metadata_length]
+                        metadata              metadata(metadata_length){columns_type}
                         nullable              bit[columns_count]
                     
                     20:pre_ga_write_rows  byte[auto]
@@ -129,7 +130,7 @@ binlog  BINLOG
                         #isnull                bit[columns_count]
                         #value                 rowvalue[columns_count]{$coltype,isnull}
                         #row_image             byte[auto]
-                        value                 rows(auto){columns_count,$coltype,$tst,$idt,table_id}
+                        value                 rows(auto){columns_count,$coltype,$metadata,$tst,$idt,table_id}
                     
                     24:update_rows        EVENT_DATA_UPDATE(auto)
 
@@ -145,7 +146,7 @@ binlog  BINLOG
                         #row_image             byte[auto]
                         #isnull_ai             bit[columns_count]
                         #value_ai              rowvalue[columns_count]{$coltype,isnull_ai}
-                        value                 rows(auto){columns_count,$coltype,$tst,$idt,table_id}
+                        value                 rows(auto){columns_count,$coltype,$metadata,$tst,$idt,table_id}
 
 
                     25:delete_rows        EVENT_DATA_DELETE(auto)
@@ -157,7 +158,7 @@ binlog  BINLOG
                         bitmap                bit[columns_count]
                         #isnull                bit[columns_count]
                         #value                 rowvalue[columns_count]{$coltype,isnull}
-                        value                 rows(auto){columns_count,$coltype,$tst,$idt,table_id}
+                        value                 rows(auto){columns_count,$coltype,$metadata,$tst,$idt,table_id}
                     
                     26:incident_evnet     byte[auto]
                     27:heartbeat          byte[auto]

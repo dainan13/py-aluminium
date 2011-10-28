@@ -13,10 +13,10 @@ class EasyRepError(Exception):
 class UnkownDBArgs(EasyRepError):
     pass
 
-class UnknowTableDefine(EasyRepError):
+class UnknownTableDefine(EasyRepError):
     pass
 
-class UnknowColumnType(EasyRepError):
+class UnknownColumnType(EasyRepError):
     pass
 
 class MySQLBinLogError(EasyRepError):
@@ -57,6 +57,8 @@ class EventWait(object):
         
         
 class RowType( ezp.ProtocolType ):
+    
+    datetimeformat = True
     
     def __init__( self ):
         
@@ -143,7 +145,7 @@ class RowType( ezp.ProtocolType ):
         l = 0
         r = []
 
-        columns_count, coltypes, tst, idt, tid = args
+        columns_count, coltypes, metadatas, tst, idt, tid = args
         
         tname = idt.get(tid, None)
         
@@ -158,12 +160,12 @@ class RowType( ezp.ProtocolType ):
         if not cols :
             
             if not self.sqlquery :
-                raise UnknowTableDefine, '.'.join(tname)
+                raise UnknownTableDefine, '.'.join(tname)
             
             try :
                 rst = self.sqlquery( 'DESCRIBE `%s`.`%s`' % tname )
             except UnkownDBArgs:
-                raise UnknowTableDefine, '.'.join(tname)
+                raise UnknownTableDefine, '.'.join(tname)
             
             rst = [ (row['Field'], self.colparse(row['Type'])) for row in rst ]
             
@@ -187,11 +189,11 @@ class RowType( ezp.ProtocolType ):
             
             isnull, l = self.readbit( x, l, columns_count )
             #print 'isnull:', isnull
-            cols = zip( coltypes, isnull, cola )
+            cols = zip( coltypes, metadatas, isnull, cola )
             
             rr = []
             
-            for coltype, isnull, ca in cols :
+            for coltype, mdata, isnull, ca in cols :
                 
                 #_debug_l = l
                 
@@ -225,37 +227,40 @@ class RowType( ezp.ProtocolType ):
                     rr.append( _r )
                 elif coltype == 12 : # datetime
                     _r, l = self.readint(x,l,8)
-                    rr.append( datetime.datetime.strptime(str(_r),'%Y%m%d%H%M%S') )
+                    if self.datetimeformat :
+                        rr.append( None if _r < 10000101000000 else datetime.datetime.strptime(str(_r),'%Y%m%d%H%M%S') )
+                    else :
+                        rr.append( _r )
                 elif coltype == 15 : # varchar
-                    _r, l = self.readint(x,l,ca)
+                    _r, l = self.readint(x,l,mdata)
                     _r, l = self.readchar(x,l,_r)
                     rr.append( _r )
                 elif coltype == 249 : # tiny blob / text
-                    _r, l = self.readint(x,l,1)
+                    _r, l = self.readint(x,l,mdata)
                     _r, l = self.readchar(x,l,_r)
                     rr.append( _r )
                 elif coltype == 250 : # medium blob / text
-                    _r, l = self.readint(x,l,3)
+                    _r, l = self.readint(x,l,mdata)
                     _r, l = self.readchar(x,l,_r)
                     rr.append( _r )
                 elif coltype == 251 : # long blob / text
-                    _r, l = self.readint(x,l,4)
+                    _r, l = self.readint(x,l,mdata)
                     _r, l = self.readchar(x,l,_r)
                     rr.append( _r )
                 elif coltype == 252 : # blob / text
-                    _r, l = self.readint(x,l,2)
+                    _r, l = self.readint(x,l,mdata)
                     _r, l = self.readchar(x,l,_r)
                     rr.append( _r )
                 elif coltype == 253 : # varbinary, may not correct, varbinary is 15 instead
-                    _r, l = self.readint(x,l,2)
+                    _r, l = self.readint(x,l,mdata)
                     _r, l = self.readchar(x,l,_r)
                     rr.append( _r )
                 elif coltype == 254 : # binary / char
-                    _r, l = self.readint(x,l,ca)
+                    _r, l = self.readint(x,l,mdata)
                     _r, l = self.readchar(x,l,_r)
                     rr.append( _r )
                 else :
-                    raise UnknowColumnType, ('unkown column type',coltype)
+                    raise UnknownColumnType, ('unkown column type',coltype)
                 
                 #print '.'*10
                 #print coltype, ca, repr(rr[-1])
@@ -308,6 +313,95 @@ class PACKINTType( ezp.ProtocolType ):
         
 
 
+class METADATAType( ezp.ProtocolType ):
+    
+    def __init__( self ):
+        
+        self.name = 'metadata'
+        self.cname = 'int *'
+        
+        self.identifiable = True
+        self.stretch = True
+        
+        self.variables = []
+        
+    def length( self, lens, array ):
+        return None
+    
+    def readint( self, x, l, lens, bigend=False ):
+        
+        chrs = x[l:l+lens]
+        
+        r = 0
+        
+        if bigend == True :
+            chrs = list(chrs)
+            chrs.reverse()
+        
+        for i, c in enumerate(chrs) :
+            r += ord(c) * ( 256**i )
+            
+        return r, l+lens
+    
+    def read( self, namespace, fp, lens, args ):
+        
+        x = fp.read(lens)
+        
+        l = 0
+        
+        rr = []
+        
+        for coltype in args :
+            
+            if coltype == 1 : # tiny int
+                rr.append( None )
+            elif coltype == 2 : # small int
+                rr.append( None )
+            elif coltype == 3 : # int
+                rr.append( None )
+            elif coltype == 4 : # float
+                rr.append( None )
+            elif coltype == 5 : # double
+                rr.append( None )
+            elif coltype == 7 : # timestamp
+                rr.append( None )
+            elif coltype == 8 : # bigint
+                rr.append( None )
+            elif coltype == 9 : # medium int
+                rr.append( None )
+            elif coltype == 12 : # datetime
+                rr.append( None )
+            elif coltype == 15 : # varchar
+                _r, l = self.readint(x,l,2)
+                rr.append( 2 if _r >= 256 else 1 )
+            elif coltype == 249 : # tiny blob / text
+                _r, l = self.readint(x,l,1)
+                rr.append( _r )
+            elif coltype == 250 : # medium blob / text
+                _r, l = self.readint(x,l,1)
+                rr.append( _r )
+            elif coltype == 251 : # long blob / text
+                _r, l = self.readint(x,l,1)
+                rr.append( _r )
+            elif coltype == 252 : # blob / text
+                _r, l = self.readint(x,l,1)
+                rr.append( _r )
+            elif coltype == 253 : # varbinary, may not correct, varbinary is 15 instead
+                _r, l = self.readint(x,l,2)
+                rr.append( 2 if _r >= 256 else 1 )
+            elif coltype == 254 : # binary / char
+                _r, l = self.readint(x,l,2)
+                rr.append( 1 if _r >= 65024 else 2 )
+            else :
+                raise UnknownColumnType, ('unkown column type',coltype)
+        
+        if l != lens :
+            raise Exception, 'metadata read error'
+        
+        print 'metadata>', rr, args
+        
+        return tuple(rr), lens
+
 
 class EasyReplication(object):
     
@@ -318,6 +412,7 @@ class EasyReplication(object):
     ebp = ezp.EasyBinaryProtocol()
     ebp.buildintypes.append(RowType())
     ebp.buildintypes.append(PACKINTType())
+    ebp.buildintypes.append(METADATAType())
     ebp.namespaces = dict( (bt.name, bt) for bt in ebp.buildintypes )
     ebp.parsefile( 'replication.protocol' )
     
@@ -454,7 +549,7 @@ class EasyReplication(object):
         
         try :
             while(True):
-                rs = datas.fetch_row( 50 )
+                rs = datas.fetch_row( 500 )
                 if len(rs) != 0 :
                     q.put(rs)
                 else :
@@ -503,7 +598,15 @@ class EasyReplication(object):
             if (not self.tablefilter(tbl)) or (not self.dumpfilter(tbl)) :
                 continue
             
-            cols = [ col['Field'] for col in CnL(conn).getcols( tbl )]
+            for ii in range(3):
+                try :
+                    cols = [ col['Field'] for col in CnL(conn).getcols( tbl )]
+                    break
+                except :
+                    if locktable == False :
+                        conn = MySQLdb.connect( **self.dbarg )
+            else :
+                raise
             
             readsql = 'SELECT SQL_BIG_RESULT SQL_NO_CACHE %s FROM %s' % \
                                ( esql.formatcols(cols), esql.formattable(tbl) )
@@ -511,7 +614,7 @@ class EasyReplication(object):
             conn.query( readsql )
             datas = conn.use_result()
             
-            q = Queue.Queue(500)
+            q = Queue.Queue(1000)
             
             fe = threading.Thread( target = self.tofetchrow, 
                                    args = ( datas, q ), 
@@ -521,11 +624,6 @@ class EasyReplication(object):
             fe.start()
             
             while( True ):
-                
-                #rs = datas.fetch_row( 50 )
-                
-                #if len(rs) == 0 :
-                #    break
                 
                 rs = q.get()
                 
@@ -579,6 +677,7 @@ class EasyReplication(object):
             onconn(self.conn, self.logname, self.pos, self.tablest)
             
         coltype = ()
+        metadata = ()
         idt = {}
         
         self.run_pos = self.pos
@@ -592,6 +691,7 @@ class EasyReplication(object):
                 r = self.ebp.read( 'binlog', self.conn.socket.makefile(), 
                                          extra_headers_length=0,
                                          coltype=coltype, 
+                                         metadata=metadata,
                                          tst = self.tablest, idt=idt )
             except ezp.ConnectionError, e:
                 self.conn = pymysql.connect( **self.dbarg )
@@ -608,14 +708,15 @@ class EasyReplication(object):
             try :
                 if 'error' in r['body']['content'] :
                     err = r['body']['content']['error']
-                    print err
                     raise MySQLBinLogError, (err['state'],err['code'],err['message'])
             except KeyError, e :
                 pass
             
             try :
-                
+                print r['body']['content']['event']['data']['table']['tablename']
                 coltype = r['body']['content']['event']['data']['table']['columns_type']
+                print coltype
+                metadata = r['body']['content']['event']['data']['table']['metadata']
                 idt[r['body']['content']['event']['data']['table']['table_id']] = \
                     (r['body']['content']['event']['data']['table']['dbname'],
                      r['body']['content']['event']['data']['table']['tablename'])
@@ -673,10 +774,10 @@ class EasyReplication(object):
             elif op == 'update_rows' :
                 
                 v = zip( d['value'][::2], d['value'][1::2] )
-                for a, b in v[:-1] :
+                for b, a in v[:-1] :
                     yield None, t, a, b
                     
-                yield (self.logname, self.pos, self.tablest), t, v[-1][0], v[-1][1]
+                yield (self.logname, self.pos, self.tablest), t, v[-1][1], v[-1][0]
                 
             elif op == 'delete_rows' :
                 
@@ -703,7 +804,7 @@ if __name__ == '__main__':
            'user' : 'repl',
          }
 
-    erep = EasyReplication( db, ('apollo112-bin.000006', 587360945, None), tablefilter = ('SinaStore','Key') )
+    erep = EasyReplication( db, ('mysql-bin.000002', 18724, None) )
     
     #erep = EasyReplication( db, None, tablefilter=( lambda x: ( x[0] == 'test' ) ), dbfilter=( lambda x: ( x != 'log' ) ) )
     
