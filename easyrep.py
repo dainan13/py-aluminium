@@ -396,9 +396,7 @@ class METADATAType( ezp.ProtocolType ):
                 raise UnknownColumnType, ('unkown column type',coltype)
         
         if l != lens :
-            raise Exception, 'metadata read error'
-        
-        print 'metadata>', rr, args
+            raise EasyRepError, 'metadata read error'
         
         return tuple(rr), lens
 
@@ -713,9 +711,7 @@ class EasyReplication(object):
                 pass
             
             try :
-                print r['body']['content']['event']['data']['table']['tablename']
                 coltype = r['body']['content']['event']['data']['table']['columns_type']
-                print coltype
                 metadata = r['body']['content']['event']['data']['table']['metadata']
                 idt[r['body']['content']['event']['data']['table']['table_id']] = \
                     (r['body']['content']['event']['data']['table']['dbname'],
