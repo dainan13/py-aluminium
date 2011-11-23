@@ -6,7 +6,6 @@ import datetime
 class EasySqlLiteException( Exception ):
     pass
 
-
 def formatcols( cols ):
     return ','.join( ('`%s`' % (c) if c is not None else 'NULL') for c in cols )
 
@@ -29,7 +28,7 @@ def formatvalue( v ):
         return str(v)
 
     if type(v) == datetime.datetime :
-        return v.strftime('%Y-%m-%d %H:%M:%S')
+        return pymysql.escape_string( v.strftime('%Y-%m-%d %H:%M:%S') )
 
     return pymysql.escape_string((v))
 
@@ -105,10 +104,7 @@ class ConnLite( object ):
 
     def gets( self, tb, cols=None, where=None, order=None, group=None, reverse=False, limit=None ):
 
-        if type(tb) in (types.TupleType, types.ListType ):
-            tb = '`%s`.`%s`' % tuple(tb)
-        else :
-            tb = '`%s`' % (tb,)
+        tb = formattable( tb )
 
         if cols == all :
             cs = '*'
@@ -152,10 +148,7 @@ class ConnLite( object ):
     def puts( self, tb, datas, ignore=False, replace=False, ondupupdate=False ):
         if datas == [] :
             return
-        if type(tb) in (types.TupleType, types.ListType ):
-            tb = '`%s`.`%s`' % tuple(tb)
-        else :
-            tb = '`%s`' % (tb,)
+        tb = formattable( tb )
 
         ks = set([ k for d in datas for k in d.keys() ])
         vss = [ [ d.get(k,None) for k in ks ] for d in datas ]
@@ -182,20 +175,16 @@ class ConnLite( object ):
     def update( self, tb, data, where=None ):
         if data == [] :
             return
-        if type(tb) in (types.TupleType, types.ListType ):
-            tb = '`%s`.`%s`' % tuple(tb)
-        else :
-            tb = '`%s`' % (tb,)
+        tb = formattable( tb )
             
         kvs = ', '.join( '`%s` = %s' % ( k, formatvalue(v) ) for k, v in data.items() )
         
         sql = "UPDATE %s SET %s" % ( tb, kvs, )
         
-        
         if where:
             sql = "%s WHERE %s" % ( sql, makecond(where), )
         
-        #print sql
+        print sql
         return self.write( sql, )
         
     def delete( self, tb, where=None ):
@@ -210,7 +199,7 @@ class ConnLite( object ):
         if where:
             sql = "%s WHERE %s" % ( sql, makecond(where), )
             
-        #print sql
+        print sql
 
         self.write( sql, True )
 
@@ -238,10 +227,7 @@ class ConnLite( object ):
 
     def getcols( self, tb ):
 
-        if type(tb) in (types.TupleType, types.ListType ) :
-            tb = '`%s`.`%s`' % tuple(tb)
-        else :
-            tb = '`%s`' % (tb,)
+        tb = formattable( tb )
 
         return self.read( "DESCRIBE " + tb )
         
@@ -343,8 +329,6 @@ class Connection( ConnLite ):
 
             except:
                 raise
-
-
         else :
             raise
         
