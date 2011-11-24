@@ -170,7 +170,7 @@ class ConnLite( object ):
 
     def put( self, tb, data, *args, **kwargs ):
 
-        return self.puts( tb, [data], *args, **kwargs )
+        return self.puts( tb, data, *args, **kwargs )
         
     def update( self, tb, data, where=None ):
         if data == [] :
