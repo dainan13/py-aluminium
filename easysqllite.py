@@ -170,10 +170,10 @@ class ConnLite( object ):
 
     def put( self, tb, data, *args, **kwargs ):
 
-        return self.puts( tb, data, *args, **kwargs )
+        return self.puts( tb, [data], *args, **kwargs )
         
     def update( self, tb, data, where=None ):
-        if data == [] :
+        if data == {} :
             return
         tb = formattable( tb )
             
@@ -366,13 +366,13 @@ class Table( object ):
 
     def put( self, data, *args, **kwargs ):
 
-        data = [ dict(( k, v ) for k, v in data.items() if k in self.cols) ]
+        data = dict([( k, v ) for k, v in data.items() if k in self.cols])
 
         return self.conn.put( self.name, data, *args, **kwargs )
 
     def update( self, data, *args, **kwargs ):
         
-        data = [ dict(( k, v ) for k, v in data.items() if k in self.cols) ]
+        data = dict([( k, v ) for k, v in data.items() if k in self.cols])
         
         return self.conn.update( self.name, data, *args, **kwargs )
         
