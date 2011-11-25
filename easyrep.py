@@ -120,8 +120,8 @@ class RowType( ezp.ProtocolType ):
         
         raise Exception, 'float read error'
         
-    
-    def colparse( self, t ):
+    @staticmethod
+    def colparse( t ):
         
         if t.startswith('int'):
             return t.endswith('unsigned')
@@ -390,7 +390,7 @@ class METADATAType( ezp.ProtocolType ):
                 _r, l = self.readint(x,l,2)
                 rr.append( 2 if _r >= 256 else 1 )
             elif coltype == 254 : # binary / char
-                _r, l = self.readint(x,l,2)
+                _r, l = self.readint(x,l,2,True)
                 rr.append( 1 if _r >= 65024 else 2 )
             else :
                 raise UnknownColumnType, ('unkown column type',coltype)
