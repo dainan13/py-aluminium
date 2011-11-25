@@ -778,7 +778,7 @@ class EasyReplication(object):
             elif op == 'delete_rows' :
                 
                 for x in d['value'][:-1] :
-                    yield None, t, x, None
+                    yield None, t, None, x
             
                 yield (self.logname, self.pos, self.tablest), t, None, d['value'][-1]
                 
