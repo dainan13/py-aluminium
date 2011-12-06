@@ -30,6 +30,9 @@ def formatvalue( v ):
     if type(v) == datetime.datetime :
         return pymysql.escape_string( v.strftime('%Y-%m-%d %H:%M:%S') )
 
+    if type(v) in (types.TupleType, types.ListType):
+        return (','.join([formatvalue(vv) for vv in v])) .join(['(', ')'])
+
     return pymysql.escape_string((v))
 
 def formatcond( k, v ):
