@@ -1,0 +1,19 @@
+
+ttf TTF
+    
+    directory TableDirectory
+    
+        sfntversion   FIX(4)
+            major     int_b(2)
+            sub       int_b(2)
+        numberTables  int_b(1)
+        searchRange   int_b(1)
+        entrySelector int_b(1)
+        rangeShift    int_b(1)
+        
+        entry TableEntry[numberTables]
+    
+            tag           char[4]
+            cheksum       int_b(8)
+            offset        int_b(8)
+            length        int_b(8)
