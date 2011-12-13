@@ -1,19 +1,165 @@
 
-ttf TTF
+#http://bbs.chinaunix.net/thread-2041402-1-1.html
+
+# BYTE     8-bit unsigned integer.
+# CHAR     8-bit signed integer.
+# USHORT   16-bit unsigned integer.
+# SHORT    16-bit signed integer.
+# ULONG    32-bit unsigned integer.
+# LONG     32-bit signed integer.
+# FIXED    32-bit signed fixed-point number (16.16)
+# FUNIT    Smallest measurable distance in the em space.
+# FWORD    16-bit signed integer (SHORT) that describes a quantity in FUnits.
+# UFWORD   Unsigned 16-bit integer (USHORT) that describes a quantity in FUnits. 
+# F2DOT14   16-bit signed fixed number with the low 14 bits of fraction (2.14).
+
+
+ttf TTF(auto)
     
-    directory TableDirectory
+    directory TableDirectory   # 12 bytes
     
-        sfntversion   FIX(4)
-            major     int_b(2)
-            sub       int_b(2)
-        numberTables  int_b(1)
-        searchRange   int_b(1)
-        entrySelector int_b(1)
-        rangeShift    int_b(1)
+        sfntversion   FIX
+            major         uint_b(2)
+            sub           uint_b(2)
+        numberTables  uint_b(2)
+        searchRange   uint_b(2) # (Maximum power of 2 numTables) x 16.
+        entrySelector uint_b(2) # Log2(maximum power of 2 numTables).
+        rangeShift    uint_b(2) # NumTables x 16-searchRange.
         
         entry TableEntry[numberTables]
-    
+        
+            #tag           uint_b(4)
             tag           char[4]
-            cheksum       int_b(8)
-            offset        int_b(8)
-            length        int_b(8)
+            cheksum       uint_b(4)
+            offset        uint_b(4)
+            length        uint_b(4)
+
+
+
+
+## Required Table
+# cmap    character to glyph mapping
+# glyf    glyph data
+# head    font header
+# hhea    horizontal header
+# hmtx    horizontal metrics
+# loca    index to location
+# maxp    maximum profile
+# name    naming table
+# post    PostScript information
+# OS/2    OS/2 and Windows specific metrics
+
+## Optional Table
+# cvt     Control Value Table
+# EBDT    Embedded bitmap data
+# EBLC    Embedded bitmap location data
+# EBSC    Embedded bitmap scaling data
+# fpgm    font program
+# gasp    grid-fitting and scan conversion procedure (grayscale)
+# hdmx    horizontal device metrics
+# kern    kerning
+# LTSH    Linear threshold table
+# prep    CVT Program
+# PCLT    PCL5
+# VDMX    Vertical Device Metrics table
+# vhea    Vertical Metrics header
+# vmtx    Vertical Metrics
+
+head    TTF_head
+    
+    version      FIX
+    reversion    FIX
+    
+
+cmap    TTF_cmap
+
+    version              uint_b(2)
+    numberEncodingTable  uint_b(2)
+    platformID           uint_b(2)
+    encodingID           uint_b(2)
+    offset               uint_b(4)
+    
+# apples
+# windows
+# 3    0    Symbol
+# 3    1    Unicode
+# 3    2    ShiftJIS
+# 3    3    Big5
+# 3    4    PRC
+# 3    5    Wansung
+# 3    6    Johab
+
+cmaptable TTF_cmap_table(.length)
+
+    format         uint_b(2)
+    length         uint_b(2)
+    version        uint_b(2)
+
+    cmap           TTF_cmap_t(auto){format}
+
+        0:format0      TTF_cmap0(auto)
+            plyphIdArray   uint_b(2)[256]
+            
+            
+        # http://svn.apache.org/repos/asf/pdfbox/trunk/fontbox/src/main/java/org/apache/fontbox/ttf/CMAPEncodingEntry.java
+        2:format2      TTF_cmap2(auto)
+            subHeaderKeys       uint_b(2)[256]
+            subHeaders          TTF_cmap2_subHeader[max(subHeaderKeys)/8+1]
+                firstCode           uint_b(2)
+                entryCount          uint_b(2)
+                idDelta             int_b(2)
+                idRangeOffset       uint_b(2)
+            plyphIdArray        uint_b(2)[auto]
+            # charCode = (charCode << 8 ) + (firstCode + j);
+            
+        4:format4      TTF_cmap4(auto)
+            segCountX2          uint_b(2)                # 2 x segCount
+            searchRange         uint_b(2)                # 2 x (2**floor(log2(segCount)))
+            entrySelector       uint_b(2)                # log2(searchRange/2)
+            rangeShift          uint_b(2)                # 2 x segCount - searchRange
+            endCount            uint_b(2)[segCountX2/2]  # End characterCode for each segment, last =0xFFFF.
+            reservedPad         uint_b(2)                # set to 0
+            startCount          uint_b(2)[segCountX2/2]  # Start character code for each segment.
+            idDelta             uint_b(2)[segCountX2/2]
+            idRangeOffset       uint_b(2)[segCountX2/2]
+            plyphIdArray        uint_b(2)[auto]
+
+        6:format6      TTF_cmap6(auto)
+            firstCode           uint_b(2)
+            entryCount          uint_b(2)
+            plyphIdArray        uint_b(2)[auto]
+
+
+
+glyf    TTF_glyf($length)
+
+    numberOfContours     uint_b(2)
+    xMin                 uint_b(2)
+    yMin                 uint_b(2)
+    xMax                 uint_b(2)
+    yMax                 uint_b(2)
+    
+    glyphDesc            TTF_glyph_desc{ numberOfContours >= 0 }
+    
+        #0:composite
+        1:simple             TTF_glyph_desc_simple
+            
+            endPtsOfContours       uint_b(2)[numberOfContours]
+            instructionLength      uint_b(2)
+            instructions           byte[instructionLength]
+            
+            #flags                  uint[last(endPtsOfContours)+1]
+            #http://java.freehep.org/vectorgraphics/xref/org/freehep/graphicsio/font/truetype/TTFGlyfTable.html
+            flags                  flags{last(endPtsOfContours)+1}
+            
+            xCoordinates           coords{flags,True}
+            yCoordinates           coords{flags,False}
+
+
+
+
+
+
+
+
+

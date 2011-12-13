@@ -310,7 +310,7 @@ class BuildinTypeUINT( ProtocolType ):
     def __init__( self ):
         
         self.name = 'uint'
-        self.cname = 'long'
+        self.cname = 'unsigned long'
         
         self.identifiable = True
         self.stretch = False
@@ -331,6 +331,68 @@ class BuildinTypeUINT( ProtocolType ):
         
         return r, lens
         
+
+class BuildinTypeUINTB( ProtocolType ):
+    
+    def __init__( self ):
+        
+        self.name = 'uint_b'
+        self.cname = 'unsigned long'
+        
+        self.identifiable = True
+        self.stretch = False
+        
+        self.variables = []
+        
+    def length( self, lens, array ):
+        return lens*array
+        
+    def read( self, namespace, fp, lens, args ):
+        
+        chrs = fp.read(lens)
+        
+        r = 0
+        
+        chrs = list(chrs)
+        chrs.reverse()
+        
+        for i, c in enumerate(chrs) :
+            r += ord(c) * ( 256**i )
+        
+        return r, lens
+        
+class BuildinTypeINTB( ProtocolType ):
+    
+    def __init__( self ):
+        
+        self.name = 'int_b'
+        self.cname = 'long'
+        
+        self.identifiable = True
+        self.stretch = False
+        
+        self.variables = []
+        
+    def length( self, lens, array ):
+        return lens*array
+        
+    def read( self, namespace, fp, lens, args ):
+        
+        chrs = fp.read(lens)
+        
+        r = 0
+        
+        chrs = list(chrs)
+        chrs.reverse()
+        
+        c = 0
+        for i, c in enumerate(chrs) :
+            r += ord(c) * ( 256**i )
+        
+        if c >= 127 :
+            r = 256**(i+1) - r
+        
+        return r, lens
 
 class BuildinTypeCHAR( ProtocolType ):
     
@@ -440,6 +502,8 @@ class EasyBinaryProtocol( object ):
                      BuildinTypeUINT(),
                      BuildinTypeBYTE(),
                      BuildinTypeBIT(),
+                     BuildinTypeINTB(),
+                     BuildinTypeUINTB(),
                    ]
     
     def __init__( self ):
