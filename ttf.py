@@ -111,7 +111,20 @@ class TTFile(object):
         #self.entrys = dict( for entry in self.directory )
         cmap = dict( ( entry['tag'], entry ) for entry in self.directory['entry'] )['cmap']
         self.fp.seek(cmap['offset'])
-        self.entrys = { 'cmap': self.ebp.read('cmap', self.fp) }
+        self.entrys = { 'cmap': self.ebp.read('cmap', self.fp)['cmap'] }
+        for cmapt in self.entrys['cmap'] :
+            self.fp.seek(cmap['offset']+cmapt['offset'])
+            cmapt[''] = t = self.ebp.read('cmaptable', self.fp, div=(lambda a, b : a/b) )
+            if 'format6' in t['cmap'] :
+                fm6 = t['cmap']['format6']
+                cmapt['_index'] = dict((i+fm6['firstCode'],v) for i, v in enumerate(fm6['plyphIdArray']))
+                if len(fm6['plyphIdArray']) != fm6['entryCount'] :
+                    raise TTFError, 'read error.'
+            elif 'format4' in t['cmap'] :
+                fm4 = t['cmap']['format4']
+                for s, e, delta, offset in zip(fm4['startCount'], fm4['endCount'], fm4['idDelta'], fm4['idRangeOffset']):
+                    print '>', s, e, delta, offset
+                print
     
     def make_entry( self, entry ):
         
@@ -124,6 +137,25 @@ class TTFile(object):
 if __name__ == '__main__' :
     
     t = TTFile( 'ttf.protocol' )
-    pprint.pprint( t.directory )
-    pprint.pprint( t.entrys )
-    
+    #pprint.pprint( t.directory )
+    #pprint.pprint( t.entrys )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -26,6 +26,19 @@ class UndefinedValueInUnion( EasyBinaryProtocolError ):
 class ConnectionError( EasyBinaryProtocolError ):
     pass
 
+def argsplit( inp ):
+    
+    args = inp.split(',')
+    
+    cs = [ a.count('(') - a.count(')') for a in args ]
+    cs = [ sum(cs[:i+1]) for i in range(len(cs)) ]
+    
+    cs = [ i for i, c in enumerate(cs) if c == 0 ]
+    
+    args = [ ','.join(args[s+1:e+1]) for s, e in zip([-1]+cs, cs) ]
+    
+    return [ a.strip() for a in args ]
+
 def parse_expr( e ):
     
     if e == None :
@@ -49,12 +62,12 @@ def parse_expr( e ):
         m = re.match(r'%s\(%s\)' % (function, arguments), e)
         
         if m == None :
-            raise ParseSyntaxError, ( 'Line: %d %s' % (i,li) )
+            raise ParseSyntaxError, ( 'Line: %s' % (e,) )
         
         m = m.groupdict()
         
         f = m['function']
-        args = [ a.strip() for a in m['args'].split(',') ]
+        args = [ a.strip() for a in argsplit( m['args'] ) ]
         
         args = [ parse_expr(a) for a in args ]
         
@@ -506,6 +519,17 @@ class EasyBinaryProtocol( object ):
                      BuildinTypeUINTB(),
                    ]
     
+    buildinfunction = [ ( 'add', (lambda a, b: a+b) ),
+                        ( 'sub', (lambda a, b: a+b) ),
+                        ( 'mul', (lambda a, b: a+b) ),
+                        ( 'div', (lambda a, b: a/b) ),
+                        ( 'mod', (lambda a, b: a%b) ),
+                        ( 'first', (lambda a : a[0]) ),
+                        ( 'last', (lambda a: a[-1]) ),
+                        ( 'max', max ),
+                        ( 'min', min ),
+                      ]
+    
     def __init__( self ):
         
         seg = r'(?P<seg>[0-9,*]*:)'
@@ -521,6 +545,11 @@ class EasyBinaryProtocol( object ):
         self.p_globals = {}
         
         self.buildintypes = self.buildintypes[:]
+    
+    def rebuild_namespaces( self ):
+        self.namespaces = dict( (bt.name, bt) for bt in self.buildintypes )
+        for k, v in self.buildinfunction :
+            self.namespaces[k] = v
     
     def parsefile( self, fname ):
         

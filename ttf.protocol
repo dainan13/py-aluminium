@@ -75,19 +75,26 @@ cmap    TTF_cmap
 
     version              uint_b(2)
     numberEncodingTable  uint_b(2)
-    platformID           uint_b(2)
-    encodingID           uint_b(2)
-    offset               uint_b(4)
     
-# apples
+    cmap                 TTF_cmap_data[numberEncodingTable]
+        platformID           uint_b(2)
+        encodingID           uint_b(2)
+        offset               uint_b(4)
+    
+# unicode
+#    0    3    Unicode
+# macintosh
+#    1    0
+# iso
+#    2
 # windows
-# 3    0    Symbol
-# 3    1    Unicode
-# 3    2    ShiftJIS
-# 3    3    Big5
-# 3    4    PRC
-# 3    5    Wansung
-# 3    6    Johab
+#    3    0    Symbol
+#    3    1    Unicode
+#    3    2    ShiftJIS
+#    3    3    Big5
+#    3    4    PRC
+#    3    5    Wansung
+#    3    6    Johab
 
 cmaptable TTF_cmap_table(.length)
 
@@ -104,7 +111,7 @@ cmaptable TTF_cmap_table(.length)
         # http://svn.apache.org/repos/asf/pdfbox/trunk/fontbox/src/main/java/org/apache/fontbox/ttf/CMAPEncodingEntry.java
         2:format2      TTF_cmap2(auto)
             subHeaderKeys       uint_b(2)[256]
-            subHeaders          TTF_cmap2_subHeader[max(subHeaderKeys)/8+1]
+            subHeaders          TTF_cmap2_subHeader[add(div(max(subHeaderKeys),8),1)]
                 firstCode           uint_b(2)
                 entryCount          uint_b(2)
                 idDelta             int_b(2)
@@ -117,11 +124,11 @@ cmaptable TTF_cmap_table(.length)
             searchRange         uint_b(2)                # 2 x (2**floor(log2(segCount)))
             entrySelector       uint_b(2)                # log2(searchRange/2)
             rangeShift          uint_b(2)                # 2 x segCount - searchRange
-            endCount            uint_b(2)[segCountX2/2]  # End characterCode for each segment, last =0xFFFF.
+            endCount            uint_b(2)[div(segCountX2,2)]  # End characterCode for each segment, last =0xFFFF.
             reservedPad         uint_b(2)                # set to 0
-            startCount          uint_b(2)[segCountX2/2]  # Start character code for each segment.
-            idDelta             uint_b(2)[segCountX2/2]
-            idRangeOffset       uint_b(2)[segCountX2/2]
+            startCount          uint_b(2)[div(segCountX2,2)]  # Start character code for each segment.
+            idDelta             int_b(2)[div(segCountX2,2)]   # ms doc is wrong is signed short
+            idRangeOffset       uint_b(2)[div(segCountX2,2)]
             plyphIdArray        uint_b(2)[auto]
 
         6:format6      TTF_cmap6(auto)
@@ -148,9 +155,9 @@ glyf    TTF_glyf($length)
             instructionLength      uint_b(2)
             instructions           byte[instructionLength]
             
-            #flags                  uint[last(endPtsOfContours)+1]
+            #flags                  uint[add(last(endPtsOfContours),1)]
             #http://java.freehep.org/vectorgraphics/xref/org/freehep/graphicsio/font/truetype/TTFGlyfTable.html
-            flags                  flags{last(endPtsOfContours)+1}
+            flags                  flags{add(last(endPtsOfContours),1)}
             
             xCoordinates           coords{flags,True}
             yCoordinates           coords{flags,False}
