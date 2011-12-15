@@ -520,8 +520,8 @@ class EasyBinaryProtocol( object ):
                    ]
     
     buildinfunction = [ ( 'add', (lambda a, b: a+b) ),
-                        ( 'sub', (lambda a, b: a+b) ),
-                        ( 'mul', (lambda a, b: a+b) ),
+                        ( 'sub', (lambda a, b: a-b) ),
+                        ( 'mul', (lambda a, b: a*b) ),
                         ( 'div', (lambda a, b: a/b) ),
                         ( 'mod', (lambda a, b: a%b) ),
                         ( 'first', (lambda a : a[0]) ),
