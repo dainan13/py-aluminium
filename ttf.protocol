@@ -67,8 +67,25 @@ ttf TTF(auto)
 
 head    TTF_head
     
-    version      FIX
-    reversion    FIX
+    version            FIX
+    reversion          FIX
+    checkSumAdjustment uint_b(4)
+    magicNumber        uint_b(4) # =0x5F0F3CF5
+    flags              uint_b(2)
+    unitsPerEm         uint_b(2)
+    created            uint[8]
+    modified           uint[8]
+    xMin               uint_b(2)
+    yMin               uint_b(2)
+    xMax               uint_b(2)
+    yMax               uint_b(2)
+    macStyle           uint_b(2)
+    lowestRecPPEM      uint_b(2)
+    fontDirectionHint  int_b(2)
+    indexToLocFormat   int_b(2)
+    glyphDataFromat    int_b(2)
+    
+    
     
 
 cmap    TTF_cmap
@@ -127,7 +144,7 @@ cmaptable TTF_cmap_table(.length)
             endCount            uint_b(2)[div(segCountX2,2)]  # End characterCode for each segment, last =0xFFFF.
             reservedPad         uint_b(2)                # set to 0
             startCount          uint_b(2)[div(segCountX2,2)]  # Start character code for each segment.
-            idDelta             int_b(2)[div(segCountX2,2)]   # ms doc is wrong is signed short
+            idDelta             uint_b(2)[div(segCountX2,2)]  
             idRangeOffset       uint_b(2)[div(segCountX2,2)]
             plyphIdArray        uint_b(2)[auto]
 
@@ -137,6 +154,28 @@ cmaptable TTF_cmap_table(.length)
             plyphIdArray        uint_b(2)[auto]
 
 
+loca    TTF_loca(auto){$indexToLocFormat}
+
+    1:loca_short uint_b[$numGlyphs]
+    2:loca_long  uint_b[$numGlyphs]
+
+name    TTF_name($length)
+    
+    formatSelector       uint_b(2)
+    numNameRecords       uint_b(2)
+    dataOffset           uint_b(2)
+    
+    nameRecords          TTF_NAME_RECORDS[numNameRecords]
+    
+        platformID           uint_b(2)           
+        encodingID           uint_b(2)
+        LanguageID           uint_b(2)
+        NameID               uint_b(2)
+        stringLength         uint_b(2)
+        stringOffset         uint_b(2)
+    
+    other                byte[auto]
+    data                 byte[sub($length,dataOffset)]
 
 glyf    TTF_glyf($length)
 
@@ -163,6 +202,68 @@ glyf    TTF_glyf($length)
             yCoordinates           coords{flags,False}
 
 
+
+post    TTF_post($length)
+    
+    formatType           FIX
+    atalicAngle          FIX
+    underlinePosition    uint_b(2)
+    underlineThickness   uint_b(2)
+    isFixedPitch         uint_b(4)
+    minMemType42         uint_b(4)
+    maxMemType42         uint_b(4)
+    minMemType1          uint_b(4)
+    maxMemType1          uint_b(4)
+
+
+
+os_2   TTF_os2($length)
+    
+    version              uint_b(2)
+    xAvgCharWidth        int_b(2)
+    usWeightClass        uint_b(2)
+    usWidthClass         uint_b(2)
+    fsType               int_b(2)
+    ySubscriptXSize      int_b(2)
+    ySubscriptYSize      int_b(2)
+    ySubscriptXOffset    int_b(2)
+    ySubscriptYOffset    int_b(2)
+    ySuperscriptXSize    int_b(2)
+    ySuperscriptYSize    int_b(2)
+    ySuperscriptXOffset  int_b(2)
+    ySuperscriptYOffset  int_b(2)
+    yStrikeoutSize       int_b(2)
+    yStrikeoutPosition   int_b(2)
+    sFamilyClass         int_b(2)
+    
+    panose               TTF_PANOSE
+    
+        bFamilyType          byte
+        bSerifStyle          byte
+        bWeight              byte
+        bProportion          byte
+        bContrast            byte
+        bStrokeVariation     byte
+        bArmStyle            byte
+        bLetterform          byte
+        bMidline             byte
+        bXHeight             byte
+    
+    ulUnicodeRange1      uint_b(4)  # Bits 0–31
+    ulUnicodeRange2      uint_b(4)  # Bits 32–63
+    ulUnicodeRange3      uint_b(4)  # Bits 64–95
+    ulUnicodeRange4      uint_b(4)  # Bits 96–127
+    achVendID[4]         byte[4]
+    fsSelection          uint_b(2)
+    usFirstCharIndex     uint_b(2)
+    usLastCharIndex      uint_b(2)
+    sTypoAscender        uint_b(2)
+    sTypoDescender       uint_b(2)
+    sTypoLineGap         uint_b(2)
+    usWinAscent          uint_b(2)
+    usWinDescent         uint_b(2)
+    ulCodePageRange1     uint_b(4) # Bits 0-31
+    ulCodePageRange2     uint_b(4) # Bits 32-63
 
 
 

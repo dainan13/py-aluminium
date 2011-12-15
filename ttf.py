@@ -100,13 +100,15 @@ class TTFile(object):
     ebp = ezp.EasyBinaryProtocol()
     ebp.buildintypes.append(FLAGSType())
     ebp.buildintypes.append(COORDSType())
-    ebp.namespaces = dict( (bt.name, bt) for bt in ebp.buildintypes )
+    #ebp.namespaces = dict( (bt.name, bt) for bt in ebp.buildintypes )
+    ebp.rebuild_namespaces()
     ebp.parsefile( 'ttf.protocol' )
     
     def __init__( self, filename ):
         
         self.fp = open('../../../font/One Starry Night sub.ttf')
         self.directory = self.ebp.read('ttf', self.fp )['directory']
+        pprint.pprint( self.directory['entry'] )
         
         #self.entrys = dict( for entry in self.directory )
         cmap = dict( ( entry['tag'], entry ) for entry in self.directory['entry'] )['cmap']
@@ -122,9 +124,25 @@ class TTFile(object):
                     raise TTFError, 'read error.'
             elif 'format4' in t['cmap'] :
                 fm4 = t['cmap']['format4']
-                for s, e, delta, offset in zip(fm4['startCount'], fm4['endCount'], fm4['idDelta'], fm4['idRangeOffset']):
-                    print '>', s, e, delta, offset
-                print
+                r = []
+                for segc, s, e, delta, offset in zip( range(fm4['segCountX2']/2,0,-1), fm4['startCount'], fm4['endCount'], fm4['idDelta'], fm4['idRangeOffset']):
+                    #print '>', s, e, delta, offset
+                    rs = offset/2 - segc if offset != 0 else s
+                    re = rs + e - s
+                    vs = [ (v+delta)%65536 for v in fm4['plyphIdArray'][rs:re] ]
+                    r.extend( zip(range(s,e),vs) )
+                cmapt['_index'] = dict( r )
+                
+        name = dict( ( entry['tag'], entry ) for entry in self.directory['entry'] )['name']
+        self.fp.seek(name['offset'])
+        self.entrys['name'] = self.ebp.read('name', self.fp, length=name['length'], sub=(lambda a, b : a-b))
+        for nm in self.entrys['name']['nameRecords'] :
+            rs = nm['stringOffset']
+            re = nm['stringOffset'] + nm['stringLength']
+            nm['name'] = self.entrys['name']['data'][rs:re]
+            if nm['encodingID'] == 1 and nm['platformID'] == 3 :
+                nm['name'] = nm['name'].decode('utf-16BE')
+            
     
     def make_entry( self, entry ):
         
@@ -137,8 +155,8 @@ class TTFile(object):
 if __name__ == '__main__' :
     
     t = TTFile( 'ttf.protocol' )
-    #pprint.pprint( t.directory )
-    #pprint.pprint( t.entrys )
+    pprint.pprint( t.directory )
+    pprint.pprint( t.entrys )
 
 
 
