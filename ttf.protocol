@@ -28,7 +28,6 @@ ttf TTF(auto)
         
         entry TableEntry[numberTables]
         
-            #tag           uint_b(4)
             tag           char[4]
             cheksum       uint_b(4)
             offset        uint_b(4)
@@ -75,10 +74,10 @@ head    TTF_head
     unitsPerEm         uint_b(2)
     created            uint[8]
     modified           uint[8]
-    xMin               uint_b(2)
-    yMin               uint_b(2)
-    xMax               uint_b(2)
-    yMax               uint_b(2)
+    xMin               int_b(2) #FWORD
+    yMin               int_b(2) #FWORD
+    xMax               int_b(2) #FWORD
+    yMax               int_b(2) #FWORD
     macStyle           uint_b(2)
     lowestRecPPEM      uint_b(2)
     fontDirectionHint  int_b(2)
@@ -101,7 +100,7 @@ cmap    TTF_cmap
 # unicode
 #    0    3    Unicode
 # macintosh
-#    1    0
+#    1    0    mac os roman
 # iso
 #    2
 # windows
@@ -137,12 +136,12 @@ cmaptable TTF_cmap_table(.length)
             # charCode = (charCode << 8 ) + (firstCode + j);
             
         4:format4      TTF_cmap4(auto)
-            segCountX2          uint_b(2)                # 2 x segCount
-            searchRange         uint_b(2)                # 2 x (2**floor(log2(segCount)))
-            entrySelector       uint_b(2)                # log2(searchRange/2)
-            rangeShift          uint_b(2)                # 2 x segCount - searchRange
+            segCountX2          uint_b(2)                     # 2 x segCount
+            searchRange         uint_b(2)                     # 2 x (2**floor(log2(segCount)))
+            entrySelector       uint_b(2)                     # log2(searchRange/2)
+            rangeShift          uint_b(2)                     # 2 x segCount - searchRange
             endCount            uint_b(2)[div(segCountX2,2)]  # End characterCode for each segment, last =0xFFFF.
-            reservedPad         uint_b(2)                # set to 0
+            reservedPad         uint_b(2)                     # set to 0
             startCount          uint_b(2)[div(segCountX2,2)]  # Start character code for each segment.
             idDelta             uint_b(2)[div(segCountX2,2)]  
             idRangeOffset       uint_b(2)[div(segCountX2,2)]
@@ -154,10 +153,13 @@ cmaptable TTF_cmap_table(.length)
             plyphIdArray        uint_b(2)[auto]
 
 
-loca    TTF_loca(auto){$indexToLocFormat}
+loca    TTF_loca
 
-    1:loca_short uint_b[$numGlyphs]
-    2:loca_long  uint_b[$numGlyphs]
+    loca    TTF_loca_u{$indexToLocFormat}
+
+        0:loca_short  uint_b(2)[add($numGlyphs,1)]
+        1:loca_long   uint_b(4)[add($numGlyphs,1)]
+
 
 name    TTF_name($length)
     
@@ -177,38 +179,42 @@ name    TTF_name($length)
     other                byte[auto]
     data                 byte[sub($length,dataOffset)]
 
-glyf    TTF_glyf($length)
 
-    numberOfContours     uint_b(2)
-    xMin                 uint_b(2)
-    yMin                 uint_b(2)
-    xMax                 uint_b(2)
-    yMax                 uint_b(2)
+
+glyf                 TTF_glyf
+
+    numberOfContours     int_b(2)
+    xMin                 int_b(2) #FWORD
+    yMin                 int_b(2) #FWORD
+    xMax                 int_b(2) #FWORD
+    yMax                 int_b(2) #FWORD
     
-    glyphDesc            TTF_glyph_desc{ numberOfContours >= 0 }
     
-        #0:composite
-        1:simple             TTF_glyph_desc_simple
+glyphDescription     TTF_glyph_desc
+
+    glyphdesc            TTF_glyph_desc_u(auto){ ge($numberOfContours,0) }
+
+        true:simple             TTF_glyph_desc_simple
             
-            endPtsOfContours       uint_b(2)[numberOfContours]
-            instructionLength      uint_b(2)
-            instructions           byte[instructionLength]
+            endPtsOfContours     uint_b(2)[$numberOfContours]
+            instructionLength    uint_b(2)
+            instructions         byte[instructionLength]
             
-            #flags                  uint[add(last(endPtsOfContours),1)]
             #http://java.freehep.org/vectorgraphics/xref/org/freehep/graphicsio/font/truetype/TTFGlyfTable.html
-            flags                  flags{add(last(endPtsOfContours),1)}
+            flags                flags{add(last(endPtsOfContours),1)}
+            #flags                flags{last(endPtsOfContours)}
             
-            xCoordinates           coords{flags,True}
-            yCoordinates           coords{flags,False}
+            xCoordinates         coords{flags,$true}   #return array
+            yCoordinates         coords{flags,$false}  #return array
 
 
 
-post    TTF_post($length)
+post    TTF_post
     
     formatType           FIX
     atalicAngle          FIX
-    underlinePosition    uint_b(2)
-    underlineThickness   uint_b(2)
+    underlinePosition    int_b(2) #FWORD
+    underlineThickness   int_b(2) #FWORD
     isFixedPitch         uint_b(4)
     minMemType42         uint_b(4)
     maxMemType42         uint_b(4)
@@ -217,7 +223,7 @@ post    TTF_post($length)
 
 
 
-os_2   TTF_os2($length)
+os_2   TTF_os2
     
     version              uint_b(2)
     xAvgCharWidth        int_b(2)
@@ -253,7 +259,7 @@ os_2   TTF_os2($length)
     ulUnicodeRange2      uint_b(4)  # Bits 32–63
     ulUnicodeRange3      uint_b(4)  # Bits 64–95
     ulUnicodeRange4      uint_b(4)  # Bits 96–127
-    achVendID[4]         byte[4]
+    achVendID            byte[4]
     fsSelection          uint_b(2)
     usFirstCharIndex     uint_b(2)
     usLastCharIndex      uint_b(2)
@@ -262,12 +268,57 @@ os_2   TTF_os2($length)
     sTypoLineGap         uint_b(2)
     usWinAscent          uint_b(2)
     usWinDescent         uint_b(2)
-    ulCodePageRange1     uint_b(4) # Bits 0-31
-    ulCodePageRange2     uint_b(4) # Bits 32-63
+    ulCodePageRange1     uint_b(4)  # Bits 0-31
+    ulCodePageRange2     uint_b(4)  # Bits 32-63
 
 
 
+maxp    TTF_maxp
+    
+    version               FIX
+    numGlyphs             uint_b(2)
+    maxPoints             uint_b(2)
+    maxContours           uint_b(2)
+    maxCompositePoints    uint_b(2)
+    maxCompositeContours  uint_b(2)
+    maxZones              uint_b(2)
+    maxTwilightPoints     uint_b(2)
+    maxStorage            uint_b(2)
+    maxFunctionDefs       uint_b(2)
+    maxInstructionDefs    uint_b(2)
+    maxStackElements      uint_b(2)
+    maxSizeOfInstructions uint_b(2)
+    maxComponentElements  uint_b(2)
+    maxComponentDepth     uint_b(2)
 
 
+
+hhea    TTF_hhea
+
+    version               FIX
+    ascender              int_b(2)   #FWORD
+    descender             int_b(2)   #FWORD
+    lineGap               int_b(2)   #FWORD
+    advanceWidthMax       uint_b(2)  #UFWORD
+    minLeftSideBearing    int_b(2)   #FWORD
+    minRightSideBearing   int_b(2)   #FWORD
+    xMaxExtent            int_b(2)   #FWORD
+    caretSlopeRise        int_b(2)
+    reversed1             int_b(2)
+    reversed2             int_b(2)
+    reversed3             int_b(2)
+    reversed4             int_b(2)
+    reversed5             int_b(2)
+    numberOfHMetrics      uint_b(2)
+    
+
+
+hmtx    TTF_hmtx
+    
+    hMetrics                      TTF_longHorMetric[$numberOfHMetrics]
+        advanceWidth                  uint_b(2) #uFWord
+        leftSideBearing               int_b(2)  #FWord
+        
+    nonHorizontalLeftSideBearing  int_b(2)[sub($numGlyphs,$numberOfHMetrics)] #FWord
 
 

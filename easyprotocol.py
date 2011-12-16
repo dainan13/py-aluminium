@@ -104,8 +104,8 @@ def complength( e, vs, namespace ):
         return e[1]
     
     if t == 3 :
+        
         args = [ complength(a, vs, namespace) for a in e[1][1] ]
-        #print '@',e
         try :
             return namespace[e[1][0]](*args)
         except KeyError, er:
@@ -141,7 +141,7 @@ class ProtocolType( object ):
         
         r = [ self.read( namespace, fp, lens, args ) for i in range(mlens) ]
         
-        r, le = zip( *r )
+        r, le = zip( *r ) if r else ([],[0])
         
         return r, sum(le)
 
@@ -237,12 +237,21 @@ class TypeUnion( ProtocolType ):
         
         i = 0
         for m in members :
+            
             if 'seg' in m and m['seg']:
                 
                 if m['seg'] == '*:' :
                     self.defaultmember = m
                     continue
-                    
+                
+                if m['seg'] == 'true:' :
+                    self.members[True] = m
+                    continue
+                
+                if m['seg'] == 'false:' :
+                    self.members[False] = m
+                    continue
+                
                 keys = [ int(i) for i in m['seg'].strip(':').split(',') if i ]
                 for k in keys :
                     self.members[k] = m
@@ -272,7 +281,7 @@ class TypeUnion( ProtocolType ):
         m = self.members.get(args, self.defaultmember )
         
         if not m :
-            raise UndefinedValueInUnion, args
+            raise UndefinedValueInUnion, (self.name, args, self.members)
         
         if m['array'][0] == 0 : #None
             
@@ -396,17 +405,16 @@ class BuildinTypeINTB( ProtocolType ):
         
         chrs = fp.read(lens)
         
-        r = 0
-        
         chrs = list(chrs)
         chrs.reverse()
         
+        r = 0
         c = 0
         for i, c in enumerate(chrs) :
             r += ord(c) * ( 256**i )
         
-        if c >= 127 :
-            r = 256**(i+1) - r
+        if ord(c) >= 127 :
+            r = r - 256**(i+1)
         
         return r, lens
 
@@ -532,16 +540,23 @@ class EasyBinaryProtocol( object ):
                         ( 'max', max ),
                         ( 'min', min ),
                         ( 'tuple', (lambda *args : args) ),
+                        ( 'ge', (lambda a, b: a>=b ) ),
+                        ( 'le', (lambda a, b: a<=b ) ),
+                        ( 'gt', (lambda a, b: a>b ) ),
+                        ( 'lt', (lambda a, b: a<b ) ),
+                        ( 'true', True ),
+                        ( 'false', False ),
                       ]
     
     def __init__( self ):
         
-        seg = r'(?P<seg>[0-9,*]*:)'
+        seg = r'(?P<seg>([0-9,*]*|true|false):)'
         var = r'(?P<var>[a-zA-Z_]\w*)'
         name = r'(?P<name>[a-zA-Z_]\w*)'
         length = r'\((?P<length>\s*\S+?\s*)\)'
         array = r'\[(?P<array>\s*\S+\s*)\]'
-        arg = r'\{(?P<arg>\s*\S+\s*)\}'
+        #arg = r'\{(?P<arg>\s*\S+\s*)\}'
+        arg = r'\{(?P<arg>.*)\}'
 
         self.pat = '%s?%s\s+%s(%s)?(%s)?(%s)?' % (seg,var, name, length, array, arg)
         

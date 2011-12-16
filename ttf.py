@@ -26,17 +26,28 @@ class FLAGSType( ezp.ProtocolType ):
     
     def read( self, namespace, fp, lens, args ):
         
+        print '-', namespace, args
+        
         numberOfPoints = args
         repeat = 1 << 3
+        zerocheck = ( 1 << 6 ) | ( 1 << 7 )
         
         r = []
         le = 0
-        while( numberOfPoints >= 0 ):
+        while( numberOfPoints > 0 ):
             flag = ord(fp.read(1))
+            #if flag & zerocheck :
+            #    raise Exception, ('zero check error', hex(flag))
             c = ord(fp.read(1)) if (flag & repeat) else 1
+            #if c == 0 :
+            #    raise Exception, ('repeat 0', hex(flag))
             le += ( 2 if (flag&repeat) else 1 )
-            r.extends([flag]*c)
+            r.extend([flag]*min(c,numberOfPoints))
+            numberOfPoints -= c
             
+        #if numberOfPoints != 0 :
+        #    raise  Exception, ('length check error', numberOfPoints)
+        
         return r, le
         
     def read_multi( self, namespace, fp, lens, mlens, args ):
@@ -59,8 +70,11 @@ class COORDSType( ezp.ProtocolType ):
     def length( self, lens, array ):
         return None
     
+    def readbyte( self, fp ):
+        return ord(fp.read(1))
+    
     def readshort( self, fp ):
-        return ( ord(fp.read(1)) << 8 ) + fp.read(1)
+        return ( ord(fp.read(1)) << 8 ) + ord(fp.read(1))
     
     def read( self, namespace, fp, lens, args ):
         
@@ -78,9 +92,10 @@ class COORDSType( ezp.ProtocolType ):
         last = 0
         r = []
         le = 0
+        
         for flag in flags :
             if flag & short :
-                last = ( last + ord(fp.read(1)) ) if flag & positive else ( last - ord(fp.read(1)) )
+                last = ( last + self.readbyte(fp) ) if flag & positive else ( last - self.readbyte(fp) )
                 r.append( last )
                 le += 1
             else :
@@ -108,57 +123,133 @@ class TTFile(object):
         
         self.fp = open('../../../font/One Starry Night sub.ttf')
         self.directory = self.ebp.read('ttf', self.fp )['directory']
-        pprint.pprint( self.directory['entry'] )
+        self.make_entrys()
+    
+    idxsort = ['head','maxp','cmap','loca','glyf','hhea','hmtx']
+    
+    @classmethod
+    def entry_index( cls, e ):
+        try :
+            return cls.idxsort.index(e['tag'])
+        except :
+            return 100
+    
+    def make_entrys( self ):
         
-        #self.entrys = dict( for entry in self.directory )
-        cmap = dict( ( entry['tag'], entry ) for entry in self.directory['entry'] )['cmap']
-        self.fp.seek(cmap['offset'])
-        self.entrys = { 'cmap': self.ebp.read('cmap', self.fp)['cmap'] }
-        for cmapt in self.entrys['cmap'] :
+        entrys = list(self.directory['entry'])
+        entrys.sort( key = lambda e : self.entry_index(e))
+        self.entrys = {}
+        
+        for entry in entrys :
+            
+            ef = getattr( self, 'entry_'+entry['tag'].replace('/','_'), None )
+            if ef :
+                self.fp.seek(entry['offset'])
+                self.entrys[entry['tag']] = ef(entry)
+        
+        return
+        
+    def entry_head( self, head ):
+        return self.ebp.read('head', self.fp)
+    
+    def entry_post( self, post ):
+        return self.ebp.read('post', self.fp)
+    
+    def entry_os_2( self, os_2 ):
+        return self.ebp.read('os_2', self.fp)
+    
+    def entry_maxp( self, maxp ):
+        return self.ebp.read('maxp', self.fp)
+    
+    def entry_loca( self, loca ):
+        
+        _loca = self.ebp.read('loca', self.fp, numGlyphs=self.entrys['maxp']['numGlyphs'], indexToLocFormat=self.entrys['head']['indexToLocFormat'])['loca']
+        
+        if 'loca_short' in _loca :
+            _loca = tuple( l*2 for l in _loca['loca_short'] )
+        else :
+            _loca = _loca['loca_long']
+            
+        return _loca
+        
+    def entry_hhea( self, hhea ):
+        return self.ebp.read('hhea', self.fp)
+    
+    def entry_hmtx( self, hmtx ):
+        return self.ebp.read('hmtx', self.fp, numGlyphs=self.entrys['maxp']['numGlyphs'], numberOfHMetrics=self.entrys['hhea']['numberOfHMetrics'])
+    
+    def entry_glyf( self, glyf ):
+        
+        _glyf = []
+        
+        for offset in self.entrys['loca'][:-1] :
+            
+            self.fp.seek(glyf['offset']+offset)
+            g = self.ebp.read('glyf', self.fp)
+            print g['numberOfContours']
+            g['glyphDescription'] = self.ebp.read( 'glyphDescription', self.fp, numberOfContours=g['numberOfContours'] )['glyphdesc']
+            _glyf.append( g )
+            
+        return _glyf
+    
+    def entry_cmap( self, cmap ):
+        
+        _cmap = self.ebp.read('cmap', self.fp)['cmap']
+        
+        for cmapt in _cmap :
+            
             self.fp.seek(cmap['offset']+cmapt['offset'])
-            cmapt[''] = t = self.ebp.read('cmaptable', self.fp, div=(lambda a, b : a/b) )
+            cmapt[''] = t = self.ebp.read('cmaptable', self.fp)
+            
             if 'format6' in t['cmap'] :
+                
                 fm6 = t['cmap']['format6']
                 cmapt['_index'] = dict((i+fm6['firstCode'],v) for i, v in enumerate(fm6['plyphIdArray']))
+                    
                 if len(fm6['plyphIdArray']) != fm6['entryCount'] :
                     raise TTFError, 'read error.'
+                    
             elif 'format4' in t['cmap'] :
+                
                 fm4 = t['cmap']['format4']
                 r = []
+                
                 for segc, s, e, delta, offset in zip( range(fm4['segCountX2']/2,0,-1), fm4['startCount'], fm4['endCount'], fm4['idDelta'], fm4['idRangeOffset']):
                     #print '>', s, e, delta, offset
                     rs = offset/2 - segc if offset != 0 else s
                     re = rs + e - s
                     vs = [ (v+delta)%65536 for v in fm4['plyphIdArray'][rs:re] ]
                     r.extend( zip(range(s,e),vs) )
+                    
                 cmapt['_index'] = dict( r )
                 
-        name = dict( ( entry['tag'], entry ) for entry in self.directory['entry'] )['name']
-        self.fp.seek(name['offset'])
-        self.entrys['name'] = self.ebp.read('name', self.fp, length=name['length'], sub=(lambda a, b : a-b))
-        for nm in self.entrys['name']['nameRecords'] :
+        return _cmap
+        
+    def entry_name( self, name ):
+        
+        _name = self.ebp.read('name', self.fp, length=name['length'])
+        
+        for nm in _name['nameRecords'] :
+            
             rs = nm['stringOffset']
             re = nm['stringOffset'] + nm['stringLength']
-            nm['name'] = self.entrys['name']['data'][rs:re]
+            nm['name'] = _name['data'][rs:re]
+            
             if nm['encodingID'] == 1 and nm['platformID'] == 3 :
                 nm['name'] = nm['name'].decode('utf-16BE')
-            
-    
-    def make_entry( self, entry ):
-        
-        if entry['tag'] in (''):
-            self.fp.seek(entry['offset'])
-            
-        return
+                
+        return _name
         
     
 if __name__ == '__main__' :
     
     t = TTFile( 'ttf.protocol' )
     pprint.pprint( t.directory )
-    pprint.pprint( t.entrys )
+    pprint.pprint( t.entrys['loca'] )
+    print len(t.entrys['loca'])
 
-
+    # from fontTools import ttLib
+    # x = ttLib.TTFont('/home/dainan/workspace/font/One Starry Night sub.ttf')
 
 
 
