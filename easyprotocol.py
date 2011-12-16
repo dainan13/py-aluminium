@@ -106,7 +106,10 @@ def complength( e, vs, namespace ):
     if t == 3 :
         args = [ complength(a, vs, namespace) for a in e[1][1] ]
         #print '@',e
-        return namespace[e[1][0]](*args)
+        try :
+            return namespace[e[1][0]](*args)
+        except KeyError, er:
+            raise KeyError, (er,namespace,e)
         
     if t == 4 :
         return namespace[e[1]]
@@ -528,6 +531,7 @@ class EasyBinaryProtocol( object ):
                         ( 'last', (lambda a: a[-1]) ),
                         ( 'max', max ),
                         ( 'min', min ),
+                        ( 'tuple', (lambda *args : args) ),
                       ]
     
     def __init__( self ):
@@ -548,8 +552,9 @@ class EasyBinaryProtocol( object ):
     
     def rebuild_namespaces( self ):
         self.namespaces = dict( (bt.name, bt) for bt in self.buildintypes )
-        for k, v in self.buildinfunction :
-            self.namespaces[k] = v
+        #for k, v in self.buildinfunction :
+        #    self.namespaces[k] = v
+        #print 'NS:', self.namespaces
     
     def parsefile( self, fname ):
         
@@ -656,7 +661,8 @@ class EasyBinaryProtocol( object ):
         v = self.p_globals[name]
         stt = self.namespaces[v['name']]
         
-        spaces['tuple'] = lambda *args : args
+        for k, bif in self.buildinfunction :
+            spaces.setdefault(k,bif)
         
         return stt.read( spaces, SafeIO(io), v['length'], v['array'] )[0]
         
