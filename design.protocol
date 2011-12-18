@@ -1,0 +1,48 @@
+$ length = 100
+$ array = 200
+
+- STRUCT_A(length)[array] : arg1, arg2
+    name1 uint(arg1)
+    name2 uint(arg1)[arg2]
+    -     pad(auto)
+    
+$ stA = STRUCT_A
+
+s1 STRUCT_B(auto)[array]
+    name1 uint
+    name2 uint
+    name3 stA(auto)[name1] % name1, name2
+    
+- UNION_A(auto)[array] : arg1, arg2, arg3
+    1:name1 uint(1)[arg2]
+    *:name2 uint(2)[arg3]
+    
+- STRUCT_B(length) : arg1
+    
+    $ arg2 = arg1/2
+    
+    name1 uint[arg2]
+    name2 uint[arg2]
+    
+    name3 stA(@name1)[arg2] % @name1, @name2
+    
+    -     pad(auto)
+    
+    name4 uint =name4/2
+    name5 uint[arg2] =@name5/2
+    name6 uint[arg2] =(@name6+@name5)%65536
+    name7 =(name4+max(name6))%65536
+    
+- STRUCT_C
+    
+    -name1   uint(1)
+    --       UNION_B : arg1 % name1
+        1:--     uint(1)
+        2:--     uint(2)
+        3:--     uint(3)
+
+name struct(length)[array] : arg1, arg2=default, ... % input1, input2, ... # comment
+
+    case1, case2, ... : sub1 struct(length)[array] << sub1/2
+    
+    - struct
