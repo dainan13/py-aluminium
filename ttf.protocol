@@ -29,7 +29,7 @@ ttf TTF(auto)
         entry TableEntry[numberTables]
         
             tag           char[4]
-            cheksum       uint_b(4)
+            checksum      uint_b(4)
             offset        uint_b(4)
             length        uint_b(4)
 
@@ -309,6 +309,7 @@ hhea    TTF_hhea
     reversed3             int_b(2)
     reversed4             int_b(2)
     reversed5             int_b(2)
+    metricDataFormat      int_b(2)
     numberOfHMetrics      uint_b(2)
     
 
@@ -322,3 +323,6 @@ hmtx    TTF_hmtx
     nonHorizontalLeftSideBearing  int_b(2)[sub($numGlyphs,$numberOfHMetrics)] #FWord
 
 
+
+checksum  TTF_checksum($length)    
+    data   uint_b(4)[auto]

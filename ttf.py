@@ -26,7 +26,7 @@ class FLAGSType( ezp.ProtocolType ):
     
     def read( self, namespace, fp, lens, args ):
         
-        print '-', namespace, args
+        #print '-', namespace, args
         
         numberOfPoints = args
         repeat = 1 << 3
@@ -35,12 +35,14 @@ class FLAGSType( ezp.ProtocolType ):
         r = []
         le = 0
         while( numberOfPoints > 0 ):
+            
             flag = ord(fp.read(1))
             #if flag & zerocheck :
             #    raise Exception, ('zero check error', hex(flag))
+            
             c = ord(fp.read(1)) if (flag & repeat) else 1
-            #if c == 0 :
-            #    raise Exception, ('repeat 0', hex(flag))
+            if c == 0 :
+                raise Exception, ('repeat 0', hex(flag))
             le += ( 2 if (flag&repeat) else 1 )
             r.extend([flag]*min(c,numberOfPoints))
             numberOfPoints -= c
@@ -121,7 +123,8 @@ class TTFile(object):
     
     def __init__( self, filename ):
         
-        self.fp = open('../../../font/One Starry Night sub.ttf')
+        self.fp = open('../../../font/One Starry Night.ttf')
+        #self.fp = open('../../../font/arial.ttf')
         self.directory = self.ebp.read('ttf', self.fp )['directory']
         self.make_entrys()
     
@@ -150,6 +153,15 @@ class TTFile(object):
         return
         
     def entry_head( self, head ):
+        le = (head['length'] + 3) & (0xFFFFFFFC)
+        d = list(self.ebp.read('checksum', self.fp, length=le)['data'])
+        d2, d[2] = d[2], 0
+        if reduce( (lambda a,b: (a+b) & 0xFFFFFFFF ), d ) != head['checksum'] :
+            raise Exception, head
+        if 0xB1B0AFBA - head['checksum'] != d2 :
+            raise Exception, ( head, d2 )
+        
+        self.fp.seek(head['offset'])
         return self.ebp.read('head', self.fp)
     
     def entry_post( self, post ):
@@ -159,6 +171,11 @@ class TTFile(object):
         return self.ebp.read('os_2', self.fp)
     
     def entry_maxp( self, maxp ):
+        le = (maxp['length'] + 3) & (0xFFFFFFFC)
+        if reduce( (lambda a,b: (a+b) & 0xFFFFFFFF ), self.ebp.read('checksum', self.fp, length=le)['data'] ) != maxp['checksum'] :
+            raise Exception, maxp
+        
+        self.fp.seek(maxp['offset'])
         return self.ebp.read('maxp', self.fp)
     
     def entry_loca( self, loca ):
@@ -173,6 +190,12 @@ class TTFile(object):
         return _loca
         
     def entry_hhea( self, hhea ):
+        if hhea['length'] != 36 :
+            raise Exception, hhea
+        if reduce( (lambda a,b: (a+b) & 0xFFFFFFFF ), self.ebp.read('checksum', self.fp, length=36)['data'] ) != hhea['checksum'] :
+            raise Exception, hhea
+        
+        self.fp.seek(hhea['offset'])
         return self.ebp.read('hhea', self.fp)
     
     def entry_hmtx( self, hmtx ):
@@ -186,7 +209,7 @@ class TTFile(object):
             
             self.fp.seek(glyf['offset']+offset)
             g = self.ebp.read('glyf', self.fp)
-            print g['numberOfContours']
+            #print g['numberOfContours']
             g['glyphDescription'] = self.ebp.read( 'glyphDescription', self.fp, numberOfContours=g['numberOfContours'] )['glyphdesc']
             _glyf.append( g )
             
