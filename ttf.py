@@ -123,12 +123,11 @@ class TTFile(object):
     
     def __init__( self, filename ):
         
-        self.fp = open('../../../font/One Starry Night.ttf')
-        #self.fp = open('../../../font/arial.ttf')
+        self.fp = open(filename)
         self.directory = self.ebp.read('ttf', self.fp )['directory']
         self.make_entrys()
     
-    idxsort = ['head','maxp','cmap','loca','glyf','hhea','hmtx']
+    idxsort = ['head','maxp','cmap','loca','glyf','hhea','hmtx','post']
     
     @classmethod
     def entry_index( cls, e ):
@@ -153,19 +152,33 @@ class TTFile(object):
         return
         
     def entry_head( self, head ):
+        
         le = (head['length'] + 3) & (0xFFFFFFFC)
         d = list(self.ebp.read('checksum', self.fp, length=le)['data'])
         d2, d[2] = d[2], 0
         if reduce( (lambda a,b: (a+b) & 0xFFFFFFFF ), d ) != head['checksum'] :
             raise Exception, head
-        if 0xB1B0AFBA - head['checksum'] != d2 :
+        
+        self.fp.seek(0)
+        le = 12 + 16*len(self.directory['entry'])
+        le = (le+3) & (0xFFFFFFFC)
+        chks = self.ebp.read('checksum', self.fp, length=le )['data']
+        chks = reduce( (lambda a,b: (a+b) & 0xFFFFFFFF ), chks )
+        chks = reduce( (lambda a,b: (a+b) & 0xFFFFFFFF ), [ e['checksum'] for e in self.directory['entry'] ], chks )
+        if 0xB1B0AFBA - chks != d2 :
             raise Exception, ( head, d2 )
         
         self.fp.seek(head['offset'])
         return self.ebp.read('head', self.fp)
     
     def entry_post( self, post ):
-        return self.ebp.read('post', self.fp)
+        #if post['length'] != 32 :
+        #    raise Exception, post
+        #if reduce( (lambda a,b: (a+b) & 0xFFFFFFFF ), self.ebp.read('checksum', self.fp, length=32)['data'] ) != post['checksum'] :
+        #    raise Exception, post
+            
+        self.fp.seek(post['offset'])
+        return self.ebp.read('post', self.fp, numGlyphs=self.entrys['maxp']['numGlyphs'], length=post['length'])
     
     def entry_os_2( self, os_2 ):
         return self.ebp.read('os_2', self.fp)
@@ -205,13 +218,27 @@ class TTFile(object):
         
         _glyf = []
         
-        for offset in self.entrys['loca'][:-1] :
+        print self.entrys['loca']
+        
+        for offset, end in zip(self.entrys['loca'][:-1],self.entrys['loca'][1:]) :
+            
+            le = end - offset
+            if le % 4 != 0 :
+                raise Exception, '1'
+            if le == 0 :
+                continue
+            
+            self.fp.seek(glyf['offset']+offset)
+            chks = reduce( (lambda a,b: (a+b) & 0xFFFFFFFF ), self.ebp.read('checksum', self.fp, length=le)['data'] )
             
             self.fp.seek(glyf['offset']+offset)
             g = self.ebp.read('glyf', self.fp)
             #print g['numberOfContours']
             g['glyphDescription'] = self.ebp.read( 'glyphDescription', self.fp, numberOfContours=g['numberOfContours'] )['glyphdesc']
             _glyf.append( g )
+            
+            g['checksum'] = chks
+            g['length'] = le
             
         return _glyf
     
@@ -266,10 +293,12 @@ class TTFile(object):
     
 if __name__ == '__main__' :
     
-    t = TTFile( 'ttf.protocol' )
+    t = TTFile( '../../../font/One Starry Night sub.ttf' )
+    #t = TTFile( '../../../font/simhei.ttf' )
     pprint.pprint( t.directory )
-    pprint.pprint( t.entrys['loca'] )
-    print len(t.entrys['loca'])
+    pprint.pprint( t.entrys )
+    #print len(t.entrys['loca'])
+    #print t.entrys['post']
 
     # from fontTools import ttLib
     # x = ttLib.TTFont('/home/dainan/workspace/font/One Starry Night sub.ttf')

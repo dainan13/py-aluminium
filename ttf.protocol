@@ -209,7 +209,7 @@ glyphDescription     TTF_glyph_desc
 
 
 
-post    TTF_post
+post    TTF_post($length)
     
     formatType           FIX
     atalicAngle          FIX
@@ -220,6 +220,21 @@ post    TTF_post
     maxMemType42         uint_b(4)
     minMemType1          uint_b(4)
     maxMemType1          uint_b(4)
+    
+    glyphNames           TTF_glyphNames(auto){add(mul(formatType.major,10),formatType.sub)}
+        10:Format10          TTF_glyphNames_Format10(auto)
+            pad                  byte[auto]
+        20:Format20          TTF_glyphNames_Format20(auto)
+            numGlyphs            uint_b(2)
+            index                uint_b(2)[numGlyphs]
+            stt_names            TTF_glyphNames_Format20_Name_s(auto)[sub(max(index),257)]
+                namelen              uint(1)
+                name                 byte[namelen]
+        25:Format25          TTF_glyphNames_Format25
+            index                uint_b(2)[$numGlyphs]
+        30:Format30          TTF_glyphNames_Format30(auto)
+            pad                  byte[auto]
+        
 
 
 
