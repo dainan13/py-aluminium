@@ -3,10 +3,14 @@
 
 import easyprotocol as ezp
 import pprint
-
+import cStringIO
 
 class TTFError(Exception):
     pass
+
+
+def string_checksum( inp ):
+    return reduce( (lambda a,b: (a+b) & 0xFFFFFFFF ), self.ebp.read('checksum', cStringIO(inp), length=le)['data'] )
 
 
 class FLAGSType( ezp.ProtocolType ):
@@ -217,8 +221,7 @@ class TTFile(object):
     def entry_glyf( self, glyf ):
         
         _glyf = []
-        
-        print self.entrys['loca']
+        _g = []
         
         for offset, end in zip(self.entrys['loca'][:-1],self.entrys['loca'][1:]) :
             
@@ -226,6 +229,8 @@ class TTFile(object):
             if le % 4 != 0 :
                 raise Exception, '1'
             if le == 0 :
+                _glyf.append( {} )
+                _g.append( {'checksum':0, length:0, data:''} )
                 continue
             
             self.fp.seek(glyf['offset']+offset)
@@ -237,9 +242,16 @@ class TTFile(object):
             g['glyphDescription'] = self.ebp.read( 'glyphDescription', self.fp, numberOfContours=g['numberOfContours'] )['glyphdesc']
             _glyf.append( g )
             
-            g['checksum'] = chks
-            g['length'] = le
+            self.fp.seek(glyf['offset']+offset)
+            _g.append(
+                { 'checksum' : chks,
+                  'length' : le,
+                  'data' : self.fp.read(le),
+                }
+            )
             
+        self.glyf_raw = _g
+        
         return _glyf
     
     def entry_cmap( self, cmap ):
@@ -294,6 +306,35 @@ class TTFile(object):
                 
         return _name
         
+    def make_subset( self, fname, subset ):
+        
+        subset = list(unicode(subset))
+        subset.sort()
+        subset = [ ord(char) for char in subset ]
+        
+        cmapidx = self.entry['cmap']['_index'][(0,3)]
+        cmapidx = [ cmapidx[char] for char in subset ]
+        cmapidx = [0] + cmapidx
+        
+        glyf = [ self.glyf_raw[c] for c in cmapidx ]
+        glyf = {
+            'data' : ''.join( g['data'] for g in flyf ),
+            'length' : sum( g['length'] for g in flyf ),
+            'checksum' : ( sum( g['checksum'] for g in flyf ) & 0xFFFFFFFF ),
+        }
+        
+        loca = [ sum(cmapidx[:i+1]) for i in range(len(cmapidx)) ]
+        if len(loca) % 2 != 0 :
+            loca = loca + [0]
+        loca = [ loc/2 for loc in loca ]
+        loca = [ chr(loc/65536) + chr(loc%65536) for loc in loca ]
+        loca = ''.join(loca)
+        loca = {
+            'data' : loca,
+            'lenght' : len(loca),
+            'checksum' : string_checksum(loca),
+        }
+    
     
 if __name__ == '__main__' :
     
