@@ -319,6 +319,7 @@ hhea    TTF_hhea
     minRightSideBearing   int_b(2)   #FWORD
     xMaxExtent            int_b(2)   #FWORD
     caretSlopeRise        int_b(2)
+    caretSlopeRun         int_b(2)
     reversed1             int_b(2)
     reversed2             int_b(2)
     reversed3             int_b(2)

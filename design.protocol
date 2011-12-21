@@ -1,24 +1,30 @@
+# 全局变量定义
 $ length = 100
 $ array = 200
 
-- STRUCT_A(length)[array] : arg1, arg2
-    name1 uint(arg1)
-    name2 uint(arg1)[arg2]
-    -     pad(auto)
-    
-$ stA = STRUCT_A
-
-s1 STRUCT_B(auto)[array]
+# 结构定义
+- STRUCT_A(length)[array]
     name1 uint
     name2 uint
     name3 stA(auto)[name1] % name1, name2
     
+# 结构重命名
+$ stA = STRUCT_A
+
+# 带参数传递的结构体
+s1 STRUCT_B(auto)[array] : arg1, arg2
+    name1 uint(arg1)
+    name2 uint(arg1)[arg2]
+    -     pad(auto)
+    
+# 联合定义，所有成员必须使用case: name语法
 - UNION_A(auto)[array] : arg1, arg2, arg3
     1:name1 uint(1)[arg2]
     *:name2 uint(2)[arg3]
     
 - STRUCT_B(length) : arg1
     
+    # 局部变量定义
     $ arg2 = arg1/2
     
     name1 uint[arg2]
@@ -26,8 +32,10 @@ s1 STRUCT_B(auto)[array]
     
     name3 stA(@name1)[arg2] % @name1, @name2
     
+    # 匿名成员，不会出现在成员表中
     -     pad(auto)
     
+    # 数值重入，将读出的数据进行操作后重新写入成员
     name4 uint =name4/2
     name5 uint[arg2] =@name5/2
     name6 uint[arg2] =(@name6+@name5)%65536
@@ -35,6 +43,7 @@ s1 STRUCT_B(auto)[array]
     
 - STRUCT_C
     
+    # 变量成员，不会出现在成员表中，但会赋值给变量
     -name1   uint(1)
     --       UNION_B : arg1 % name1
         1:--     uint(1)
@@ -43,6 +52,8 @@ s1 STRUCT_B(auto)[array]
 
 name struct(length)[array] : arg1, arg2=default, ... % input1, input2, ... # comment
 
-    case1, case2, ... : sub1 struct(length)[array] << sub1/2
+    1, 2 : sub1 struct(length)[array] << sub1/2
+    
+    3 ... 6 : sub1 struct(length*2)[array] << sub1/2
     
     - struct

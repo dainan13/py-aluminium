@@ -37,10 +37,10 @@ class FLAGSType( ezp.ProtocolType ):
         while( numberOfPoints > 0 ):
             
             flag = ord(fp.read(1))
-            #if flag & zerocheck :
-            #    raise Exception, ('zero check error', hex(flag))
+            if flag & zerocheck :
+                raise Exception, ('zero check error', hex(flag))
             
-            c = ord(fp.read(1)) if (flag & repeat) else 1
+            c = ord(fp.read(1))+1 if (flag & repeat) else 1
             if c == 0 :
                 raise Exception, ('repeat 0', hex(flag))
             le += ( 2 if (flag&repeat) else 1 )
@@ -244,9 +244,10 @@ class TTFile(object):
     
     def entry_cmap( self, cmap ):
         
-        _cmap = self.ebp.read('cmap', self.fp)['cmap']
+        _cmap = self.ebp.read('cmap', self.fp)
+        _idx = _cmap['_index'] = {}
         
-        for cmapt in _cmap :
+        for cmapt in _cmap['cmap'] :
             
             self.fp.seek(cmap['offset']+cmapt['offset'])
             cmapt[''] = t = self.ebp.read('cmaptable', self.fp)
@@ -254,7 +255,7 @@ class TTFile(object):
             if 'format6' in t['cmap'] :
                 
                 fm6 = t['cmap']['format6']
-                cmapt['_index'] = dict((i+fm6['firstCode'],v) for i, v in enumerate(fm6['plyphIdArray']))
+                _idx[(cmapt['platformID'],cmapt['encodingID'])] = dict((i+fm6['firstCode'],v) for i, v in enumerate(fm6['plyphIdArray']))
                     
                 if len(fm6['plyphIdArray']) != fm6['entryCount'] :
                     raise TTFError, 'read error.'
@@ -266,13 +267,16 @@ class TTFile(object):
                 
                 for segc, s, e, delta, offset in zip( range(fm4['segCountX2']/2,0,-1), fm4['startCount'], fm4['endCount'], fm4['idDelta'], fm4['idRangeOffset']):
                     #print '>', s, e, delta, offset
-                    rs = offset/2 - segc if offset != 0 else s
-                    re = rs + e - s
-                    vs = [ (v+delta)%65536 for v in fm4['plyphIdArray'][rs:re] ]
-                    r.extend( zip(range(s,e),vs) )
+                    if offset != 0 :
+                        rs = offset/2 - segc
+                        re = rs + e - s
+                        vs = [ (v+delta)%65536 for v in fm4['plyphIdArray'][rs:re+1] ]
+                        r.extend( zip(range(s,e+1),vs) )
+                    else :
+                        r.extend( [ (k, (k+delta)%65536) for k in range(s,e+1) ] )
                     
-                cmapt['_index'] = dict( r )
-                
+                _idx[(cmapt['platformID'],cmapt['encodingID'])] = dict( r )
+        
         return _cmap
         
     def entry_name( self, name ):
