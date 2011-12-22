@@ -552,6 +552,14 @@ class SQLConnectionPool( object ):
     '''
     
     default_timeout = 2
+    writeRetryError = (
+        2006,
+    )
+
+    readRetryError = (
+            2006,
+            2013, # timeout
+    )
     
     def __init__( self, ):
         
@@ -632,7 +640,7 @@ class SQLConnectionPool( object ):
                     r, fs = self._read_with_cols( conn, sql )
                     rconn = conn
                 except MySQLdb.OperationalError, e :
-                    if e.args[0] == 2006 :
+                    if e.args[0] in self.readRetryError:
                         conn = self._get( conn_args, False, sql, infos )
                         self._traceback( infos, False, 
                                          tuple(conn_args), sql, -1, None )
@@ -671,7 +679,7 @@ class SQLConnectionPool( object ):
                     rconn = conn
                     break
                 except MySQLdb.OperationalError, e :
-                    if e.args[0] == 2006 :
+                    if e.args[0] in self.readRetryError:
                         conn = self._get( conn_args, False, sql, infos )
                         self._traceback( infos, False, 
                                          tuple(conn_args), sql, -1, None )
@@ -712,7 +720,7 @@ class SQLConnectionPool( object ):
                     rconn = conn
                     break
                 except MySQLdb.OperationalError, e :
-                    if e.args[0] == 2006 :
+                    if e.args[0] in self.writeRetryError:
                         conn = self._get( conn_args, True, sql, infos )
                         self._traceback( infos, True, 
                                          tuple(conn_args), sql, -1, None )
