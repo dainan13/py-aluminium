@@ -1,4 +1,4 @@
-
+# -*- coding: utf-8 -*-
 
 
 import easyprotocol as ezp
@@ -159,7 +159,7 @@ class TTFile(object):
         
         for entry in entrys :
             
-            ef = getattr( self, 'entry_'+entry['tag'].replace('/','_'), None )
+            ef = getattr( self, 'entry_'+entry['tag'].replace('/','_').replace(' ','_'), None )
             if ef :
                 self.fp.seek(entry['offset'])
                 self.entrys[entry['tag']] = ef(entry)
@@ -197,7 +197,21 @@ class TTFile(object):
     
     def entry_os_2( self, os_2 ):
         return self.ebp.read('os_2', self.fp)
-    
+
+
+    def entry_kern( self, kern ):
+        return self.ebp.read('kern', self.fp)
+
+    def entry_prep( self, prep ):
+        return self.ebp.read('prep', self.fp, length=prep['length'])
+
+    def entry_cvt_( self, cvt ):
+        return self.ebp.read('cvt', self.fp, length=cvt['length'])
+
+    def entry_fpgm( self, fpgm ):
+        return self.ebp.read('fpgm', self.fp, length=fpgm['length'])
+
+
     def entry_maxp( self, maxp ):
         le = (maxp['length'] + 3) & (0xFFFFFFFC)
         if reduce( (lambda a,b: (a+b) & 0xFFFFFFFF ), self.ebp.read('checksum', self.fp, length=le)['data'] ) != maxp['checksum'] :
@@ -237,15 +251,18 @@ class TTFile(object):
         for offset, end in zip(self.entrys['loca'][:-1],self.entrys['loca'][1:]) :
             
             le = end - offset
-            if le % 4 != 0 :
-                raise Exception, 'glyf 1ength error'
+            #if le % 4 != 0 :
+            #    raise Exception, 'glyf 1ength error'
             if le == 0 :
                 _glyf.append( {} )
                 _g.append( {'checksum':0, 'length':0, 'data':''} )
                 continue
             
             self.fp.seek(glyf['offset']+offset)
-            chks = reduce( (lambda a,b: (a+b) & 0xFFFFFFFF ), self.ebp.read('checksum', self.fp, length=le)['data'] )
+            xle = le % 4
+            xle = 4-xle if xle else 0
+            xle = le + xle
+            chks = reduce( (lambda a,b: (a+b) & 0xFFFFFFFF ), self.ebp.read('checksum', self.fp, length=xle)['data'] )
             
             self.fp.seek(glyf['offset']+offset)
             g = self.ebp.read('glyf', self.fp)
@@ -323,20 +340,32 @@ class TTFile(object):
         subset = [ ord(char) for char in subset ]
         subset.sort()
         
-        cmapidx = self.entrys['cmap']['_index'][(0,3)]
+        uni = (3,1) # (0,3)
+        
+        cmapidx = self.entrys['cmap']['_index'][uni]
         cmapidx = [ cmapidx[char] for char in subset ]
         cmapidx = [0] + cmapidx
 
         charidx = dict([ (char, i+1) for i,char in enumerate(subset) ])
+        anticmapidx = [ (v,k) for k, v in self.entrys['cmap']['_index'][uni].items() if v != 0 ]
+        anticmapidx = dict(anticmapidx)
 
         numGlyphs = len(cmapidx)
         
         glyf = [ self.glyf_raw[c] for c in cmapidx ]
         glyflen = [ g['length'] for g in glyf ]
+        #glyf = {
+        #    'data' : ''.join( g['data'] for g in glyf ),
+        #    'length' : sum( g['length'] for g in glyf ),
+        #    'checksum' : ( sum( g['checksum'] for g in glyf ) & 0xFFFFFFFF ),
+        #    'tag' : 'glyf',
+        #}
+        
+        glyfdata = ''.join( g['data'] for g in glyf )
         glyf = {
-            'data' : ''.join( g['data'] for g in glyf ),
-            'length' : sum( g['length'] for g in glyf ),
-            'checksum' : ( sum( g['checksum'] for g in glyf ) & 0xFFFFFFFF ),
+            'data' : glyfdata,
+            'length' : len(glyfdata),
+            'checksum' : string_checksum(glyfdata),
             'tag' : 'glyf',
         }
         
@@ -536,7 +565,78 @@ class TTFile(object):
         }
         
         
-        allentry = [cmap,glyf,head,hhea,hmtx,loca,maxp,name,post,os_2]
+        extentry = []
+        if 'kern' in self.entrys :
+            
+            print 'kern founded.'
+            
+            _kern = self.entrys['kern']
+            kern = []
+            for _ktable in _kern['subTables'] :
+                if _ktable['format'] != 0 :
+                    continue
+                field = _ktable['field']['format0']['values']
+                field = [ (f['left'],f['right'],f['value']) for f in field ]
+                field = [ (anticmapidx[l],anticmapidx[r],v) for l, r, v in field ]
+                field = [ (charidx[l],charidx[r],v) for l, r, v in field
+                          if l in charidx and r in charidx
+                        ]
+                fele = len(field)
+                field = ''.join( struct.pack('>HHh',l,r,v) for l, r, v in field )
+                fesch, fesel = searchrange(fele)
+                field = struct.pack('>HHHH',fele,fesch*6/2,fesel-2,fele*6-fesch*6/2) + field
+                field = struct.pack('>HHBB',0,len(field)+6,0,1) + field
+                kern.append(field)
+            kern = struct.pack('>HH',0,len(kern)) + ''.join(kern)
+            kern = {
+                'data' : kern,
+                'length' : len(kern),
+                'checksum' : string_checksum(kern),
+                'tag' : 'kern',
+            }
+            extentry.append(kern)
+        
+        if 'prep' in self.entrys :
+            
+            print 'prep founded.'
+            
+            self.fp.seek( self.dirs['prep']['offset'] )
+            prep = {
+                'data' : self.fp.read( self.dirs['prep']['length'] ),
+                'length' : self.dirs['prep']['length'],
+                'checksum' : self.dirs['prep']['checksum'],
+                'tag' : 'prep',
+            }
+            extentry.append(prep)
+            
+        if 'cvt ' in self.entrys :
+            
+            print 'prep founded.'
+            
+            self.fp.seek( self.dirs['cvt ']['offset'] )
+            cvt = {
+                'data' : self.fp.read( self.dirs['cvt ']['length'] ),
+                'length' : self.dirs['cvt ']['length'],
+                'checksum' : self.dirs['cvt ']['checksum'],
+                'tag' : 'cvt ',
+            }
+            extentry.append(cvt)
+            
+        if 'fpgm' in self.entrys :
+            
+            print 'fpgm founded.'
+            
+            self.fp.seek( self.dirs['fpgm']['offset'] )
+            fpgm = {
+                'data' : self.fp.read( self.dirs['fpgm']['length'] ),
+                'length' : self.dirs['fpgm']['length'],
+                'checksum' : self.dirs['fpgm']['checksum'],
+                'tag' : 'fpgm',
+            }
+            extentry.append(fpgm)
+        
+        allentry = [cmap,glyf,head,hhea,hmtx,loca,maxp,name,post,os_2] + extentry
+        
         offset = 12+len(allentry)*16
         for e in allentry :
             e['offset'] = offset
@@ -554,7 +654,7 @@ class TTFile(object):
         dirsch, dirsel = searchrange(10)
         dirs = struct.pack('>HHHHHH',
             self.directory['sfntversion']['major'], self.directory['sfntversion']['sub'],
-            10,
+            len(allentry),
             dirsch*8,
             dirsel/2,
             10*16 - dirsch*8,
@@ -605,14 +705,14 @@ class TTFile(object):
     
 if __name__ == '__main__' :
     
-    t = TTFile( '../../../font/One Starry Night sub.ttf' )
-    #t = TTFile( '../../../font/simhei.ttf' )
+    #t = TTFile( '../../../font/One Starry Night sub.ttf' )
+    t = TTFile( '../../../font/simhei.ttf' )
     #pprint.pprint( t.directory )
     #pprint.pprint( t.entrys )
     #print len(t.entrys['loca'])
     #print t.entrys['post']
     
-    t.make_subset('osnsub.ttf','abcd')
+    t.make_subset('simheisub.ttf','世界你好'.decode('utf8'))
 
     # from fontTools import ttLib
     # x = ttLib.TTFont('/home/dainan/workspace/font/One Starry Night sub.ttf')

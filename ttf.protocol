@@ -1,5 +1,6 @@
 
-#http://bbs.chinaunix.net/thread-2041402-1-1.html
+# http://developer.apple.com/fonts/TTRefMan/RM06/Chap6.html
+# http://bbs.chinaunix.net/thread-2041402-1-1.html
 
 # BYTE     8-bit unsigned integer.
 # CHAR     8-bit signed integer.
@@ -339,6 +340,50 @@ hmtx    TTF_hmtx
     nonHorizontalLeftSideBearing  int_b(2)[sub($numGlyphs,$numberOfHMetrics)] #FWord
 
 
+kern    TTF_kern(auto)
+
+    version               uint_b(2)
+    nTables               uint_b(2)
+    
+    subTables             TTF_kern_table(.length)[nTables]
+    
+        version               uint_b(2)
+        length                uint_b(2)
+        #coverage              uint_b(2)
+        format                uint_b(1)
+        subcoverage           uint_b(1)
+        
+        field                 TTF_kern_field(auto){format}
+        
+            0:format0             TTF_kern_field0(auto)
+            
+                nPairs                uint_b(2)
+                searchRange           uint_b(2)
+                entrySelector         uint_b(2)
+                rangeShift            uint_b(2)
+                
+                values            TTF_kern_v[nPairs]
+                
+                    left              uint_b(2)
+                    right             uint_b(2)
+                    value             int_b(2)
+                    
+            # only supported format 0
+            
+            
+prep    TTF_prep($length)
+    vars          byte[auto]
+
+cvt     TTF_cvt($length)
+    vars          uint_b(2)[auto]
+
+fpgm    TTF_fpgm($length)
+    instructions  byte[auto]
+
 
 checksum  TTF_checksum($length)    
     data   uint_b(4)[auto]
+
+
+
+

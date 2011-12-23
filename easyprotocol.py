@@ -215,7 +215,10 @@ class TypeStruct( ProtocolType ):
             else :
                 
                 array = complength( m['array'], r, namespace )
-                le = complength( m['length'], r, namespace )
+                try :
+                    le = complength( m['length'], r, namespace )
+                except KeyError :
+                    le = m['length']
                 
                 a = complength( m['arg'], r, namespace )
                 
@@ -517,7 +520,6 @@ class SafeIO( object ):
         if len(r) != lens :
             raise ConnectionError, 'Connection Error'
         return r
-        
         
 
 class EasyBinaryProtocol( object ):
