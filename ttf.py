@@ -250,7 +250,10 @@ class TTFile(object):
         return self.ebp.read('hhea', self.fp)
     
     def entry_hmtx( self, hmtx ):
-        return self.ebp.read('hmtx', self.fp, numGlyphs=self.entrys['maxp']['numGlyphs'], numberOfHMetrics=self.entrys['hhea']['numberOfHMetrics'])
+        r = self.ebp.read('hmtx', self.fp, numGlyphs=self.entrys['maxp']['numGlyphs'], numberOfHMetrics=self.entrys['hhea']['numberOfHMetrics'])
+        self.hmtxmetrix = [ ( hm['advanceWidth'], hm['leftSideBearing'] ) for hm in r['hMetrics'] ] + \
+                          [ ( r['hMetrics'][-1]['advanceWidth'], nhlsb ) for nhlsb in r['nonHorizontalLeftSideBearing']]
+        return r
     
     def entry_glyf( self, glyf ):
         
@@ -448,10 +451,12 @@ class TTFile(object):
             'tag' : 'hhea',
         }
         
-        print _hhea['numberOfHMetrics'], _maxp['numGlyphs']
+        #print _hhea['numberOfHMetrics'], _maxp['numGlyphs']
         
-        hmtx = [ self.entrys['hmtx']['hMetrics'][c] for c in cmapidx ]
-        hmtx = [ struct.pack('>Hh', v['advanceWidth'], v['leftSideBearing'] ) for v in hmtx ]
+        #hmtx = [ self.entrys['hmtx']['hMetrics'][c] for c in cmapidx ]
+        #hmtx = [ struct.pack('>Hh', v['advanceWidth'], v['leftSideBearing'] ) for v in hmtx ]
+        hmtx = [ self.hmtxmetrix[c] for c in cmapidx ]
+        hmtx = [ struct.pack('>Hh', a, lsb) for a, lsb in hmtx ]
         hmtx = ''.join(hmtx)
         hmtx = {
             'data' : hmtx,
@@ -732,8 +737,7 @@ class TTFile(object):
             _head['macStyle'],
             _head['lowestRecPPEM'],
             _head['fontDirectionHint'],
-            #_head['indexToLocFormat'],
-            0,
+            0, #_head['indexToLocFormat'],
             _head['glyphDataFromat'],
         )
         head['data'] = realhead
