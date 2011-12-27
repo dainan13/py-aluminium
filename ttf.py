@@ -169,7 +169,9 @@ class TTFile(object):
             ef = getattr( self, 'entry_'+entry['tag'].replace('/','_').replace(' ','_'), None )
             if ef :
                 self.fp.seek(entry['offset'])
+                print entry['tag'], self.fp.tell(), entry['offset'],
                 self.entrys[entry['tag']] = ef(entry)
+                print entry['length'], self.fp.tell(), entry['offset']+entry['length']
         
         return
         
@@ -293,6 +295,9 @@ class TTFile(object):
         
         _cmap = self.ebp.read('cmap', self.fp)
         _idx = _cmap['_index'] = {}
+        #_cmap['cmap'] = list(_cmap['cmap'])
+        #_cmap['cmap'].sort( key = lambda x : x['offset'] )
+        #print _cmap['cmap']
         
         for cmapt in _cmap['cmap'] :
             
@@ -341,17 +346,22 @@ class TTFile(object):
                 
         return _name
         
-    def make_subset( self, fname, subset ):
+    def make_subset( self, fname, subset, ignore=False ):
         
         subset = list(unicode(subset))
         subset = [ ord(char) for char in subset ]
-        subset.sort()
+        subset = [ char for char in subset if char!=0 and char!=65535]
         
         uni = (3,1) # (0,3)
         
         cmapidx = self.entrys['cmap']['_index'][uni]
         
-        subset = [ char for char in subset if char in cmapidx ]
+        if ignore == True :
+            subset = [ char for char in subset if char in cmapidx ]
+        else :
+            errorsub = [ unichr(char) for char in subset if char not in cmapidx ]
+            if errorsub :
+                raise TTFError, ('chr not found in font', errorsub)
         
         cmapidx = [ cmapidx[char] for char in subset ]
         cmapidx = [0] + cmapidx
@@ -438,7 +448,8 @@ class TTFile(object):
             'tag' : 'hhea',
         }
         
-        #hmtx = ''.join( struct.pack('>Hh', v['advanceWidth'], v['leftSideBearing'] ) for v in self.entrys['hmtx']['hMetrics'] )
+        print _hhea['numberOfHMetrics'], _maxp['numGlyphs']
+        
         hmtx = [ self.entrys['hmtx']['hMetrics'][c] for c in cmapidx ]
         hmtx = [ struct.pack('>Hh', v['advanceWidth'], v['leftSideBearing'] ) for v in hmtx ]
         hmtx = ''.join(hmtx)
@@ -474,24 +485,22 @@ class TTFile(object):
         f6len = len(format6)+6
         format6 = struct.pack('>HHH',6,f6len,0) + format6
         
-        format4 = [(None,None)]
-        for c in subset :
-            if format4[-1][0] == None :
-                format4[-1] = (c,c)
-                continue
+        format4 = [(subset[0],subset[0])]
+        for c in subset[1:] :
             if format4[-1][1] == c-1 :
                 format4[-1] = (format4[-1][0],c)
                 continue
-            format4.append((None,None))
+            format4.append((c,c))
         
-        if format4[-1][0] == None :
-            format4[-1] = (65535,65535)
-        elif format4[-1][1] == None :
+        if format4[-1][1] == None :
             format4[-1] = (format4[-1][0],format4[-1][0])
             format4.append((65535,65535))
         else :
             format4.append((65535,65535))
-            
+        
+        #print '-'*30
+        #print format4
+        
         format4 = [ (st,en,(charidx.get(st,0)-st+65536)%65536) for st, en in format4 ]
         format4st = ''.join([ chr(st/256) + chr(st%256) for st in zip(*format4)[0] ])
         format4en = ''.join([ chr(en/256) + chr(en%256) for en in zip(*format4)[1] ])
@@ -511,8 +520,8 @@ class TTFile(object):
         cmap = struct.pack('>HHHHIHHIHHI',
             0, 3,
             0, 3, 28,
-            3, 1, 28,
             1, 0, f4len+28,
+            3, 1, 28,
         )
         
         cmap = cmap + format4 + format6
@@ -524,25 +533,53 @@ class TTFile(object):
             'tag' : 'cmap',
         }
         
+        
         _post = self.entrys['post']
-        post = struct.pack('>HHHHhhIIIII',
-            3, 0,
-            _post['atalicAngle']['major'], _post['atalicAngle']['sub'],
-            _post['underlinePosition'],
-            _post['underlineThickness'],
-            _post['isFixedPitch'],
-            _post['minMemType42'],
-            _post['maxMemType42'],
-            _post['minMemType1'],
-            _post['maxMemType1'],
-        )
+        if _post['formatType']['major'] == 2 and _post['formatType']['sub'] == 0 :
+
+            post = struct.pack('>HHHHhhIIIII',
+                2, 0,
+                _post['atalicAngle']['major'], _post['atalicAngle']['sub'],
+                _post['underlinePosition'],
+                _post['underlineThickness'],
+                _post['isFixedPitch'],
+                _post['minMemType42'],
+                _post['maxMemType42'],
+                _post['minMemType1'],
+                _post['maxMemType1'],
+            )
+            
+            f20 = _post['glyphNames']['Format20']
+            
+            gnindex = [ f20['index'][c] for c in cmapidx ]
+            gnindex = [ chr(c/256)+chr(c%256) for c in gnindex ]
+            gnindex = ''.join(gnindex)
+            names = [ chr(s['namelen'])+s['name'] for s in f20['stt_names'] ]
+            names = ''.join(names)
+            
+            post = post + ( chr(numGlyphs/256) + chr(numGlyphs%256) + gnindex + names )
+
+        else :
+            
+            post = struct.pack('>HHHHhhIIIII',
+                3, 0,
+                _post['atalicAngle']['major'], _post['atalicAngle']['sub'],
+                _post['underlinePosition'],
+                _post['underlineThickness'],
+                _post['isFixedPitch'],
+                _post['minMemType42'],
+                _post['maxMemType42'],
+                _post['minMemType1'],
+                _post['maxMemType1'],
+            )
+
         post = {
             'data' : post,
             'length' : len(post),
             'checksum' : string_checksum(post),
             'tag' : 'post',
         }
-        
+
         _head = self.entrys['head']
         head = struct.pack('>HHHHIIHH8s8shhhhHHhhh',
             _head['version']['major'], _head['version']['sub'],
@@ -660,14 +697,16 @@ class TTFile(object):
         
         #dirsch, dirsel = searchrange(10)
         dirsearchrange, direntryselector, dirrangeshift = make_ser(len(allentry),16)
+        sorted_allentry = allentry[:]
+        sorted_allentry.sort( key = lambda x: x['tag'] )
         dirs = struct.pack('>HHHHHH',
             self.directory['sfntversion']['major'], self.directory['sfntversion']['sub'],
             len(allentry),
             dirsearchrange,
             direntryselector,
             dirrangeshift,
-        ) + ''.join( e['entrydata'] for e in allentry )
-            
+        ) + ''.join( e['entrydata'] for e in sorted_allentry )
+        
         dirs = {
             'data' : dirs,
             'length' : len(dirs),
@@ -677,7 +716,7 @@ class TTFile(object):
         allchecksum = sum([ e['checksum'] for e in allentry ], dirs['checksum'])
         allchecksum = allchecksum & 0xFFFFFFFF
         
-        head = struct.pack('>HHHHIIHH8s8shhhhHHhhh',
+        realhead = struct.pack('>HHHHIIHH8s8shhhhHHhhh',
             _head['version']['major'], _head['version']['sub'],
             _head['reversion']['major'],_head['reversion']['sub'],
             0xB1B0AFBA - allchecksum,
@@ -697,12 +736,7 @@ class TTFile(object):
             0,
             _head['glyphDataFromat'],
         )
-        head = {
-            'data' : head,
-            'length' : len(head),
-            'checksum' : string_checksum(head),
-            'tag' : 'head',
-        }
+        head['data'] = realhead
         
         fp = open(fname,'wb')
         fp.write(dirs['data'])
@@ -713,241 +747,40 @@ class TTFile(object):
     
 if __name__ == '__main__' :
     
-    t = TTFile( '../../../font/One Starry Night sub.ttf' )
-    #t = TTFile( '../../../font/simhei.ttf' )
+    #t = TTFile( '../../../font/One Starry Night sub.ttf' )
+    t = TTFile( '../../../font/simhei.ttf' )
     #pprint.pprint( t.directory )
     #pprint.pprint( t.entrys )
     #print len(t.entrys['loca'])
     #print t.entrys['post']
 
-    subset = [u' ', 
- u'!',
- u'"',
- u'#',
- u'$',
- u'%',
- u'&',
- u"'",
- u'(',
- u')',
- u'*',
- u'+',
- u',',
- u'-',
- u'.',
- u'/',
- u'0',
- u'1',
- u'2',
- u'3',
- u'4',
- u'5',
- u'6',
- u'7',
- u'8',
- u'9',
- u':',
- u';',
- u'<',
- u'=',
- u'>',
- u'?',
- u'@',
- u'A',
- u'B',
- u'C',
- u'D',
- u'E',
- u'F',
- u'G',
- u'H',
- u'I',
- u'J',
- u'K',
- u'L',
- u'M',
- u'N',
- u'O',
- u'P',
- u'Q',
- u'R',
- u'S',
- u'T',
- u'U',
- u'V',
- u'W',
- u'X',
- u'Y',
- u'Z',
- u'[',
- u'\\',
- u']',
- u'^',
- u'_',
- u'`',
- u'a',
- u'b',
- u'c',
- u'd',
- u'e',
- u'f',
- u'g',
- u'h',
- u'i',
- u'j',
- u'k',
- u'l',
- u'm',
- u'n',
- u'o',
- u'p',
- u'q',
- u'r',
- u's',
- u't',
- u'u',
- u'v',
- u'w',
- u'x',
- u'y',
- u'z',
- u'{',
- u'|',
- u'}',
- u'~',
- u'\x7f',
- u'\x80',
- u'\x81',
- u'\x82',
- u'\x83',
- u'\x84',
- u'\x85',
- u'\x86',
- u'\x87',
- u'\x88',
- u'\x89',
- u'\x8a',
- u'\x8b',
- u'\x8c',
- u'\x8d',
- u'\x8e',
- u'\x8f',
- u'\x90',
- u'\x91',
- u'\x92',
- u'\x93',
- u'\x94',
- u'\x95',
- u'\x96',
- u'\x97',
- u'\x98',
- u'\x99',
- u'\x9a',
- u'\x9b',
- u'\x9c',
- u'\x9d',
- u'\x9e',
- u'\x9f',
- u'\xa0',
- u'\xa1',
- u'\xa2',
- u'\xa3',
- u'\xa4',
- u'\xa5',
- u'\xa6',
- u'\xa7',
- u'\xa8',
- u'\xa9',
- u'\xaa',
- u'\xab',
- u'\xac',
- u'\xad',
- u'\xae',
- u'\xaf',
- u'\xb0',
- u'\xb1',
- u'\xb2',
- u'\xb3',
- u'\xb4',
- u'\xb5',
- u'\xb6',
- u'\xb7',
- u'\xb8',
- u'\xb9',
- u'\xba',
- u'\xbb',
- u'\xbc',
- u'\xbd',
- u'\xbe',
- u'\xbf',
- u'\xc0',
- u'\xc1',
- u'\xc2',
- u'\xc3',
- u'\xc4',
- u'\xc5',
- u'\xc6',
- u'\xc7',
- u'\xc8',
- u'\xc9',
- u'\xca',
- u'\xcb',
- u'\xcc',
- u'\xcd',
- u'\xce',
- u'\xcf',
- u'\xd0',
- u'\xd1',
- u'\xd2',
- u'\xd3',
- u'\xd4',
- u'\xd5',
- u'\xd6',
- u'\xd7',
- u'\xd8',
- u'\xd9',
- u'\xda',
- u'\xdb',
- u'\xdc',
- u'\xdd',
- u'\xde',
- u'\xdf',
- u'\xe0',
- u'\xe1',
- u'\xe2',
- u'\xe3',
- u'\xe4',
- u'\xe5',
- u'\xe6',
- u'\xe7',
- u'\xe8',
- u'\xe9',
- u'\xea',
- u'\xeb',
- u'\xec',
- u'\xed',
- u'\xee',
- u'\xef',
- u'\xf0',
- u'\xf1',
- u'\xf2',
- u'\xf3',
- u'\xf4',
- u'\xf5',
- u'\xf6',
- u'\xf7',
- u'\xf8',
- u'\xf9',
- u'\xfa',
- u'\xfb',
- u'\xfc',
- u'\xfd',
- u'\xfe',
- u'\xff',
- u'\uffff']
+    subset = [
+        u' ', u'!', u'"', u'#', u'$', u'%', u'&', u"'",
+        u'(', u')', u'*', u'+', u',', u'-', u'.', u'/',
+        u'0', u'1', u'2', u'3', u'4', u'5', u'6', u'7', u'8', u'9',
+        u':', u';', u'<', u'=', u'>', u'?', u'@',
+        u'A', u'B', u'C', u'D', u'E', u'F', u'G', u'H',
+        u'I', u'J', u'K', u'L', u'M', u'N', u'O', u'P',
+        u'Q', u'R', u'S', u'T', u'U', u'V', u'W', u'X', u'Y', u'Z',
+        u'[', u'\\', u']', u'^', u'_', u'`',
+        u'a', u'b', u'c', u'd', u'e', u'f', u'g', u'h',
+        u'i', u'j', u'k', u'l', u'm', u'n', u'o', u'p',
+        u'q', u'r', u's', u't', u'u', u'v', u'w', u'x', u'y', u'z',
+        u'{', u'|', u'}', u'~',
 
-    t.make_subset('osnsub.ttf',''.join(subset))
-    #t.make_subset('simheisub.ttf','世界你好'.decode('utf8'))
+        u'\x7f', 
+        u'\x80', u'\x81', u'\x82', u'\x83', u'\x84', u'\x85', u'\x86', u'\x87', 
+        u'\x88', u'\x89', u'\x8a', u'\x8b', u'\x8c', u'\x8d', u'\x8e', u'\x8f',
+        u'\x90', u'\x91', u'\x92', u'\x93', u'\x94', u'\x95', u'\x96', u'\x97',
+        u'\x98', u'\x99', u'\x9a', u'\x9b', u'\x9c', u'\x9d', u'\x9e', u'\x9f',
+        u'\xa0', u'\xa1', u'\xa2', u'\xa3', u'\xa4', u'\xa5', u'\xa6', u'\xa7',
+        u'\xa8', u'\xa9', u'\xaa', u'\xab', u'\xac', u'\xad', u'\xae', u'\xaf',
+
+        u'\uffff',
+    ]
+
+    #t.make_subset('osnsub.ttf',''.join(subset), True)
+    t.make_subset('simheisub.ttf','世界你好'.decode('utf8'))
 
 
 
