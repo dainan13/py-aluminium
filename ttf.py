@@ -15,13 +15,20 @@ def string_checksum( inp ):
         inp = inp + chr(0)*(4-(len(inp) % 4))
     return reduce( (lambda a,b: (a+b) & 0xFFFFFFFF ), TTFile.ebp.read('checksum', cStringIO.StringIO(inp), length=len(inp))['data'] )
 
-def searchrange( inp ):
-    a = 1
-    b = 1
-    while( a < inp ):
-        a = a*2
-        b += 1
-    return a, b
+def make_ser( inp, nbyte ):
+    
+    if inp < 1 :
+        raise TTFError, 'make ser error.'
+    
+    searchrange = 1
+    entryselector = 0
+    
+    while( searchrange*2 < inp ):
+        searchrange = searchrange*2
+        entryselector += 1
+        
+    return nbyte*searchrange, entryselector, nbyte*(inp-searchrange)
+    
 
 class FLAGSType( ezp.ProtocolType ):
     
@@ -343,6 +350,9 @@ class TTFile(object):
         uni = (3,1) # (0,3)
         
         cmapidx = self.entrys['cmap']['_index'][uni]
+        
+        subset = [ char for char in subset if char in cmapidx ]
+        
         cmapidx = [ cmapidx[char] for char in subset ]
         cmapidx = [0] + cmapidx
 
@@ -354,12 +364,6 @@ class TTFile(object):
         
         glyf = [ self.glyf_raw[c] for c in cmapidx ]
         glyflen = [ g['length'] for g in glyf ]
-        #glyf = {
-        #    'data' : ''.join( g['data'] for g in glyf ),
-        #    'length' : sum( g['length'] for g in glyf ),
-        #    'checksum' : ( sum( g['checksum'] for g in glyf ) & 0xFFFFFFFF ),
-        #    'tag' : 'glyf',
-        #}
         
         glyfdata = ''.join( g['data'] for g in glyf )
         glyf = {
@@ -434,7 +438,10 @@ class TTFile(object):
             'tag' : 'hhea',
         }
         
-        hmtx = ''.join( struct.pack('>Hh', v['advanceWidth'], v['leftSideBearing'] ) for v in self.entrys['hmtx']['hMetrics'] )
+        #hmtx = ''.join( struct.pack('>Hh', v['advanceWidth'], v['leftSideBearing'] ) for v in self.entrys['hmtx']['hMetrics'] )
+        hmtx = [ self.entrys['hmtx']['hMetrics'][c] for c in cmapidx ]
+        hmtx = [ struct.pack('>Hh', v['advanceWidth'], v['leftSideBearing'] ) for v in hmtx ]
+        hmtx = ''.join(hmtx)
         hmtx = {
             'data' : hmtx,
             'length' : len(hmtx),
@@ -490,12 +497,12 @@ class TTFile(object):
         format4en = ''.join([ chr(en/256) + chr(en%256) for en in zip(*format4)[1] ])
         format4dt = ''.join([ chr(dt/256) + chr(dt%256) for dt in zip(*format4)[2] ])
         f4len = len(format4)
-        f4sch, f4sel = searchrange(f4len)
+        f4searchrange, f4entryselector, f4rangeshift = make_ser(f4len,2)
         format4 = struct.pack('>HHHH',
-            f4len*2,
-            f4sch,
-            f4sel,
-            f4len*2 - f4sch,
+            f4len*2, #segCountX2
+            f4searchrange,
+            f4entryselector,
+            f4rangeshift,
         ) + format4en + chr(0) + chr(0) + format4st + format4dt + chr(0)*(f4len*2)
         
         f4len = len(format4)+6
@@ -537,7 +544,7 @@ class TTFile(object):
         }
         
         _head = self.entrys['head']
-        head = struct.pack('>HHHHIIHH8s8shhhhHHhhhH',
+        head = struct.pack('>HHHHIIHH8s8shhhhHHhhh',
             _head['version']['major'], _head['version']['sub'],
             _head['reversion']['major'],_head['reversion']['sub'],
             0,
@@ -555,7 +562,6 @@ class TTFile(object):
             _head['fontDirectionHint'],
             0, #_head['indexToLocFormat'],
             _head['glyphDataFromat'],
-            0,
         )
         head = {
             'data' : head,
@@ -583,10 +589,11 @@ class TTFile(object):
                         ]
                 fele = len(field)
                 field = ''.join( struct.pack('>HHh',l,r,v) for l, r, v in field )
-                fesch, fesel = searchrange(fele)
-                field = struct.pack('>HHHH',fele,fesch*6/2,fesel-2,fele*6-fesch*6/2) + field
-                field = struct.pack('>HHBB',0,len(field)+6,0,1) + field
-                kern.append(field)
+                #fesch, fesel = searchrange(fele)
+                fesearchrange, feentryselector, ferangeshift = make_ser(fele,6)
+                field = struct.pack('>HHHH',fele,fesearchrange,feentryselector,ferangeshift) + field
+                subtbl = struct.pack('>HHBB',0,len(field)+6,0,1) + field
+                kern.append(subtbl)
             kern = struct.pack('>HH',0,len(kern)) + ''.join(kern)
             kern = {
                 'data' : kern,
@@ -611,7 +618,7 @@ class TTFile(object):
             
         if 'cvt ' in self.entrys :
             
-            print 'prep founded.'
+            print 'cvt  founded.'
             
             self.fp.seek( self.dirs['cvt ']['offset'] )
             cvt = {
@@ -651,13 +658,14 @@ class TTFile(object):
             e['pad'] = pad
             offset += ( e['length'] + pad )
         
-        dirsch, dirsel = searchrange(10)
+        #dirsch, dirsel = searchrange(10)
+        dirsearchrange, direntryselector, dirrangeshift = make_ser(len(allentry),16)
         dirs = struct.pack('>HHHHHH',
             self.directory['sfntversion']['major'], self.directory['sfntversion']['sub'],
             len(allentry),
-            dirsch*8,
-            dirsel/2,
-            10*16 - dirsch*8,
+            dirsearchrange,
+            direntryselector,
+            dirrangeshift,
         ) + ''.join( e['entrydata'] for e in allentry )
             
         dirs = {
@@ -669,7 +677,7 @@ class TTFile(object):
         allchecksum = sum([ e['checksum'] for e in allentry ], dirs['checksum'])
         allchecksum = allchecksum & 0xFFFFFFFF
         
-        head = struct.pack('>HHHHIIHH8s8shhhhHHhhhH',
+        head = struct.pack('>HHHHIIHH8s8shhhhHHhhh',
             _head['version']['major'], _head['version']['sub'],
             _head['reversion']['major'],_head['reversion']['sub'],
             0xB1B0AFBA - allchecksum,
@@ -685,9 +693,9 @@ class TTFile(object):
             _head['macStyle'],
             _head['lowestRecPPEM'],
             _head['fontDirectionHint'],
-            _head['indexToLocFormat'],
-            _head['glyphDataFromat'],
+            #_head['indexToLocFormat'],
             0,
+            _head['glyphDataFromat'],
         )
         head = {
             'data' : head,
@@ -705,14 +713,243 @@ class TTFile(object):
     
 if __name__ == '__main__' :
     
-    #t = TTFile( '../../../font/One Starry Night sub.ttf' )
-    t = TTFile( '../../../font/simhei.ttf' )
+    t = TTFile( '../../../font/One Starry Night sub.ttf' )
+    #t = TTFile( '../../../font/simhei.ttf' )
     #pprint.pprint( t.directory )
     #pprint.pprint( t.entrys )
     #print len(t.entrys['loca'])
     #print t.entrys['post']
-    
-    t.make_subset('simheisub.ttf','世界你好'.decode('utf8'))
+
+    subset = [u' ', 
+ u'!',
+ u'"',
+ u'#',
+ u'$',
+ u'%',
+ u'&',
+ u"'",
+ u'(',
+ u')',
+ u'*',
+ u'+',
+ u',',
+ u'-',
+ u'.',
+ u'/',
+ u'0',
+ u'1',
+ u'2',
+ u'3',
+ u'4',
+ u'5',
+ u'6',
+ u'7',
+ u'8',
+ u'9',
+ u':',
+ u';',
+ u'<',
+ u'=',
+ u'>',
+ u'?',
+ u'@',
+ u'A',
+ u'B',
+ u'C',
+ u'D',
+ u'E',
+ u'F',
+ u'G',
+ u'H',
+ u'I',
+ u'J',
+ u'K',
+ u'L',
+ u'M',
+ u'N',
+ u'O',
+ u'P',
+ u'Q',
+ u'R',
+ u'S',
+ u'T',
+ u'U',
+ u'V',
+ u'W',
+ u'X',
+ u'Y',
+ u'Z',
+ u'[',
+ u'\\',
+ u']',
+ u'^',
+ u'_',
+ u'`',
+ u'a',
+ u'b',
+ u'c',
+ u'd',
+ u'e',
+ u'f',
+ u'g',
+ u'h',
+ u'i',
+ u'j',
+ u'k',
+ u'l',
+ u'm',
+ u'n',
+ u'o',
+ u'p',
+ u'q',
+ u'r',
+ u's',
+ u't',
+ u'u',
+ u'v',
+ u'w',
+ u'x',
+ u'y',
+ u'z',
+ u'{',
+ u'|',
+ u'}',
+ u'~',
+ u'\x7f',
+ u'\x80',
+ u'\x81',
+ u'\x82',
+ u'\x83',
+ u'\x84',
+ u'\x85',
+ u'\x86',
+ u'\x87',
+ u'\x88',
+ u'\x89',
+ u'\x8a',
+ u'\x8b',
+ u'\x8c',
+ u'\x8d',
+ u'\x8e',
+ u'\x8f',
+ u'\x90',
+ u'\x91',
+ u'\x92',
+ u'\x93',
+ u'\x94',
+ u'\x95',
+ u'\x96',
+ u'\x97',
+ u'\x98',
+ u'\x99',
+ u'\x9a',
+ u'\x9b',
+ u'\x9c',
+ u'\x9d',
+ u'\x9e',
+ u'\x9f',
+ u'\xa0',
+ u'\xa1',
+ u'\xa2',
+ u'\xa3',
+ u'\xa4',
+ u'\xa5',
+ u'\xa6',
+ u'\xa7',
+ u'\xa8',
+ u'\xa9',
+ u'\xaa',
+ u'\xab',
+ u'\xac',
+ u'\xad',
+ u'\xae',
+ u'\xaf',
+ u'\xb0',
+ u'\xb1',
+ u'\xb2',
+ u'\xb3',
+ u'\xb4',
+ u'\xb5',
+ u'\xb6',
+ u'\xb7',
+ u'\xb8',
+ u'\xb9',
+ u'\xba',
+ u'\xbb',
+ u'\xbc',
+ u'\xbd',
+ u'\xbe',
+ u'\xbf',
+ u'\xc0',
+ u'\xc1',
+ u'\xc2',
+ u'\xc3',
+ u'\xc4',
+ u'\xc5',
+ u'\xc6',
+ u'\xc7',
+ u'\xc8',
+ u'\xc9',
+ u'\xca',
+ u'\xcb',
+ u'\xcc',
+ u'\xcd',
+ u'\xce',
+ u'\xcf',
+ u'\xd0',
+ u'\xd1',
+ u'\xd2',
+ u'\xd3',
+ u'\xd4',
+ u'\xd5',
+ u'\xd6',
+ u'\xd7',
+ u'\xd8',
+ u'\xd9',
+ u'\xda',
+ u'\xdb',
+ u'\xdc',
+ u'\xdd',
+ u'\xde',
+ u'\xdf',
+ u'\xe0',
+ u'\xe1',
+ u'\xe2',
+ u'\xe3',
+ u'\xe4',
+ u'\xe5',
+ u'\xe6',
+ u'\xe7',
+ u'\xe8',
+ u'\xe9',
+ u'\xea',
+ u'\xeb',
+ u'\xec',
+ u'\xed',
+ u'\xee',
+ u'\xef',
+ u'\xf0',
+ u'\xf1',
+ u'\xf2',
+ u'\xf3',
+ u'\xf4',
+ u'\xf5',
+ u'\xf6',
+ u'\xf7',
+ u'\xf8',
+ u'\xf9',
+ u'\xfa',
+ u'\xfb',
+ u'\xfc',
+ u'\xfd',
+ u'\xfe',
+ u'\xff',
+ u'\uffff']
+
+    t.make_subset('osnsub.ttf',''.join(subset))
+    #t.make_subset('simheisub.ttf','世界你好'.decode('utf8'))
+
+
 
     # from fontTools import ttLib
     # x = ttLib.TTFont('/home/dainan/workspace/font/One Starry Night sub.ttf')
