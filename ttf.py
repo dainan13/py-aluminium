@@ -169,9 +169,9 @@ class TTFile(object):
             ef = getattr( self, 'entry_'+entry['tag'].replace('/','_').replace(' ','_'), None )
             if ef :
                 self.fp.seek(entry['offset'])
-                print entry['tag'], self.fp.tell(), entry['offset'],
+                #print entry['tag'], self.fp.tell(), entry['offset'],
                 self.entrys[entry['tag']] = ef(entry)
-                print entry['length'], self.fp.tell(), entry['offset']+entry['length']
+                #print entry['length'], self.fp.tell(), entry['offset']+entry['length']
         
         return
         
@@ -180,8 +180,8 @@ class TTFile(object):
         le = (head['length'] + 3) & (0xFFFFFFFC)
         d = list(self.ebp.read('checksum', self.fp, length=le)['data'])
         d2, d[2] = d[2], 0
-        if reduce( (lambda a,b: (a+b) & 0xFFFFFFFF ), d ) != head['checksum'] :
-            raise Exception, head
+        #if reduce( (lambda a,b: (a+b) & 0xFFFFFFFF ), d ) != head['checksum'] :
+        #    raise Exception, head
         
         self.fp.seek(0)
         le = 12 + 16*len(self.directory['entry'])
@@ -196,10 +196,10 @@ class TTFile(object):
         return self.ebp.read('head', self.fp)
     
     def entry_post( self, post ):
-        #if post['length'] != 32 :
-        #    raise Exception, post
-        #if reduce( (lambda a,b: (a+b) & 0xFFFFFFFF ), self.ebp.read('checksum', self.fp, length=32)['data'] ) != post['checksum'] :
-        #    raise Exception, post
+        if post['length'] != 32 :
+            raise Exception, post
+        if reduce( (lambda a,b: (a+b) & 0xFFFFFFFF ), self.ebp.read('checksum', self.fp, length=32)['data'] ) != post['checksum'] :
+            raise Exception, post
             
         self.fp.seek(post['offset'])
         return self.ebp.read('post', self.fp, numGlyphs=self.entrys['maxp']['numGlyphs'], length=post['length'])
@@ -279,7 +279,8 @@ class TTFile(object):
             self.fp.seek(glyf['offset']+offset)
             g = self.ebp.read('glyf', self.fp)
             #print g['numberOfContours']
-            g['glyphDescription'] = self.ebp.read( 'glyphDescription', self.fp, numberOfContours=g['numberOfContours'] )['glyphdesc']
+            #g['glyphDescription'] = self.ebp.read( 'glyphDescription', self.fp, numberOfContours=g['numberOfContours'] )['glyphdesc']
+            g['glyphDescription'] = None
             _glyf.append( g )
             
             self.fp.seek( glyf['offset'] + offset )
@@ -354,8 +355,9 @@ class TTFile(object):
         subset = list(unicode(subset))
         subset = [ ord(char) for char in subset ]
         subset = [ char for char in subset if char!=0 and char!=65535]
+        subset.sort()
         
-        uni = (3,1) # (0,3)
+        uni = (3,1) if (3,1) in self.entrys['cmap']['_index'] else (0,3)
         
         cmapidx = self.entrys['cmap']['_index'][uni]
         
@@ -364,7 +366,7 @@ class TTFile(object):
         else :
             errorsub = [ unichr(char) for char in subset if char not in cmapidx ]
             if errorsub :
-                raise TTFError, ('chr not found in font', errorsub)
+                raise TTFError, ('chr not found in font', ''.join(errorsub))
         
         cmapidx = [ cmapidx[char] for char in subset ]
         cmapidx = [0] + cmapidx
@@ -450,8 +452,6 @@ class TTFile(object):
             'checksum' : string_checksum(hhea),
             'tag' : 'hhea',
         }
-        
-        #print _hhea['numberOfHMetrics'], _maxp['numGlyphs']
         
         #hmtx = [ self.entrys['hmtx']['hMetrics'][c] for c in cmapidx ]
         #hmtx = [ struct.pack('>Hh', v['advanceWidth'], v['leftSideBearing'] ) for v in hmtx ]
@@ -721,10 +721,12 @@ class TTFile(object):
         allchecksum = sum([ e['checksum'] for e in allentry ], dirs['checksum'])
         allchecksum = allchecksum & 0xFFFFFFFF
         
+        #print '--debug--', hex(allchecksum)
+        
         realhead = struct.pack('>HHHHIIHH8s8shhhhHHhhh',
             _head['version']['major'], _head['version']['sub'],
             _head['reversion']['major'],_head['reversion']['sub'],
-            0xB1B0AFBA - allchecksum,
+            (0xB1B0AFBA - allchecksum) % 0x100000000,
             _head['magicNumber'],
             _head['flags'],
             _head['unitsPerEm'],
@@ -749,14 +751,29 @@ class TTFile(object):
             fp.write(chr(0)*e['pad'])
         fp.close()
     
+    def findsubseterror( self, subset ):
+
+        uni = (3,1) if (3,1) in self.entrys['cmap']['_index'] else (0,3)
+
+        cmapidx = self.entrys['cmap']['_index'][uni]
+        
+        errorsub = [ char for char in subset if ord(char) not in cmapidx ]
+            
+        return errorsub
+    
 if __name__ == '__main__' :
     
     #t = TTFile( '../../../font/One Starry Night sub.ttf' )
-    t = TTFile( '../../../font/simhei.ttf' )
+    #t = TTFile( '../../../font/simhei.ttf' )
+    #t = TTFile('../../../font/STCAIYUN.TTF')
+    t = TTFile('../../../font/msyh.ttf')
     #pprint.pprint( t.directory )
     #pprint.pprint( t.entrys )
     #print len(t.entrys['loca'])
     #print t.entrys['post']
+
+    #print t.entrys['hhea']['numberOfHMetrics'], t.entrys['maxp']['numGlyphs']
+        
 
     subset = [
         u' ', u'!', u'"', u'#', u'$', u'%', u'&', u"'",
@@ -782,10 +799,24 @@ if __name__ == '__main__' :
 
         u'\uffff',
     ]
+    
+    wb = open('500.txt','r').read()[2:].decode('utf-16')
+    subset = set(wb)
+    subset = ''.join( s for s in subset if s not in u'\r\n')
+    
+    esub = t.findsubseterror( subset )
+    esub = set(esub)
+    wbl = wb.split('\r\n') 
+    wbls = [ (set(l)&esub) for l in wbl ]
+    wbls = [ (i, ol) for i, (l, ol) in enumerate(zip(wbls, wbl)) if len(l) != 0 ]
+    wbls = [ ( i, [ ( c if c not in esub else "<span style='background-color:yellow;'>" + c + '</span>' ) for c in l ]) for i, l in wbls ]
+    wbls = [ '<div>' + str(i) + '&nbsp;&nbsp;' + ''.join(l) + '</div><br/>'for i, l in wbls ]
+    print '\r\n'.join(wbls).encode('utf-8')
 
     #t.make_subset('osnsub.ttf',''.join(subset), True)
-    t.make_subset('simheisub.ttf','世界你好'.decode('utf8'))
-
+    #t.make_subset('simheisub.ttf','世界你好abcd'.decode('utf8'))
+    #t.make_subset('test.ttf','全球你好abcd'.decode('utf8'))
+    #t.make_subset('msyhsub.ttf',subset)
 
 
     # from fontTools import ttLib
