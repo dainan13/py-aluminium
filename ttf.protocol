@@ -152,6 +152,8 @@ cmaptable TTF_cmap_table(.length)
             firstCode           uint_b(2)
             entryCount          uint_b(2)
             plyphIdArray        uint_b(2)[auto]
+            
+        *:formatd      byte[auto]
 
 
 loca    TTF_loca
@@ -179,6 +181,16 @@ name    TTF_name($length)
     
     other                byte[auto]
     data                 byte[sub($length,dataOffset)]
+    
+    # NameID
+    # 0 copyright
+    # 1 family name
+    # 2 sub family name
+    # 3 unique identifier
+    # 4 full name
+    # 5 version X.XX format
+    # 6 postscript name
+    # 7 trademark
 
 
 
