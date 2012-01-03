@@ -2,14 +2,17 @@
 $ length = 100
 $ array = 200
 
+
 # 结构定义
 - STRUCT_A(length)[array]
     name1 uint
     name2 uint
     name3 stA(auto)[name1] % name1, name2
     
+    
 # 结构重命名
 $ stA = STRUCT_A
+
 
 # 带参数传递的结构体
 s1 STRUCT_B(auto)[array] : arg1, arg2
@@ -17,10 +20,12 @@ s1 STRUCT_B(auto)[array] : arg1, arg2
     name2 uint(arg1)[arg2]
     -     pad(auto)
     
+    
 # 联合定义，所有成员必须使用case: name语法
 - UNION_A(auto)[array] : arg1, arg2, arg3
     1:name1 uint(1)[arg2]
     *:name2 uint(2)[arg3]
+    
     
 - STRUCT_B(length) : arg1
     
@@ -41,19 +46,33 @@ s1 STRUCT_B(auto)[array] : arg1, arg2
     name6 uint[arg2] =(@name6+@name5)%65536
     name7 =(name4+max(name6))%65536
     
+    
 - STRUCT_C
     
     # 变量成员，不会出现在成员表中，但会赋值给变量
     -name1   uint(1)
-    --       UNION_B : arg1 % name1
-        1:--     uint(1)
-        2:--     uint(2)
-        3:--     uint(3)
-
+    
+    name2    uint(1)[name1]
+    
+    
+- STRUCT_D  # 透明结构体，其类型和数值将被某一成员重载替换
+    
+    name1    uint(1)
+    
+    # 重入变量成员，其值将被重载入父结构体
+    --       uint(1)[name1]
+    
+    
+- UNION_B : arg1
+    1:--     uint(1)
+    2:--     uint(2)
+    3:--     uint(4)
+    
+    
 name struct(length)[array] : arg1, arg2=default, ... % input1, input2, ... # comment
 
     1, 2 : sub1 struct(length)[array] << sub1/2
     
-    3 ... 6 : sub1 struct(length*2)[array] << sub1/2
+    3 .. 6 : sub1 struct(length*2)[array] << sub1/2
     
     - struct
