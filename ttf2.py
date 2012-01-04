@@ -23,16 +23,16 @@ def checksum( inp, le=None ):
     if type(inp) == types.ListType :
         r = 0
         i = 0
-        for lc, in inp :
+        for lc in inp :
             for c in lc :
-                r = ( c << ((3-(i%4))*8) ) & 0xFFFFFFFF
+                r = ( ord(c) << ((3-(i%4))*8) ) & 0xFFFFFFFF
                 i += 1
         return r
     
     r = 0
     for i, c in enumerate(inp) :
         i = 3 - (i % 4)
-        r += c << (i*8)
+        r += ord(c) << (i*8)
         r = r & 0xFFFFFFFF
     
     return r
@@ -169,7 +169,7 @@ def load_unicode_block( fname ):
     lns = [ ( seg.split('..'), name.strip() ) for seg, name in lns ]
     if not all( st.endswith('0') and ed.endswith('F') for (st,ed), name in lns ) :
         raise TTFError, 'unicode block error'
-    lns = [ (int(st),int(ed),name) for (st, ed), name in lns ]
+    lns = [ (int(st,16),int(ed,16),name) for (st, ed), name in lns ]
     lns = [ (st,ed,name) for st, ed, name in lns if st < 0xFFFF ]
     
     xlns = [ (b[1]+1,a[0]-1,'nodefined '+hex(b[1]+1)+'..'+hex(a[0]-1)) 
@@ -189,7 +189,7 @@ class TTFile(object):
     ebp.rebuild_namespaces()
     ebp.parsefile( 'ttf.protocol' )
     
-    unicode_block = load_unicode_block( os.path.realpath(__file__)+'Blocks-6.1.0d1.txt' )
+    unicode_block = load_unicode_block( os.path.realpath(__file__).rsplit('/')[0]+'Blocks-6.1.0d1.txt' )
     
     def __init__( self ):
         
@@ -205,9 +205,11 @@ class TTFile(object):
         self.italic = False
         self.indexToLocFormat = None
         self.glyphDataFormat = None
+        
+        self.numGlyphs = None
 
         
-    idxsort = ['head','maxp','cmap','loca','glyf','hhea','hmtx','post','name','OS/2','prep','cvt ','fpgm']
+    idxsort = ['head','maxp','cmap','loca','glyf','kern','hhea','hmtx','post','name','OS/2','prep','cvt ','fpgm']
     #idxsort = dict( (n,i) for i, n in enumerate(idxsort) )
     
     def load( self, fname ):
@@ -253,34 +255,36 @@ class TTFile(object):
     
     def load_ttf( self, fname ):
         
-        with open(filename) as fp :
+        with open(fname) as fp :
             
             directory = self.ebp.read( 'ttf', fp )['directory']
             entrys = directory.pop('entry')
             
             self.sfntversion = directory['sfntversion']
             
-            entrys = [ e for e in entrys if e['tag'] in idxsort ]
+            entrys = [ e for e in entrys if e['tag'] in self.idxsort ]
             entrys.sort( key = lambda e : self.idxsort.index(e['tag']) )
             
+            ae = dict( (e['tag'],e) for e in entrys )
+            
             for e in entrys :
-                read_entry( fp, e, entrys )
+                self.read_entry( fp, e, ae )
                 
-        chrdef = zip( entrys['post']['data'],
-                      entrys['glyf']['data'], 
-                      entrys['hmtx']['data'] )
-        self.char_defines = dict( (k, chrdef[v]) for k, v in entrys['hmtx']['cmap'] )
+        chrdef = zip( ae['post']['data'],
+                      ae['glyf']['data'], 
+                      ae['hmtx']['data'] )
+        self.char_defines = dict( (k, chrdef[v]) for k, v in ae['cmap']['data'] )
         
 
-        setv = [ v for k, v in entrys['hmtx']['cmap'] ]
-        inmap = [ (v, [ k for k, v in entrys['hmtx']['cmap'] if v == sv ]) for sv in setv ]
+        setv = [ v for k, v in ae['cmap']['data'] ]
+        inmap = [ (v, [ k for k, v in ae['cmap']['data'] if v == sv ]) for sv in setv ]
         self.char_dup = [ tuple(ks) for g, ks in inmap ]
 
         if 'kern' in entrys :
             
             inmap = dict(inmap)
             
-            scs, das = zip(*entrys['kern']['data'])
+            scs, das = zip(*ae['kern']['data'])
             das = [ [(il, ir, v) for l,r,v in da for il in inmap[l] for ir in inmap(r)] for da in das ]
             self.kern = zip(scs, das)
         
@@ -288,13 +292,13 @@ class TTFile(object):
     
     def read_entry( self, fp, e, ae ):
         
-        fp.seek(entry['offset'])
+        fp.seek(e['offset'])
         if e['tag'] != 'head' and e['checksum'] != checksum( fp.read( e['length'] ) ) :
             raise TTFError, 'checksum error in ' + e['tag']
-        fp.seek(entry['offset'])
-        extent = getattr( self, 'read_' + e['tag'].replace('/','_').strip().lower(), self.extract_default )
+        fp.seek(e['offset'])
+        extent = getattr( self, 'read_' + e['tag'].replace('/','_').strip().lower(), self.read_default )
         
-        return extent( fp, e )
+        return extent( fp, e, ae )
     
     def read_default( self, fp, e, ae ):
         
@@ -327,6 +331,7 @@ class TTFile(object):
         _cmap = self.ebp.read( 'cmap', fp )
         _cmap = [ ( (cmapt['platformID'],cmapt['encodingID']), cmapt ) 
                   for cmapt in _cmap['cmap'] ]
+        _cmap = dict(_cmap)
         
         cmapt = _cmap.get( (0,3), None ) or _cmap.get( (0,3), None )
         if cmapt == None :
@@ -342,15 +347,15 @@ class TTFile(object):
         
         r = []
         
-        for segc, s, e, delta, offset in segs:
+        for segc, st, ed, delta, offset in segs:
             
             if offset != 0 :
                 rs = offset/2 - segc
-                re = rs + e - s
+                re = rs + ed - st
                 vs = [ (v+delta)%65536 for v in fm4['plyphIdArray'][rs:re+1] ]
-                r.extend( zip(range(s,e+1),vs) )
+                r.extend( zip(range(st,ed+1),vs) )
             else :
-                r.extend( [ (k, (k+delta)%65536) for k in range(s,e+1) ] )
+                r.extend( [ (k, (k+delta)%65536) for k in range(st,ed+1) ] )
         
         e['data'] = [ (unichr(k), v) for k, v in r ]
     
@@ -443,7 +448,9 @@ class TTFile(object):
         
         _name = self.ebp.read( 'name', fp, length=e['length'] )
         
-        ids = [ (nr['PlatformID'], nr['encodingID'], nr['LanguageID']) 
+        #print _name
+        
+        ids = [ (nr['platformID'], nr['encodingID'], nr['LanguageID']) 
                 for nr in _name['nameRecords'] ]
         
         ids = set(ids)
@@ -457,8 +464,8 @@ class TTFile(object):
         
         for pid, eid, lcid in ids :
             
-            nrs = [ nr for nr in r['nameRecords'] 
-                    if (nr['PlatformID'], nr['encodingID'], nr['LanguageID']) == (pid, eid, lcid) ]
+            nrs = [ nr for nr in _name['nameRecords'] 
+                    if (nr['platformID'], nr['encodingID'], nr['LanguageID']) == (pid, eid, lcid) ]
             
             if len(nrs) < 8 :
                 continue
@@ -467,7 +474,7 @@ class TTFile(object):
             if any( (i != nr['NameID']) for i, nr in enumerate(nrs) ):
                 continue
             
-            nrs = [ (nm['stringOffset'],nm['stringLength']) for nr in nrs ]
+            nrs = [ (nm['stringOffset'],nm['stringLength']) for nm in nrs ]
             nrs = [ (off,off+le) for off, le in nrs ]
             
             nrs = [ _name['data'][st:ed] for st, ed in nrs ]
@@ -535,29 +542,30 @@ class TTFile(object):
         ks = self.char_defines.keys()
         ks.sort()
         
-        if ks == [] or ks[0] != 0 :
+        if ks == [] or ord(ks[0]) != 0 :
             raise TTFError, 'must have char 0x0000'
         
-        charidx = [ (k,i) for i in k enumerate(ks) ] 
+        charidx = [ (k,i) for i, k in enumerate(ks) ] 
         charidx = dict(charidx)
         
         
         entrys = self.idxsort[:]
         entrys.sort()
         
-        entrys = [ self.getattr( 'dump_'+e.replace('/','_').strip().lower() ) for e in self.idxsort ]
-        entrys = [ e( ks, charidx ) for e in self.idxsrot ]
+        entrys = [ getattr( self, 'dump_'+e.replace('/','_').strip().lower() ) for e in self.idxsort ]
+        entrys = [ e( ks, charidx ) for e in entrys ]
         entrys = zip(entrys, self.idxsort)
         entrys = [ ( r, name ) for r, name in entrys if r != None ]
             
         le_entrys = len(entrys)
         le_dirs = 12+le_entrys*16
+        le_pad = -(le_dirs%-4)
         
         entrys = [ (name, cs, le, data) for (cs, le, data), name in entrys ]
         names, csums, lens, entrydatas = zip(*entrys)
         pads = [ -(le%-4) for le in lens ]
-        offsets = [ 12 + sum(lens[:i+1]) + sum(pads[:i+1]) for i in range( len(lens) ) ]
-        entrys = zip( name, csums, offsets, lens )
+        offsets = [ le_dirs + le_pad + sum(lens[:i]) + sum(pads[:i][:-1]) for i in range( len(lens) ) ]
+        entrys = zip( names, csums, offsets, lens )
         
         ests = [ self._dump_entry(e) for e in entrys ]
         
@@ -572,23 +580,27 @@ class TTFile(object):
         directory += ''.join(ests)
         
         entrys = [( '', checksum(directory), 0, le_dirs )] + entrys
-        entrysdata = [direcotry] + entrysdata
-        pads = [ -(le_dirs%-4) ] + pads
-
+        entrydatas = [directory] + list(entrydatas)
+        pads = [ le_pad ] + pads
+        
+        print entrys
+        print pads
+        
         with open( fname, 'w' ) as fp :
             
-            for ed, pa in zip(entrysdata, pads) :
+            for ed, pa in zip(entrydatas, pads) :
                 
                 if callable(ed) :
-                    ed = ed( entrys )
+                    ed = ed( ks, charidx, entrys )[2]
                 
-                if type(ed) != types.StirngType :
+                if type(ed) != types.StringType :
+                    
                     for edi in ed :
                         fp.write(edi)
                 else :
                     fp.write(ed)
                 
-                fp.write(pads)
+                fp.write(chr(0)*pa)
         
         return
         
@@ -619,7 +631,7 @@ class TTFile(object):
             _head['lowestRecPPEM'],
             _head['fontDirectionHint'],
             0, #indexToLocFormat,
-            self.glyphDataFromat,
+            self.glyphDataFormat,
         )
         
         if entrys is None :
@@ -629,7 +641,7 @@ class TTFile(object):
         
     def dump_maxp( self, ks, charidx ):
         
-        _maxp = self.entrys['maxp']
+        _maxp = self.stt_entrys['maxp']
         maxp = struct.pack( '>'+'H'*16,
             _maxp['version']['major'], _maxp['version']['sub'],
             self.numGlyphs,
@@ -665,6 +677,8 @@ class TTFile(object):
     
     def _dump_cmap_format4_unicode( self, ks, charidx ):
         
+        ks = [ ord(k) for k in ks ]
+        
         format4 = [(ks[0],ks[0])]
         for c in ks[1:] :
             if format4[-1][1] == c-1 :
@@ -696,8 +710,8 @@ class TTFile(object):
     
     def dump_cmap( self, ks, charidx ):
         
-        format6 = _dump_cmap_format6_roman(ks,charidx)
-        format4 = _dump_cmap_format4_unicode(ks,charidx)
+        format6 = self._dump_cmap_format6_roman(ks,charidx)
+        format4 = self._dump_cmap_format4_unicode(ks,charidx)
         
         cmap = struct.pack('>HHHHIHHIHHI',
             0, 3,
@@ -715,7 +729,7 @@ class TTFile(object):
         glyf = [ self.char_defines[k][1] for k in ks ]
         
         loca = [ len(g) for g in glyf ]
-        loca = [ sum(loca[0:i])/2 for i in range(loca+1) ]
+        loca = [ sum(loca[:i])/2 for i in range(len(loca)+1) ]
         
         loca = ''.join( int16b(lo) for lo in loca )
         
@@ -832,6 +846,31 @@ class TTFile(object):
         
         return checksum(post), len(posthead)+2+len(idx)+len(strnames), post
         
+    def dump_name( self, ks, charidx ):
+        
+        strings = [ s.encode('mac_roman') for s in self.nametuple ] + \
+                  [ s.encode('utf-16BE') for s in self.nametuple ]
+        stringlens = [ len(s) for s in strings ]
+        strlen = sum(stringlens)
+        offsets = [ sum(stringlens[:i]) for i in range(len(stringlens)) ]
+        
+        nameids = list(range(len(self.nametuple)))*2
+        pids = [1]*len(self.nametuple) + [0]*len(self.nametuple)
+        eids = [0]*len(self.nametuple) + [1]*len(self.nametuple)
+        lids = [0]*len(self.nametuple) + [1033]*len(self.nametuple)
+        
+        record = [ struct.pack('>HHHHHH', *arg) 
+                   for arg in zip(pids,eids,lids,nameids,stringlens,offsets) ]
+        
+        recordlen = len(record)*struct.calcsize('>HHHHHH')
+        le = struct.calcsize('>HHH') + recordlen + strlen
+        
+        namehead = struct.pack('>HHH', 0, le, le-strlen )
+        
+        name = [namehead,] + record + strings
+        
+        return checksum(name), le, name
+        
     def dump_os_2( self, ks, charidx ):
         os = self.fix_entrys['OS/2']
         return checksum(os), len(os), os
@@ -847,10 +886,87 @@ class TTFile(object):
     def dump_fpgm( self, ks, charidx ):
         fpgm = self.fix_entrys['fpgm']
         return checksum(fpgm), len(fpgm), fpgm
-
-    def subset( self, subchrs ):
+    
+    def copy( self ):
+        
+        return
+        
+    def rename( self, name=None, familyname=None, subfamilyname=None, postname=None,
+                      version=None, identifier=None, copyright=None, trademark=None):
+        
+        if name == None and self.name == None :
+                raise TTFError, 'name must present'
+        
+        name = name or self.name
+        familyname = familyname or name
+        subfamilyname = subfamilyname or familyname
+        postname = postname or name.strip().replace(' ','')
+        version = version or 'Version 1.00'
+        identifier = identifier or ( name + ':' + version )
+        copyright = copyright or 'Copyright (c) 2012, all rights reserved.'
+        trademark = trademark or name
+        
+        self.name = name
+        self.nametuple = ( copyright, familyname, subfamilyname, identifier,
+                           name, version, postname, trademark,
+                         )
+        
+        return
+    
+    def subset( self, subchrs, ignore=None ):
+        
+        if type(subchrs) == types.StringType :
+            subchrs = unicode(subchrs)
+        elif type(subchrs) in ( types.ListType, types.TupleType, set ) :
+            if not all( ( type(c) in types.StringTypes and len(c) == 1 ) for c in subchrs ) :
+                raise TTFError, 'err input for subchrs'
+            subchrs = [ unicode(c) for c in subchrs ]
+        elif type(subchrs) == types.UnicodeType :
+            pass
+        else :
+            raise TTFError, 'inp type error'
+        
+        if ignore == None :
+            subchrs = [ c for c in subchrs if c not in '\r\n\t\b']
+            ignore = True
+        
+        subchrs = set(subchrs) | set(unichr(0))
+        
+        if ignore == True :
+            self.char_defines = dict( (c, self.char_defines[c]) for c in subchrs )
+        else :
+            cds = [ (c, self.char_defines.get(c, None)) for c in subchrs ]
+            self.char_defines = dict( (k,v) for k, v in cds if v != None )
+        
+        if self.char_kern != None :
+            charkern = [ 
+                (sc, [ (a, b, v) for a, b, v in field if a in subchrs and b in subchrs ]) 
+                for sc, field in self.char_kern
+            ]
+            charkern = [ (sc, field) for sc, field in charkern if len(field) != 0 ]
+            self.char_kern = None if len(charkern) == 0 else charkern
+            
+        cdup = [ tuple( c for c in cs if c in subchrs ) for cs in self.char_dup ]
+        cdup = [ cs for cs in cdup if len(cs) != 0 ]
+        self.char_dup = cdup
+        
+        self.numGlyphs = len(self.char_defines)
         
         return
     
 
+if __name__ == '__main__' :
+    
+    import sys
+    
+    t = TTFile()
+    t.load( sys.argv[1] )
+    
+    t.subset('abcd')
+    t.dump_ttf( 'out.ttf' )
+    
+    
+    
+    
+    
     

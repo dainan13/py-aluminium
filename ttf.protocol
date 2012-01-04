@@ -83,7 +83,7 @@ head    TTF_head
     lowestRecPPEM      uint_b(2)
     fontDirectionHint  int_b(2)
     indexToLocFormat   int_b(2)
-    glyphDataFromat    int_b(2)
+    glyphDataFormat    int_b(2)
     
     
     
