@@ -196,10 +196,10 @@ class TTFile(object):
         return self.ebp.read('head', self.fp)
     
     def entry_post( self, post ):
-        if post['length'] != 32 :
-            raise Exception, post
-        if reduce( (lambda a,b: (a+b) & 0xFFFFFFFF ), self.ebp.read('checksum', self.fp, length=32)['data'] ) != post['checksum'] :
-            raise Exception, post
+        #if post['length'] != 32 :
+        #    raise Exception, post
+        #if reduce( (lambda a,b: (a+b) & 0xFFFFFFFF ), self.ebp.read('checksum', self.fp, length=32)['data'] ) != post['checksum'] :
+        #    raise Exception, post
             
         self.fp.seek(post['offset'])
         return self.ebp.read('post', self.fp, numGlyphs=self.entrys['maxp']['numGlyphs'], length=post['length'])
@@ -306,7 +306,10 @@ class TTFile(object):
         for cmapt in _cmap['cmap'] :
             
             self.fp.seek(cmap['offset']+cmapt['offset'])
-            cmapt[''] = t = self.ebp.read('cmaptable', self.fp)
+            try :
+                cmapt[''] = t = self.ebp.read('cmaptable', self.fp)
+            except :
+                continue
             
             if 'format6' in t['cmap'] :
                 
@@ -482,7 +485,7 @@ class TTFile(object):
         }
         
         format6 = [ ord(chr(c+0x20).decode('mac_roman')) for c in range(0,224) ]
-        format6 = [ charidx.get(c+0x20,0) for c in format6 ]
+        format6 = [ charidx.get(c,0) for c in format6 ]
         format6 = [ chr(c/256) + chr(c%256) for c in format6 ]
         format6 = ''.join(format6)
         format6 = struct.pack('>HH',0x20,224)+format6
@@ -530,7 +533,7 @@ class TTFile(object):
         )
         
         cmap = cmap + format4 + format6
-        cmap = cmap + chr(0) * (( 4 - len(cmap) % 4 ) % 4)
+        #cmap = cmap + chr(0) * (( 4 - len(cmap) % 4 ) % 4)
         cmap = {
             'data' : cmap,
             'length' : len(cmap),
@@ -603,7 +606,7 @@ class TTFile(object):
             _head['lowestRecPPEM'],
             _head['fontDirectionHint'],
             0, #_head['indexToLocFormat'],
-            _head['glyphDataFromat'],
+            _head['glyphDataFormat'],
         )
         head = {
             'data' : head,
@@ -740,7 +743,7 @@ class TTFile(object):
             _head['lowestRecPPEM'],
             _head['fontDirectionHint'],
             0, #_head['indexToLocFormat'],
-            _head['glyphDataFromat'],
+            _head['glyphDataFormat'],
         )
         head['data'] = realhead
         
@@ -766,7 +769,9 @@ if __name__ == '__main__' :
     #t = TTFile( '../../../font/One Starry Night sub.ttf' )
     #t = TTFile( '../../../font/simhei.ttf' )
     #t = TTFile('../../../font/STCAIYUN.TTF')
-    t = TTFile('../../../font/msyh.ttf')
+    #t = TTFile('../../../font/msyh.ttf')
+    t = TTFile('../../../font/consola.ttf')
+    #t = TTFile('../../../font/msvistayh.ttf')
     #pprint.pprint( t.directory )
     #pprint.pprint( t.entrys )
     #print len(t.entrys['loca'])
@@ -800,22 +805,31 @@ if __name__ == '__main__' :
         u'\uffff',
     ]
     
-    wb = open('500.txt','r').read()[2:].decode('utf-16')
-    subset = set(wb)
-    subset = ''.join( s for s in subset if s not in u'\r\n')
+    #wb = open('55.txt','r').read()[2:].decode('utf-16')
+    #wb = open('50.txt','r').read().decode('utf-8')
+    #subset = set(wb)
+    #subset = ''.join( s for s in subset if s not in u'\r\n')
     
-    esub = t.findsubseterror( subset )
-    esub = set(esub)
-    wbl = wb.split('\r\n') 
-    wbls = [ (set(l)&esub) for l in wbl ]
-    wbls = [ (i, ol) for i, (l, ol) in enumerate(zip(wbls, wbl)) if len(l) != 0 ]
-    wbls = [ ( i, [ ( c if c not in esub else "<span style='background-color:yellow;'>" + c + '</span>' ) for c in l ]) for i, l in wbls ]
-    wbls = [ '<div>' + str(i) + '&nbsp;&nbsp;' + ''.join(l) + '</div><br/>'for i, l in wbls ]
-    print '\r\n'.join(wbls).encode('utf-8')
+    #esub = t.findsubseterror( subset )
+    #esub = set(esub)
+    #wbl = wb.split('\r\n') 
+    
+    #wbls = [ (set(l)&esub) for l in wbl ]
+    #wbls = [ (i, ol) for i, (l, ol) in enumerate(zip(wbls, wbl)) if len(l) != 0 ]
+    #wbls = [ ( i, [ ( c if c not in esub else "<span style='background-color:yellow;'>" + c + '</span>' ) for c in l ]) for i, l in wbls ]
+    #wbls = [ '<div>' + str(i) + '&nbsp;&nbsp;' + ''.join(l) + '</div><br/>'for i, l in wbls ]
+    
+    #rp = { '⋯'.decode('utf-8') : '…'.decode('utf-8'),
+    #       '≪'.decode('utf-8') : '《'.decode('utf-8') ,
+    #       '≫'.decode('utf-8') : '》'.decode('utf-8') , }
+    
+    #wbls = [ ''.join( ( rp.get(c,u'\u2588') if c in esub else c ) for c in l ).strip(u'\u2588').strip().strip(u'\u2588') for l in wbl ]
+    
+    #print '\r\n'.join(wbls).encode('utf-8')
 
     #t.make_subset('osnsub.ttf',''.join(subset), True)
     #t.make_subset('simheisub.ttf','世界你好abcd'.decode('utf8'))
-    #t.make_subset('test.ttf','全球你好abcd'.decode('utf8'))
+    t.make_subset('test.ttf','abcdef'.decode('utf8'))
     #t.make_subset('msyhsub.ttf',subset)
 
 
