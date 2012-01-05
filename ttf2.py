@@ -788,8 +788,6 @@ class TTFile(object):
         
         glyf = [ self.char_defines[k][1] for k in ks ]
         
-        print glyf
-        
         glyflen = sum( len(g) for g in glyf )
         
         return checksum(glyf), glyflen, glyf
@@ -1020,23 +1018,104 @@ class TTFile(object):
         
         return
     
+    def merge( self, another, subchrs=None, covered=False ):
+        
+        return
 
 if __name__ == '__main__' :
     
     import sys
+    import getopt
     
+    opts, args = getopt.gnu_getopt(
+        sys.argv[1:],
+        'o:s:c:ge',
+        ['output=','subset=','subset-file=','decoding=','ignore','extract','rename=']
+    )
+    
+    subset = ''
+    output = None
+    decoding = 'ascii'
+    ignore = False
+    extract = False
+    rename = None
+    
+    for k, v in opts :
+        
+        k = k.strip('-')
+        
+        if k in ( 'output', 'o' ):
+            output = v
+        
+        elif k in ( 'subset', 's' ):
+            
+            for d in [decoding,'utf-8']:
+                try :
+                    subset += v.decode(d)
+                    break
+                except UnicodeDecodeError :
+                    continue
+            else :
+                raise
+        
+        elif k in ( 'subset-file', ):
+            
+            with open( v ) as fp :
+                d = decoding
+                h = fp.read(2)
+                if h == '\xff\xfe' :
+                    d = 'utf-8'
+                else :
+                    fp.seek(0)
+                subset += fp.read().decode(d)
+        
+        elif k in ( 'decoding', 'c' ):
+            decoding = v
+            
+        elif k in ( 'ignore', 'g' ):
+            ignore = True
+        
+        elif k in ( 'extract', 'e' ):
+            extract = True
+            
+        elif k in ( 'rename', ):
+            rename = v
+            
     t = TTFile()
-    t.load( sys.argv[1] )
+    t.load( args[0] )
     
-    print t.numGlyphs
-    print t.stt_entrys['head']['unitsPerEm']
+    if subset != '' :
+        t.subset( subset, ignore=ignore )
+        
+    if rename :
+        t.rename( rename )
     
-    t.subset('abcdef')
+    if output :
+        
+        if extract :
+        
+            if os.path.isdir(output) == False :
+                raise Exception, 'output arg error, it must be a path and exists.'
+                
+            t.dump_packs( output )
+            
+        else :
+            
+            pth, f = os.path.split(output)
+            
+            if f == '' or os.path.isdir(pth or '.') == False :
+                raise Exception, 'output arg error, it must be a file, not a path, or using --extract.'
+            
+            t.dump_ttf( output )
+            
+    
+    
+    #print t.numGlyphs
+    #print t.stt_entrys['head']['unitsPerEm']
+    
+    #t.subset('abcdef')
     #t.dump_ttf( 'out.ttf', onlyrequiredtable=True )
-    t.dump_ttf( 'out.ttf' )
-    
-    
-    
+    #t.dump_ttf( 'out.ttf' )
     
     
     
