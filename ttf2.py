@@ -57,6 +57,8 @@ def sum_checksum( checksums ):
 def int16b( ch ):
     return chr(ch/256) + chr(ch%256)
 
+def int32b( ch ):
+    return chr(ch/(256**3)) + chr((ch/(256**2))%256) + chr((ch/256)%256) + chr(ch%256)
 
 def make_ser( inp, nbyte ):
     
@@ -191,9 +193,88 @@ def load_unicode_block( fname ):
     
     lns = lns + xlns
     lns.sort( key = lambda n:n[0] )
-    lns = [ name for st, ed, name in lns for s in range(st>>8,(ed>>8)+1) ]
     
     return lns
+
+def init_unicodemap( unicodemap ):
+    
+    block = load_unicode_block( os.path.realpath(__file__).rsplit('/')[0]+'Blocks-6.1.0d1.txt' )
+    
+    namesearch = dict( (name, (st,ed)) for st, ed, name in block )
+    charsearch = [ name for st, ed, name in block for s in range(st>>8,(ed>>8)+1) ]
+    
+    unicodemap.namesearch = namesearch
+    unicodemap.charsearch = charsearch
+    
+    return unicodemap
+
+@init_unicodemap
+class UnicodeMap(object):
+    
+    def __init__( self ):
+        
+        pass
+        
+    def __getitems__( self, index ):
+        
+        if len(index) != 1 :
+            
+            n = self.namesearch.get(index,None)
+            
+            if n is None :
+                raise IndexError, 'map not found'
+            
+            return UnicodeMapSet(n)
+            
+        else :
+            
+            n = self.charsearch[ ord(unicode(index)) >> 8 ]
+            
+            return n
+    
+    def getname( self, c ):
+        n = self.charsearch[ ord(unicode(c)) >> 8 ]
+        return n
+    
+    def getset( self, n ):
+        n = self.namesearch.get(n,None)
+        if n is None :
+            raise IndexError, 'map not found'
+        return UnicodeMapSet(n)
+        
+    
+unimap = UnicodeMap()
+
+class UnicodeMapSet( object ):
+    
+    def __init__ ( self, seg ):
+        
+        self.seg = seg
+        
+        self.min = seg[0]
+        self.max = seg[1]
+        
+        self.st = unichr(seg[0])
+        self.ed = unichr(seg[1])
+    
+    def by_difference( self, other ):
+        
+        if type(other) != set :
+            raise TypeError, 'inp type error.'
+        
+        st, ed = self.st, self.ed
+        
+        return set( s for s in other if s < st or s > ed )
+    
+    def by_intersection( self, other ):
+        
+        if type(other) != set :
+            raise TypeError, 'inp type error.'
+        
+        st, ed = self.st, self.ed
+        
+        return set( s for s in other if s >= st or s <= ed )
+
 
 class TTFile(object):
     
@@ -203,12 +284,13 @@ class TTFile(object):
     ebp.rebuild_namespaces()
     ebp.parsefile( 'ttf.protocol' )
     
-    unicode_block = load_unicode_block( os.path.realpath(__file__).rsplit('/')[0]+'Blocks-6.1.0d1.txt' )
-    
     def __init__( self ):
         
         self.name = None
         self.nametuple = None
+        
+        self.sfntversion = None
+        
         self.fix_entrys = {}
         self.stt_entrys = {}
         self.char_defines = {}
@@ -221,7 +303,7 @@ class TTFile(object):
         self.glyphDataFormat = None
         
         self.numGlyphs = None
-
+        
         
     idxsort = ['head','maxp','cmap','loca','glyf','kern','hhea','hmtx','post','name','OS/2','prep','cvt ','fpgm']
     requiredtable = set(['head','maxp','cmap','loca','glyf','hhea','hmtx','post','name','OS/2',])
@@ -256,6 +338,7 @@ class TTFile(object):
         with open( path+'global', 'r' ) as fp :
             
             g = pickle.load( fp )
+            
             self.name = g['name']
             self.tuplename = g['tuplename']
             
@@ -265,6 +348,8 @@ class TTFile(object):
             self.italic = g['italic']
             self.indexToLocFormat = g['indexToLocFormat']
             self.glyphDataFormat = g['glyphDataFormat']
+            
+            self.numGlyphs = g['numGlyphs']
         
         return
     
@@ -371,6 +456,9 @@ class TTFile(object):
                 r.extend( zip(range(st,ed+1),vs) )
             else :
                 r.extend( [ (k, (k+delta)%65536) for k in range(st,ed+1) ] )
+        
+        if r[0][0] != 0 :
+            r = [(0,0)] + r
         
         e['data'] = [ (unichr(k), v) for k, v in r ]
     
@@ -539,6 +627,8 @@ class TTFile(object):
             g['indexToLocFormat'] = self.indexToLocFormat
             g['glyphDataFormat'] = self.glyphDataFormat
             
+            g['numGlyphs'] = self.numGlyphs
+            
             pickle.dump( g, fp )
             
         with open( path+'char_defines', 'w' ) as fp :
@@ -566,7 +656,6 @@ class TTFile(object):
         
         with open( path+'char_blocks', 'w' ) as fp :
             pickle.dump( char_blocks, fp )
-            
             
         return
     
@@ -678,7 +767,7 @@ class TTFile(object):
             self.bold*1 + self.italic*2, #macStyle
             _head['lowestRecPPEM'],
             _head['fontDirectionHint'],
-            0, #indexToLocFormat,
+            1, #indexToLocFormat,
             self.glyphDataFormat,
         )
         
@@ -778,9 +867,12 @@ class TTFile(object):
         glyf = [ self.char_defines[k][1] for k in ks ]
         
         loca = [ len(g) for g in glyf ]
-        loca = [ sum(loca[:i])/2 for i in range(len(loca)+1) ]
         
-        loca = ''.join( int16b(lo) for lo in loca )
+        #loca = [ sum(loca[:i])/2 for i in range(len(loca)+1) ]
+        #loca = ''.join( int16b(lo) for lo in loca )
+        
+        loca = [ sum(loca[:i]) for i in range(len(loca)+1) ]
+        loca = ''.join( int32b(lo) for lo in loca )
         
         return checksum(loca), len(loca), loca
     
@@ -894,7 +986,7 @@ class TTFile(object):
                     idx.append(p)
                 else :
                     strnames.append(p)
-                    idx.append( 257 + len(strname) )
+                    idx.append( 257 + len(strnames) )
                     
             idx = ''.join( int16b(p) for p in idx )
             strnames = ''.join( chr(len(sn))+sn for sn in strnames )
@@ -953,7 +1045,31 @@ class TTFile(object):
     
     def copy( self ):
         
-        return
+        another = TTFile()
+        
+        another.name = self.name
+        another.tuplename = self.tuplename
+        
+        another.sfntversion = self.sfntversion
+        
+        another.bold, another.italic = self.bolb, self.italic
+        another.indexToLocFormat = self.indexToLocFormat
+        another.glyphDataFormat = self.glyphDataFormat
+        
+        another.numGlyphs = self.numGlyphs
+        
+        
+        another.char_defines = self.char_defines.copy()
+        
+        if char_kern != None :
+            another.char_kern = [ (sc, field[:]) for sc, field in self.char_kern ]
+        
+        another.char_dup = self.char_dup[:]
+        
+        another.fix_entrys = self.fix_entrys.copy()
+        another.stt_entrys = self.stt_entrys.copy()
+        
+        return another
         
     def rename( self, name=None, familyname=None, subfamilyname=None, postname=None,
                       version=None, identifier=None, copyright=None, trademark=None):
@@ -977,24 +1093,41 @@ class TTFile(object):
         
         return
     
-    def subset( self, subchrs, ignore=None ):
+    @staticmethod
+    def build_subchrs( subchrs ):
         
         if type(subchrs) == types.StringType :
             subchrs = unicode(subchrs)
+            subchrs = set(subchrs)
         elif type(subchrs) in ( types.ListType, types.TupleType, set ) :
             if not all( ( type(c) in types.StringTypes and len(c) == 1 ) for c in subchrs ) :
                 raise TTFError, 'err input for subchrs'
             subchrs = [ unicode(c) for c in subchrs ]
+            subchrs = set(subchrs)
         elif type(subchrs) == types.UnicodeType :
-            pass
+            subchrs = set(subchrs)
+        elif type(subchrs) == set :
+            if all( ( type(c) == types.UnicodeType ) for c in subchrs ) :
+                subchrs = subchrs.copy()
+            elif all( ( type(c) in types.StringTypes and len(c) == 1 ) for c in subchrs ) :
+                subchrs = set( unicode(c) for c in subchrs )
+            else :
+                raise TTFError, 'inp type error'
         else :
-            raise TTFError, 'inp type error'
+            raise TTFError, 'inp type error'        
+        
+        return subchrs
+    
+    def subset( self, subchrs, ignore=None ):
+        
+        subchrs = self.build_subchrs( subchrs )
         
         if ignore == None :
-            subchrs = [ c for c in subchrs if c not in '\r\n\t\b']
+            #subchrs = [ c for c in subchrs if c not in '\r\n\t\b']
+            subchrs = subchrs - set('\r\n\t\b')
             ignore = True
         
-        subchrs = set(subchrs) | set(unichr(0))
+        subchrs = subchrs | set(unichr(0))
         
         if ignore == True :
             self.char_defines = dict( (c, self.char_defines[c]) for c in subchrs )
@@ -1004,23 +1137,90 @@ class TTFile(object):
         
         if self.char_kern != None :
             charkern = [ 
-                (sc, [ (a, b, v) for a, b, v in field if a in subchrs and b in subchrs ]) 
+                (sc, [ (l, r, v) for l, r, v in field if l in subchrs and r in subchrs ]) 
                 for sc, field in self.char_kern
             ]
             charkern = [ (sc, field) for sc, field in charkern if len(field) != 0 ]
             self.char_kern = None if len(charkern) == 0 else charkern
             
         cdup = [ tuple( c for c in cs if c in subchrs ) for cs in self.char_dup ]
-        cdup = [ cs for cs in cdup if len(cs) != 0 ]
+        cdup = [ cs for cs in cdup if len(cs) > 1 ]
         self.char_dup = cdup
         
         self.numGlyphs = len(self.char_defines)
         
         return
     
-    def merge( self, another, subchrs=None, covered=False ):
+    def update( self, another, subchrs=None, covered=False ):
+        
+        if self.stt_entrys['head']['unitsPerEm'] != another.stt_entrys['head']['unitsPerEm'] :
+            raise TTFError, 'unitsPerEm not match'
+            
+        #if self.stt_entrys['hhea']['ascender'] != another.stt_entrys['hhea']['ascender'] :
+        #    raise TTFError, 'ascender not match'
+            
+        #if self.stt_entrys['hhea']['descender'] != another.stt_entrys['hhea']['descender'] :
+        #    raise TTFError, 'descender not match'
+        
+        if type(subchrs) == UnicodeMapSet :
+        
+            subchrs = subchrs.by_intersection( set(another.char_defines.keys()) )
+        
+        else :
+            
+            if subchrs == None :
+                subchrs = another.char_defines.keys()
+        
+            subchrs = self.build_subchrs( subchrs )
+            subchrs = subchrs - set(unichr(0))
+        
+        if covered == True :
+            rm_glyph = []
+        else :
+            rm_glyph = [ (c,self.char_defines.pop(c,None)) for c in subchrs ]
+            rm_glyph = [ (c, g) for c, g in rm_glyph if g != None]
+                
+        rm_chars = zip(*rm_glyph)[0] if rm_glyph else []
+        rm_chars = set(rm_chars)
+        
+        add_glyph = [ (c, another.char_defines.get(c, None) ) for c in subchrs ] 
+        add_glyph = [ (c, g) for c, g in add_glyph if g != None ]
+        
+        add_chars = zip(*add_glyph)[0] if add_glyph else []
+        add_chars = set(add_chars)
+        
+        if covered == True :
+            #self.char_defines.update(dict(add_glyph))
+            for c, g in add_glyph :
+                self.char_defines[c] = g
+        else :
+            for c, g in add_glyph :
+                self.char_defines.setdefault(c,g)
+            
+        self.numGlyphs = len(self.char_defines)
+        
+        this_kern = [ (sc, [ (l, r, v) for l, r, v in l not in rm_chars and r not in rm_chars ] ) 
+                      for sc, field in self.char_kern ] if self.char_kern else []
+        that_kern = [ (sc, [ (l, r, v) for l, r, v in l in add_chars and r in add_chars ] ) 
+                      for sc, field in another.char_kern ] if another.char_kern else []
+        
+        charkern = this_kern + that_kern
+        charkern = [ (sc, field) for sc, field in charkern if len(field) != 0 ]
+        self.char_kern = None if len(charkern) == 0 else charkern
+        
+        this_dup = [ tuple( c for c in cs if c not in rm_chars ) for cs in self.char_dup ]
+        this_dup = [ cs for cs in this_dup if len(cs) > 1 ]
+        that_dup = [ tuple( c for c in cs if c in add_chars ) for cs in another.char_dup ]
+        that_dup = [ cs for cs in that_dup if len(cs) > 1 ]
+        self.char_dup = this_dup + that_dup
         
         return
+
+
+transmapdefault = '⋯…≪《≫》'.decode('utf-8')
+transmapdefault = dict(zip(transmapdefault[::2],transmapdefault[1::2]))
+
+
 
 if __name__ == '__main__' :
     
@@ -1029,9 +1229,55 @@ if __name__ == '__main__' :
     
     opts, args = getopt.gnu_getopt(
         sys.argv[1:],
-        'o:s:c:ge',
-        ['output=','subset=','subset-file=','decoding=','ignore','extract','rename=']
+        'o:s:S:c:gen:m:I:rx:X:t:y:lh',
+        ['output=','subset=','subset-file=','decoding=','ignore','extract',
+         'rename=','map=','integrate=','replace',
+         'text','text-file','text-code','output-code','use-symbol','stripline',
+         'help']
     )
+    
+    optks = zip(opts)[0] if opts else []
+    if 'help' in optks or 'h' in optks or len(args) != 1 :
+        print '''\
+TTF tool. present by py-Al project. it written by python.
+
+
+examples :
+  ttf.py [-s subsetchrs] [-I integratefont] [-o outputfile] <xxx.ttf|packagespath>
+or
+  ttf.py [-T textfile] [-o outputfile] <xxx.ttf|packagespath>
+
+
+arguments :
+    --output      -o file  : output file or path
+    --extract     -e       : extract the font file instead build a new ttf file
+    --rename      -n name  : rename the font file
+    
+for subset :
+    --subset      -s text  : set subset charactors
+    --subset-file -S file  : set subset charactors from file
+    --decoding    -c codec : set subset charactors or file coding
+    --ignore      -g       : ignore if subset charactor not found
+    
+for integrate :
+    --map         -m block : set the integrate subset, using unicode block name
+    --integrate   -I file  : integrate a font to your font
+    --replace     -r       : integrate the charactor even it in your font
+    
+for parse text file :
+    --text        -x text  : text to parse
+    --text-file   -X file  : read the text from file
+    --text-code      codec : text codec
+    --output-code    codec : output file's codec
+    --translate   -t text  : translate map, odd is key, even is value
+    --use-symbol  -y text  : replace the invisionable charactor
+    --stripline   -l       : strip the invisionable charactor by line
+    
+for help :
+    --help        -h       : to show this help info.
+
+'''
+
     
     subset = ''
     output = None
@@ -1039,6 +1285,16 @@ if __name__ == '__main__' :
     ignore = False
     extract = False
     rename = None
+    intmaps = None
+    intcover = False
+    integrate = []
+    
+    text = None
+    textdecoding = 'ascii'
+    outputcoding = 'utf-8'
+    transmap = {}
+    symbol = u''
+    stripline = False
     
     for k, v in opts :
         
@@ -1048,23 +1304,18 @@ if __name__ == '__main__' :
             output = v
         
         elif k in ( 'subset', 's' ):
-            
-            for d in [decoding,'utf-8']:
-                try :
-                    subset += v.decode(d)
-                    break
-                except UnicodeDecodeError :
-                    continue
-            else :
-                raise
+            d = 'utf-8' if decoding == 'ascii' else decoding
+            subset += v.decode(d)
         
-        elif k in ( 'subset-file', ):
+        elif k in ( 'subset-file', 'S' ):
             
             with open( v ) as fp :
                 d = decoding
                 h = fp.read(2)
                 if h == '\xff\xfe' :
-                    d = 'utf-8'
+                    d = 'utf-16'
+                else h == '\xfe\xff' :
+                    d = 'utf-16BE'
                 else :
                     fp.seek(0)
                 subset += fp.read().decode(d)
@@ -1078,44 +1329,132 @@ if __name__ == '__main__' :
         elif k in ( 'extract', 'e' ):
             extract = True
             
-        elif k in ( 'rename', ):
+        elif k in ( 'rename', 'n' ):
             rename = v
             
-    t = TTFile()
-    t.load( args[0] )
-    
-    if subset != '' :
-        t.subset( subset, ignore=ignore )
-        
-    if rename :
-        t.rename( rename )
-    
-    if output :
-        
-        if extract :
-        
-            if os.path.isdir(output) == False :
-                raise Exception, 'output arg error, it must be a path and exists.'
-                
-            t.dump_packs( output )
+        elif k in ( 'map', 'm' ):
+            intmaps = unimap.getset(v.replace('_',' ').strip())
             
+        elif k in ( 'integrate', 'I' ):
+            integrate.append( (v,intmaps,intcover) )
+            intmaps = None
+            intcover = False
+            
+        elif k in ( 'replace', 'r' ):
+            intcover = True
+    
+        elif k in ( 'text', 'x' ) :
+            text = v
+            
+        elif k in ( 'text-file', 'X' ):
+            text = open(v,'r')
+            
+        elif k in ( 'text-code', ):
+            textdecoding = v
+            
+        elif k in ( 'output-code', ):
+            outputcoding = v
+            
+        elif k in ( 'translate', 't' ):
+            if v :
+                d = 'utf-8' if textdecoding == 'ascii' else textdecoding
+                v = v.decode(d)
+                transmap = dict(zip(v[::2],v[1::2]))
+            else :
+                transmap = transmapdefault
+        
+        elif k in ( 'use-symbol', 'y' ):
+            if v :
+                d = 'utf-8' if textdecoding == 'ascii' else textdecoding
+                symbol = v.decode(d)
+            else :
+                symbol = u'\u2588'
+            
+        elif k in ( 'stripline', 'l' ):
+            stripline = True
+    
+    
+    if type(text) == types.StringType :
+        d = 'utf-8' if textdecoding == 'ascii' else textdecoding
+        text = text.decode(d)
+    elif type(text) == types.FileType :
+        d = decoding
+        fp = text
+        h = fp.read(2)
+        if h == '\xff\xfe' :
+            d = 'utf-16'
+        else h == '\xfe\xff' :
+            d = 'utf-16BE'
         else :
-            
-            pth, f = os.path.split(output)
-            
-            if f == '' or os.path.isdir(pth or '.') == False :
-                raise Exception, 'output arg error, it must be a file, not a path, or using --extract.'
-            
-            t.dump_ttf( output )
-            
+            fp.seek(0)
+        text = fp.read().decode(d)
+        fp.close()
     
     
-    #print t.numGlyphs
-    #print t.stt_entrys['head']['unitsPerEm']
+    if text and (subset or integrate):
+        raise Exception, 'can not both parse text and subset/integrate.'
+        
+    if text :
+        
+        t = TTFile()
+        t.load( args[0] )
+        
+        inp_chars = set(text) - set(u'\r\n\t\b')
+        lost_chars = inp_chars - set(t.char_defines.keys())
+        strip_chars = lostchars - set(transmap.keys())
+        
+        lost_map = dict( (c,symbol) for c in lost_chars )
+        lost_map.update(transmap)
+        
+        text = text.splitlines()
+        text = [ l.strip(''.join(strip_chars)) for l in text ]
+        text = [ ''.join( lost_map.get(c,c) for c in l ) for l in text ]
+        
+        text = '\r\n'.join(text)
+        
+        with open( output ) as fp :
+            fp.write( text.encode(outputcoding) )
+        
+    else :
     
-    #t.subset('abcdef')
-    #t.dump_ttf( 'out.ttf', onlyrequiredtable=True )
-    #t.dump_ttf( 'out.ttf' )
-    
+        t = TTFile()
+        t.load( args[0] )
+        
+        if integrate :
+            gt = {}
+            for ifn, imap, icover in integrate :
+                it = gt.get(ifn,None)
+                if not it :
+                    it = TTFile()
+                    it.load(ifn)
+                    gt[ifn] = it
+                #it = TTFile()
+                #it.load(ifn)
+                t.update( it, imap, icover )
+        
+        if subset != '' :
+            t.subset( subset, ignore=ignore )
+            
+        if rename :
+            t.rename( rename )
+        
+        elif output :
+            
+            if extract :
+            
+                if os.path.isdir(output) == False :
+                    raise Exception, 'output arg error, it must be a path and exists.'
+                    
+                t.dump_packs( output )
+                
+            else :
+                
+                pth, f = os.path.split(output)
+                
+                if f == '' or os.path.isdir(pth or '.') == False :
+                    raise Exception, 'output arg error, it must be a file, not a path, or using --extract.'
+                
+                t.dump_ttf( output )
+            
     
     
