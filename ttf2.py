@@ -309,19 +309,24 @@ class TTFile(object):
     requiredtable = set(['head','maxp','cmap','loca','glyf','hhea','hmtx','post','name','OS/2',])
     #idxsort = dict( (n,i) for i, n in enumerate(idxsort) )
     
-    def load( self, fname ):
+    def load( self, fname, noglyph=False ):
         
-        if os.path.isdir('./workspace'):
-            self.load_packs( fname )
+        if os.path.isdir(fname):
+            self.load_packs( fname, noglyph )
+        else :
+            self.load_ttf( fname, noglyph )
         
-        self.load_ttf( fname )
-        
-    def load_packs( self, path ):
+    def load_packs( self, path, noglyph=False ):
         
         path += '' if path.endswith('/') else '/'
         
-        with open( path+'char_defines', 'r' ) as fp :
-            self.char_defines = pickle.load( fp )
+        if noglyph :
+            with open( path+'char_blocks', 'r' ) as fp :
+                ks = pickle.load( fp )['']
+                self.char_defines = dict(zip(ks,[None]*len(ks)))
+        else :
+            with open( path+'char_defines', 'r' ) as fp :
+                self.char_defines = pickle.load( fp )
         
         with open( path+'char_kern', 'r' ) as fp :
             self.char_kern = pickle.load( fp )
@@ -340,7 +345,7 @@ class TTFile(object):
             g = pickle.load( fp )
             
             self.name = g['name']
-            self.tuplename = g['tuplename']
+            self.nametuple = g['nametuple']
             
             self.sfntversion = g['sfntversion']
             
@@ -353,7 +358,12 @@ class TTFile(object):
         
         return
     
-    def load_ttf( self, fname ):
+    def load_ttf( self, fname, noglyph=False ):
+        
+        if noglyph :
+            self.idxsort = self.idxsort[:]
+            self.idxsort.remove('glyf')
+            self.idxsort.remove('hmtx')
         
         with open(fname) as fp :
             
@@ -370,15 +380,22 @@ class TTFile(object):
             for e in entrys :
                 self.read_entry( fp, e, ae )
                 
-        chrdef = zip( ae['post']['data'],
-                      ae['glyf']['data'], 
-                      ae['hmtx']['data'] )
-        self.char_defines = dict( (k, chrdef[v]) for k, v in ae['cmap']['data'] )
+        if noglyph :
+            
+            self.char_defines = dict( zip(ae['cmap']['data'],[None]*self.numGlyphs) )
+            
+        else :
+            chrdef = zip( ae['post']['data'],
+                          ae['glyf']['data'], 
+                          ae['hmtx']['data'] )
+            self.char_defines = dict( (k, chrdef[v]) for k, v in ae['cmap']['data'] )
         
 
-        setv = [ v for k, v in ae['cmap']['data'] ]
-        inmap = [ (v, [ k for k, v in ae['cmap']['data'] if v == sv ]) for sv in setv ]
-        self.char_dup = [ tuple(ks) for g, ks in inmap ]
+        inmap = {}
+        for k, v in ae['cmap']['data'] :
+            inmap.setdefault(v,[])
+            inmap[v].append(k)
+        self.char_dup = [ tuple(ks) for ks in inmap.values() if len(ks) > 1 ]
 
         if 'kern' in entrys :
             
@@ -618,7 +635,7 @@ class TTFile(object):
             g = {}
             
             g['name'] = self.name
-            g['tuplename'] = self.tuplename 
+            g['nametuple'] = self.nametuple
             
             g['sfntversion'] = self.sfntversion
             
@@ -648,7 +665,7 @@ class TTFile(object):
             
         char_blocks = {}
         for k in self.char_defines :
-            char_blocks.get( (self.unicode_block[ord(k)>>8]) if k!=0 else 'null', [] ).append(k)
+            char_blocks.get( (unimap.getname(k)) if k!=chr(0) else 'null', [] ).append(k)
         char_blocks[''] = self.char_defines.keys()
         
         for v in char_blocks.values() :
@@ -1048,7 +1065,7 @@ class TTFile(object):
         another = TTFile()
         
         another.name = self.name
-        another.tuplename = self.tuplename
+        another.nametuple = self.nametuple
         
         another.sfntversion = self.sfntversion
         
@@ -1215,6 +1232,16 @@ class TTFile(object):
         self.char_dup = this_dup + that_dup
         
         return
+        
+    def showinfos( self ):
+        
+        print '       Name :', self.name
+        print ' unitsPerEm :', self.stt_entrys['head']['unitsPerEm']
+        print 'atalicAngle :', self.stt_entrys['post']['atalicAngle']['major'],\
+                          '.', self.stt_entrys['post']['atalicAngle']['sub']
+        print '  numGlyphs :', self.numGlyphs
+        
+        return
 
 
 transmapdefault = '⋯…≪《≫》'.decode('utf-8')
@@ -1229,42 +1256,52 @@ if __name__ == '__main__' :
     
     opts, args = getopt.gnu_getopt(
         sys.argv[1:],
-        'o:s:S:c:gen:m:I:rx:X:t:y:lh',
-        ['output=','subset=','subset-file=','decoding=','ignore','extract',
-         'rename=','map=','integrate=','replace',
-         'text','text-file','text-code','output-code','use-symbol','stripline',
+        'o:s:S:c:gen:m:I:rx:X:t:y:lih',
+        ['output=','extract',
+         'info',
+         'rename=',
+         'subset=','subset-file=','decoding=','ignore',
+         'map=','integrate=','replace',
+         'text=','text-file=','text-code=','output-code=','translate=','use-symbol=','stripline',
          'help']
     )
     
-    optks = zip(opts)[0] if opts else []
-    if 'help' in optks or 'h' in optks or len(args) != 1 :
-        print '''\
+    helpinfo = '''\
 TTF tool. present by py-Al project. it written by python.
 
 
 examples :
+
   ttf.py [-s subsetchrs] [-I integratefont] [-o outputfile] <xxx.ttf|packagespath>
 or
   ttf.py [-T textfile] [-o outputfile] <xxx.ttf|packagespath>
-
+or 
+  ttf.py <xxx.ttf|packagespath> --info
 
 arguments :
+
+ common :
     --output      -o file  : output file or path
     --extract     -e       : extract the font file instead build a new ttf file
-    --rename      -n name  : rename the font file
     
-for subset :
+ for display font info :
+    --info        -i       : show font file infomations
+ 
+ for change font info :
+    --rename      -n name  : rename the font file
+ 
+ for subset :
     --subset      -s text  : set subset charactors
     --subset-file -S file  : set subset charactors from file
     --decoding    -c codec : set subset charactors or file coding
     --ignore      -g       : ignore if subset charactor not found
     
-for integrate :
+ for integrate :
     --map         -m block : set the integrate subset, using unicode block name
     --integrate   -I file  : integrate a font to your font
     --replace     -r       : integrate the charactor even it in your font
     
-for parse text file :
+ for parse text file :
     --text        -x text  : text to parse
     --text-file   -X file  : read the text from file
     --text-code      codec : text codec
@@ -1273,11 +1310,20 @@ for parse text file :
     --use-symbol  -y text  : replace the invisionable charactor
     --stripline   -l       : strip the invisionable charactor by line
     
-for help :
+ for help :
     --help        -h       : to show this help info.
-
 '''
+    
+    optks = zip(opts)[0] if opts else []
+    if 'help' in optks or 'h' in optks :
+        print helpinfo
+        sys.exit(0)
 
+    if len(args) != 1 :
+        print 'error: arguments wrong'
+        print 
+        print helpinfo
+        sys.exit(-1)
     
     subset = ''
     output = None
@@ -1288,6 +1334,8 @@ for help :
     intmaps = None
     intcover = False
     integrate = []
+    
+    info = False
     
     text = None
     textdecoding = 'ascii'
@@ -1314,7 +1362,7 @@ for help :
                 h = fp.read(2)
                 if h == '\xff\xfe' :
                     d = 'utf-16'
-                else h == '\xfe\xff' :
+                elif h == '\xfe\xff' :
                     d = 'utf-16BE'
                 else :
                     fp.seek(0)
@@ -1356,23 +1404,25 @@ for help :
             outputcoding = v
             
         elif k in ( 'translate', 't' ):
-            if v :
+            if v == 'auto' :
+                transmap = transmapdefault
+            elif v :
                 d = 'utf-8' if textdecoding == 'ascii' else textdecoding
                 v = v.decode(d)
                 transmap = dict(zip(v[::2],v[1::2]))
-            else :
-                transmap = transmapdefault
         
         elif k in ( 'use-symbol', 'y' ):
-            if v :
+            if v == 'auto' :
+                symbol = u'\u2588'
+            elif v :
                 d = 'utf-8' if textdecoding == 'ascii' else textdecoding
                 symbol = v.decode(d)
-            else :
-                symbol = u'\u2588'
             
         elif k in ( 'stripline', 'l' ):
             stripline = True
     
+        elif k in ( 'info', 'i' ):
+            info = True
     
     if type(text) == types.StringType :
         d = 'utf-8' if textdecoding == 'ascii' else textdecoding
@@ -1383,7 +1433,7 @@ for help :
         h = fp.read(2)
         if h == '\xff\xfe' :
             d = 'utf-16'
-        else h == '\xfe\xff' :
+        elif h == '\xfe\xff' :
             d = 'utf-16BE'
         else :
             fp.seek(0)
@@ -1392,27 +1442,35 @@ for help :
     
     
     if text and (subset or integrate):
-        raise Exception, 'can not both parse text and subset/integrate.'
+        print >> sys.stderr, 'can not both parse text and subset/integrate.'
+    
+    if info :
+    
+        t = TTFile()
+        t.load( args[0], noglyph=True )
         
-    if text :
+        t.showinfos()
+        
+    elif text :
         
         t = TTFile()
-        t.load( args[0] )
+        t.load( args[0], noglyph=True )
         
         inp_chars = set(text) - set(u'\r\n\t\b')
         lost_chars = inp_chars - set(t.char_defines.keys())
-        strip_chars = lostchars - set(transmap.keys())
+        strip_chars = lost_chars - set(transmap.keys())
         
         lost_map = dict( (c,symbol) for c in lost_chars )
         lost_map.update(transmap)
         
         text = text.splitlines()
-        text = [ l.strip(''.join(strip_chars)) for l in text ]
+        if stripline :
+            text = [ l.strip(''.join(strip_chars)) for l in text ]
         text = [ ''.join( lost_map.get(c,c) for c in l ) for l in text ]
         
         text = '\r\n'.join(text)
         
-        with open( output ) as fp :
+        with open( output, 'w' ) as fp :
             fp.write( text.encode(outputcoding) )
         
     else :
