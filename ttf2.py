@@ -1272,13 +1272,13 @@ TTF tool. present by py-Al project. it written by python.
 
 examples :
 
-  ttf.py [-s subsetchrs] [-I integratefont] [-o outputfile] <xxx.ttf|packagespath>
-or
-  ttf.py [-T textfile] [-o outputfile] <xxx.ttf|packagespath>
-or 
-  ttf.py <xxx.ttf|packagespath> --info
+   ttf.py [-s subsetchrs] [-I integratefont] [-o output] <xxx.ttf|packagespath>
+ or
+   ttf.py [-T textfile] [-o outputfile] <xxx.ttf|packagespath>
+ or 
+   ttf.py <xxx.ttf|packagespath> --info
 
-arguments :
+command arguments :
 
  common :
     --output      -o file  : output file or path
