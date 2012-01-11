@@ -1,14 +1,42 @@
 import os
+import types
+
+import pprint
+import sys
 
 class PDFError(Exception):
     pass
+    
 
+class ObjectOnReading(Exception):
+    pass
+
+class Name( str ):
+    pass
+    
+class ObjRef( object ):
+    def __init__( self, n ):
+        self.n = n
+        
+    def __str__( self ):
+        return 'obj('+str(self.n)+')'
+        
+    def __repr__( self ):
+        return 'obj('+str(self.n)+')'
+
+class SuperLongString( str ):
+    
+    def __str__( self ):
+        return 'SuperLongString[['+str(len(self))+']]'
+        
+    def __repr__( self ):
+        return 'SuperLongString[['+str(len(self))+']]'
 
 class PDF( object ):
     
     def __init__ ( self ):
         
-        self.data = {}
+        self.objects = {}
 
     def loads( self, fn ):
         
@@ -19,16 +47,16 @@ class PDF( object ):
             fp.seek(xrefpos)
             
             xrefs = self.read_xref( fp )
+            trailer = self.read_trailer( xrefs, fp )
             
-            objs = []
-            for pos in xrefs :
-                if pos is None:
-                    objs.append( pos )
+            for nx, pos in xrefs.items() :
+                if nx in self.objects :
                     continue
-                fp.seek( pos )
-                objs.append( self.read_object(fp) )
+                self.read_object( nx, xrefs, fp )
             
-            print objs
+            pprint.pprint( trailer )
+            pprint.pprint( self.objects )
+            #print self.objects
             
     def read_startxref( self, fp ):
         
@@ -44,145 +72,208 @@ class PDF( object ):
         if fp.readline() != 'xref\n':
             raise PDFError, 'pdf format error, when read xref.'
         
-        xrefs = []
+        xrefs = {}
         ln = fp.readline()
-        while( ln != 'trailer\n' ):
+        while( not ln.startswith( 'trailer' ) ):
             
             st, cnt = ln.strip().split()
             st, cnt = int(st), int(cnt)
             
-            if st != len(xrefs) :
-                xrefs = [None]*(st-len(xrefs))
-            
             for i in range(cnt):
                 pos, upd, tag = fp.readline().split()
-                pos = int(pos) if tag == 'n' else None
-                xrefs.append(pos)
+                if tag == 'f' :
+                    continue
+                xrefs[(st+i, int(upd))] = int(pos)
                 
             ln = fp.readline()
         
-        fp.seek( -len('trailer\n') , os.SEEK_CUR)
+        fp.seek( -len(ln) , os.SEEK_CUR)
         
         return xrefs
     
-    def read_trailer( self, fp ):
+    def read_trailer( self, xrefs, fp ):
         
-        pass
+        print >> sys.stderr, 't'
         
-    def read_object( self, fp ):
+        ln = fp.readline()
+        if not ln.startswith('trailer'):
+            raise PDFError, 'pdf format error. wrong trailer : ' + fp.read()
+            
+        return self.read_type(fp, xrefs=xrefs)[0]
+        
+    def read_object( self, nx, xrefs, fp ):
+        
+        print >> sys.stderr, nx
+        
+        fp.seek( xrefs[nx] )
         
         n, upd, objtag = fp.readline().split()
         
-        print n
+        self.objects[nx] = ObjectOnReading
         
-        v = self.read_type(fp)
+        if (int(n),int(upd)) != nx :
+            raise PDFError, 'pdf format error. object address error.'
         
-        ln = fp.readline()
-        if ln == 'stream\n' :
-            v = v
-        elif ln != 'endobj\n':
-            raise PDFError, 'pdf format error. when read object' + ln
-
+        v, ln = self.read_type(fp, xrefs=xrefs)
+        
+        #ln = fp.readline()
+        if ln.startswith('stream') :
+            
+            if type(v) != types.DictType :
+                raise PDFError, 'pdf format error. wrong stream'
+            le = v['Length']
+            v = fp.read(le)
+            
+            if len(v) > 1024*5 :
+                v = SuperLongString(v)
+            
+        elif ln.startswith('endobj') :
+            pass
+            
+        else :
+            raise PDFError, 'pdf format error. when read object : ' + ln
+            
+        self.objects[nx] = v
+        
         return v
         
-    def read_type( self, fp, ln='' ):
+    def read_type( self, fp, ln='', xrefs={} ):
         
-        #ln = ln.strip()
-        ln = ln or fp.readline().lstrip()
+        ss = []
+        stack = []
         
-        print ln
-        
-        if ln.startswith('true') or ln.startswith('false'):
-            return self.read_type_booleam( fp, ln )
-        
-        elif ln[0].isdigit() or ln[0] in '+-' :
-            return self.read_type_numeric( fp, ln )
-        
-        elif ln.startswith('['):
-            return self.read_type_array( fp, ln )
-        
-        elif ln.startswith('<<'):
-            return self.read_type_dict( fp, ln )
-        
-        elif ln.startswith('/'):
-            return self.read_type_name( fp, ln )
-        
-        elif ln.startswith('(') :
-            return self.read_type_string1( fp, ln )
+        while( True ):
             
-        elif ln.startswith('<') :
-            return self.read_type_string2( fp, ln )
-            
-        elif ln.startswith('null'):
-            return None, ln[4:]
-        
-        raise PDFError, 'unkown type'
-        
-    def read_type_booleam( self, fp, ln ):
-        v, ln = ln.split(None,1)
-        return eval(v.capitalize()), ln.lstrip()
-    
-    def read_type_numeric( self, fp, ln ):
-        v, ln = ln.split(None,1)
-        return eval(ln), ln.lstrip()
-        
-    def read_type_string1( self, fp, ln ):
-        
-        ln = ln[1:]
-        
-        v = []
-        while(True):
-            r = ln.split(')',1)
-            if len(r) != 2 :
-                v.append(ln)
-                ln = fp.readline()
-                continue
+            ln = ln.lstrip() or fp.readline().lstrip()
+            if ln.startswith('endobj') or \
+               ln.startswith('stream') or \
+               ln.startswith('startxref'):
+                break
                 
-            vi, rln = r
-            if ( len(v.rstrip('/')) - len(v) ) % 2 != 0 :
-                v.append(ln)
-                ln = fp.readline()
-                continue
+            print >> sys.stderr, ':', ln.strip()
             
-            return '\n'.join(vi), rln.lstrip()
+            # boolean
+            # eg : true false
+            if ln.startswith('true') :
+                stack.append(True)
+                ln = ln[4:]
+                
+            elif ln.startswith('false'):
+                stack.append(False)
+                ln = ln[4:]
+                
+            # Numeric
+            # eg : 123 43445 +17 -98 0
+            #      34.5 -3.62 +123.6 4. -.002 0.0
+            elif ln[0].isdigit() or ln[0] in '+-':
+                e = 0
+                while(ln[e] in '+-.0123456789'): e+=1
+                stack.append(eval(ln[:e]))
+                ln = ln[e:]
+                
+            # Array
+            # eg : [549 3.14 false (Ralph) /SomeName]
+            elif ln.startswith('['):
+                ss.append(stack)
+                stack = []
+                ln = ln[1:]
+                
+            elif ln.startswith(']'):
+                ss[-1].append(stack)
+                stack = ss.pop()
+                ln = ln[1:]
+                
+            # Dictionaries
+            # eg : << /Type /Example
+            #      >>
+            elif ln.startswith('<<'):
+                ss.append(stack)
+                stack = []
+                ln = ln[2:]
+                
+            elif ln.startswith('>>'):
+                try :
+                    r = dict(zip(stack[::2],stack[1::2]))
+                except :
+                    print >> sys.stderr, stack
+                    raise
+                ss[-1].append(r)
+                stack = ss.pop()
+                ln = ln[2:]
+                
+            # Name
+            # eg : /Adobe#20Green
+            elif ln.startswith('/'):
+                e = 1
+                while(ln[e] not in '()[]{}/%\0\t\r\n \x0c'): e+=1
+                v = ln[1:e].replace('#','\\x').decode('string_escape')
+                v = Name(v)
+                stack.append(v)
+                ln = ln[e:]
+                
+            # String Type 1
+            elif ln.startswith('('):
+                e = 0
+                t = False
+                while( t or ln[e] != ')' ):
+                    t = ( t == False and ln[e] == '\\' )
+                    e += 1
+                    if e == len(ln) :
+                        ln += fp.readline()
+                stack.append(ln[1:e].replace('\(','(').replace('\)',')').decode('string_escape'))
+                ln = ln[e+1:]
+                
+            # String Type 2
+            elif ln.startswith('<'):
+                v, ln = (ln[1:].split('>',1)+[''])[:2]
+                if len(v) % 2 == 1 :
+                    v = v+'0'
+                stack.append(v.decode('hex'))
+                # ln = ln
+                
+            # null
+            elif ln.startswith('null'):
+                stack.append(None)
+                ln = ln[4:]
+            
+            #
+            # # Operator :            
+            #
+            
+            # R
+            elif ln.startswith('R'):
+                upd, n = stack.pop(), stack.pop()
+                v = self.objects.get( (n, upd), KeyError )
+                
+                if v == KeyError :
+                    curpos = fp.tell()
+                    v = self.read_object( (n, upd), xrefs, fp )
+                    fp.seek( curpos )
+                
+                if v == ObjectOnReading or type(v) in (types.DictType, types.ListType, SuperLongString):
+                    stack.append(ObjRef(n))
+                else :
+                    stack.append(v)
+                
+                ln = ln[1:]
+                
+            
+            # Tf selectfont
+            #elif ln.startswith('Tf'):
+            #    pass
+            
+            # Tj showtext
+            #elif ln.startswith('Tj'):
+            #    pass
+                
+            #elif ln.startswith('TJ'):
+            #    pass
         
-    def read_type_string2( self, fp, ln ):
+        if len(stack) != 1 :
+            print stack, ss
+            raise PDFError, 'pdf format error. when read object '
         
-        v, ln = (ln[1:].split('>',1)+[''])[:2]
-        
-        return v.decode('hex'), ln.strip()
-        
-    def read_type_name( self, fp, ln ):
-        
-        v, ln = (ln[1:].split(None,1)+[''])[:2]
-        
-        return v.replace('#','\\x').decode('string_escape'), ln.lstrip() 
-        
-    def read_type_array( self, fp, ln ):
-        
-        ln = ln[1:].lstrip()
-        
-        ln = ln or fp.readline().lstrip()
-        
-        v = []
-        while( not ln.startwith(']') ):
-            vi, ln = self.read_type( fp, ln )
-            v.append(vi)
-        
-        return v, ln
-        
-    def read_type_dict( self, fp, ln ):
-        
-        ln = ln[2:].lstrip()
-        
-        ln = ln or fp.readline().lstrip()
-        
-        v = {}
-        while( not ln.startswith('>>') ):
-            ki, ln = self.read_type_name( fp, ln )
-            vi = self.read_type( fp, ln )
-        
-        return v, ln
+        return stack[0], ln.lstrip()
         
     def read_stream( self, fp ):
         
