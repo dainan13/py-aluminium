@@ -1,8 +1,12 @@
+import sys
 import os
 import types
 
 import pprint
 import sys
+import zlib
+
+import cPickle as pickle
 
 class PDFError(Exception):
     pass
@@ -11,26 +15,33 @@ class PDFError(Exception):
 class ObjectOnReading(Exception):
     pass
 
+
 class Name( str ):
     pass
-    
-class ObjRef( object ):
-    def __init__( self, n ):
-        self.n = n
-        
-    def __str__( self ):
-        return 'obj('+str(self.n)+')'
-        
-    def __repr__( self ):
-        return 'obj('+str(self.n)+')'
 
-class SuperLongString( str ):
+class Stream( str ):
+    pass
+
+class ObjRef( object ):
     
+    def __init__( self, n, u ):
+        self.n = n
+        self.u = u
+        
     def __str__( self ):
-        return 'SuperLongString[['+str(len(self))+']]'
+        return 'obj('+str(self.n)+','+str(self.u)+')'
         
     def __repr__( self ):
-        return 'SuperLongString[['+str(len(self))+']]'
+        return 'obj('+str(self.n)+','+str(self.u)+')'
+
+
+def ipythonfix():
+    
+    m = sys.modules['__main__']
+    m.Name = Name
+    m.Stream = Stream
+    m.ObjRef = ObjRef
+
 
 class PDF( object ):
     
@@ -38,7 +49,7 @@ class PDF( object ):
         
         self.objects = {}
 
-    def loads( self, fn ):
+    def load( self, fn ):
         
         with open( fn, 'r' ) as fp :
             
@@ -47,17 +58,23 @@ class PDF( object ):
             fp.seek(xrefpos)
             
             xrefs = self.read_xref( fp )
-            trailer = self.read_trailer( xrefs, fp )
+            self.trailer = self.read_trailer( xrefs, fp )
             
             for nx, pos in xrefs.items() :
                 if nx in self.objects :
                     continue
                 self.read_object( nx, xrefs, fp )
             
-            pprint.pprint( trailer )
-            pprint.pprint( self.objects )
-            #print self.objects
+    def dump_pack( self, fn ):
+        
+        with open( fn, 'w' ) as fp :
+            pickle.dump( ( self.trailer, self.objects ), fp )
             
+    def load_pack( self, fn ):
+        
+        with open( fn, 'r' ) as fp :
+            self.trailer, self.objects = pickle.load( fp )
+    
     def read_startxref( self, fp ):
         
         fp.seek( -500, os.SEEK_END )
@@ -93,8 +110,6 @@ class PDF( object ):
     
     def read_trailer( self, xrefs, fp ):
         
-        print >> sys.stderr, 't'
-        
         ln = fp.readline()
         if not ln.startswith('trailer'):
             raise PDFError, 'pdf format error. wrong trailer : ' + fp.read()
@@ -103,29 +118,26 @@ class PDF( object ):
         
     def read_object( self, nx, xrefs, fp ):
         
-        print >> sys.stderr, nx
-        
         fp.seek( xrefs[nx] )
         
         n, upd, objtag = fp.readline().split()
         
-        self.objects[nx] = ObjectOnReading
+        n, upd = int(n),int(upd)
         
-        if (int(n),int(upd)) != nx :
+        if (n, upd) != nx :
             raise PDFError, 'pdf format error. object address error.'
+        
+        self.objects[nx] = ObjectOnReading
         
         v, ln = self.read_type(fp, xrefs=xrefs)
         
-        #ln = fp.readline()
         if ln.startswith('stream') :
             
             if type(v) != types.DictType :
                 raise PDFError, 'pdf format error. wrong stream'
-            le = v['Length']
-            v = fp.read(le)
             
-            if len(v) > 1024*5 :
-                v = SuperLongString(v)
+            self.objects[(n, upd, None)] = v
+            v = self.read_stream( v, fp )
             
         elif ln.startswith('endobj') :
             pass
@@ -150,7 +162,7 @@ class PDF( object ):
                ln.startswith('startxref'):
                 break
                 
-            print >> sys.stderr, ':', ln.strip()
+            #print >> sys.stderr, ':', ln.strip()
             
             # boolean
             # eg : true false
@@ -192,11 +204,7 @@ class PDF( object ):
                 ln = ln[2:]
                 
             elif ln.startswith('>>'):
-                try :
-                    r = dict(zip(stack[::2],stack[1::2]))
-                except :
-                    print >> sys.stderr, stack
-                    raise
+                r = dict(zip(stack[::2],stack[1::2]))
                 ss[-1].append(r)
                 stack = ss.pop()
                 ln = ln[2:]
@@ -205,7 +213,7 @@ class PDF( object ):
             # eg : /Adobe#20Green
             elif ln.startswith('/'):
                 e = 1
-                while(ln[e] not in '()[]{}/%\0\t\r\n \x0c'): e+=1
+                while(ln[e] not in '<>()[]{}/%\0\t\r\n \x0c'): e+=1
                 v = ln[1:e].replace('#','\\x').decode('string_escape')
                 v = Name(v)
                 stack.append(v)
@@ -250,10 +258,10 @@ class PDF( object ):
                     v = self.read_object( (n, upd), xrefs, fp )
                     fp.seek( curpos )
                 
-                if v == ObjectOnReading or type(v) in (types.DictType, types.ListType, SuperLongString):
-                    stack.append(ObjRef(n))
+                if v == ObjectOnReading or type(v) in (types.DictType, types.ListType, Stream):
+                    stack.append( ObjRef(n, upd) )
                 else :
-                    stack.append(v)
+                    stack.append( v )
                 
                 ln = ln[1:]
                 
@@ -275,14 +283,33 @@ class PDF( object ):
         
         return stack[0], ln.lstrip()
         
-    def read_stream( self, fp ):
+    def read_stream( self, v, fp ):
         
-        return 
-
+        le = v['Length']
+        s = fp.read(le)
+        
+        flts = v['Filter'] if type(v['Filter']) == types.ListType else [v['Filter']]
+        
+        for flt in flts :
+            decoder = getattr( self, 'decode_'+flt )
+            s = decoder( s, v.get('DecodeParams',{}) )
+        
+        return Stream(s)
+    
+    def decode_FlateDecode( self, s, v ):
+        #print 'flatedecode'
+        return zlib.decompress(s)
+    
 if __name__ == '__main__':
     
     import sys
 
     pdf = PDF()
-    pdf.loads( sys.argv[1] )
+    
+    if sys.argv[1] == 'load' :
+        pdf.load_pack( sys.argv[2] )
+        print 'load ok'
+    else :
+        pdf.load( sys.argv[1] )
+        pdf.dump_pack( sys.argv[2] )
     
