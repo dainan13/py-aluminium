@@ -15,7 +15,6 @@ class PDFError(Exception):
 class ObjectOnReading(Exception):
     pass
 
-
 class Name( str ):
     pass
 
@@ -35,7 +34,8 @@ class ObjRef( object ):
         return 'obj('+str(self.n)+','+str(self.u)+')'
 
 
-def ipythonfix():
+# fixed pickle load in ipython
+if len(sys.argv)==0 and  sys.argv[0].endswith('/ipython'):
     
     m = sys.modules['__main__']
     m.Name = Name
@@ -45,13 +45,33 @@ def ipythonfix():
 
 class PDF( object ):
     
-    def __init__ ( self ):
+    def __init__ ( self, fn = None ):
         
+        self.pdfver = '%PDF-1.3' # as default
+        self.trailer = {}
         self.objects = {}
-
+        
+        if fn :
+            self.load( fn )
+        
     def load( self, fn ):
         
         with open( fn, 'r' ) as fp :
+            
+            h = fp.readline()
+            
+        if h.startswith('%PDF-') :
+            return self.load_pdf( fn )
+        elif h.startswith('%PDFPACK') :
+            return self.load_pack( fn )
+        
+        raise PDFError, 'load error. unsupported format.'
+        
+    def load_pdf( self, fn ):
+        
+        with open( fn, 'r' ) as fp :
+            
+            self.pdfver = fp.readline().rstrip()
             
             xrefpos = self.read_startxref( fp )
             
@@ -65,16 +85,6 @@ class PDF( object ):
                     continue
                 self.read_object( nx, xrefs, fp )
             
-    def dump_pack( self, fn ):
-        
-        with open( fn, 'w' ) as fp :
-            pickle.dump( ( self.trailer, self.objects ), fp )
-            
-    def load_pack( self, fn ):
-        
-        with open( fn, 'r' ) as fp :
-            self.trailer, self.objects = pickle.load( fp )
-    
     def read_startxref( self, fp ):
         
         fp.seek( -500, os.SEEK_END )
@@ -86,8 +96,9 @@ class PDF( object ):
         
     def read_xref( self, fp ):
         
-        if fp.readline() != 'xref\n':
-            raise PDFError, 'pdf format error, when read xref.'
+        h = fp.readline()
+        if h.rstrip() != 'xref':
+            raise PDFError, 'pdf format error, when read xref.' + h + fp.read()
         
         xrefs = {}
         ln = fp.readline()
@@ -156,7 +167,10 @@ class PDF( object ):
         
         while( True ):
             
-            ln = ln.lstrip() or fp.readline().lstrip()
+            ln = ln.lstrip()
+            while( not ln ):
+                ln = fp.readline().lstrip()
+               
             if ln.startswith('endobj') or \
                ln.startswith('stream') or \
                ln.startswith('startxref'):
@@ -298,18 +312,221 @@ class PDF( object ):
     
     def decode_FlateDecode( self, s, v ):
         #print 'flatedecode'
+        if v.get('Predictor',1) != 1 :
+            raise PDFError, 'predictor not supported.'
         return zlib.decompress(s)
+    
+    def dump_pdf( self, fn ):
+        
+        with open( fn, 'w' ) as fp :
+            
+            fp.write( self.pdfver )
+            fp.write( '\n' )
+            
+            keys = self.objects.keys()
+            keys.sort()
+            
+            for ki in keys :
+                self.write_auto( self.objects[ki], fp )
+    
+    def write_auto( self, i, fp ):
+        w = getattr( self, 'write_'+type(i).__name__ )
+        w( i, fp )
+    
+    def write_int( self, i, fp ):
+        fp.write(str(i))
+    
+    def write_float( self, i, fp ):
+        fp.write(str(i))
+        
+    def write_list( self, i, fp ):
+        
+        fp.write( '[ ' )
+        
+        for ii in i :
+            self.write_auto( ii, fp )
+            fp.write( ' ' )
+            
+        fp.write( ']' )
+    
+    def write_dict( self, i, fp ):
+        
+        fp.write( '<<\n' )
+        
+        for ki, vi in i.items():
+            self.write_auto( ki, fp )
+            fp.write( ' ' )
+            self.write_auto( vi, fp )
+            fp.write( '\n' )
+            
+        fp.write( '>>\n' )
+        
+    def write_Stream( self, i, fp ):
+        self.write_auto({Name('Length'):len(i)})
+        fp.write( 'stream' )
+        fp.write( i )
+        fp.write( 'endstream' )
+        
+    def write_Name( self, i, fp ):
+        fp.write( '/' )
+        fp.write( i )
+        
+    def write_ObjRef( self, i, fp ):
+        self.write_auto(i.n)
+        fp.write( ' ' )
+        self.write_auto(i.u)
+        fp.write( ' R' )
+        
+    def load_pack( self, fn ):
+        
+        with open( fn, 'r' ) as fp :
+            fp.seek( len('%PDFPACK\n') )
+            self.trailer, self.objects = pickle.load( fp )
+    
+    def dump_pack( self, fn ):
+        
+        with open( fn, 'w' ) as fp :
+            fp.write('%PDFPACK\n')
+            pickle.dump( ( self.trailer, self.objects ), fp )
+            
+    def getref( self, ref ):
+        return self.objects[(ref.n, ref.u)]
+
+import difflib
+import hashlib
+
+differ = difflib.Differ()
+
+def pdf_item_diff( x, y, a, b, pth, queue ):
+    
+    xt = type(x)
+    yt = type(y)
+    
+    if xt == ObjRef and yt == ObjRef :
+        queue.append( ( x, y, pth ) )
+        return None
+    
+    if xt == ObjRef :
+        x = a.getref(x)
+        x = type(x)
+    
+    if yt == ObjRef :
+        y = b.getref(y)
+        y = type(y)
+    
+    if xt == types.ListType and yt != types.ListType :
+        y = {0:y}
+        x = dict(zip(range(len(x)),x))
+        xt = yt = types.DictType
+    
+    elif xt != types.ListType and yt == types.ListType :
+        x = {0:x}
+        y = dict(zip(range(len(y)),y))
+        xt = yt = types.DictType
+        
+    elif xt == types.ListType and yt == types.ListType :
+        x = dict(zip(range(len(x)),x))
+        y = dict(zip(range(len(y)),y))
+        xt = yt = types.DictType
+
+    if xt == Stream and yt == Stream :
+        
+        if x == y :
+            return None
+        
+        if pth.endswith('/Contents') :
+            return list(differ.compare(x,y))
+        else :
+            return [ 'L) '+hashlib.md5(x).hexdigest() +' Length:'+str(len(x)),
+                     'R) '+hashlib.md5(y).hexdigest() +' Length:'+str(len(y)),
+                   ]
+        
+    elif xt == types.DictType and yt == types.DictType :
+        
+        keys = list(set( x.keys() + y.keys() ))
+        keys.sort()
+        
+        dr = []
+        
+        for k in keys :
+            
+            xv = x.get(k, None)
+            yv = y.get(k, None)
+            
+            vr = pdf_item_diff( xv, yv, a, b, pth+'/'+str(k), queue )
+            
+            if vr != None :
+                dr.append( ': ' + k )
+                dr.extend( vr )
+                
+        return None if dr == [] else dr
+    
+    if x == y :
+        return None
+        
+    return [ 'L) ' + repr(x),
+             'R) ' + repr(y),
+           ]
+    
+
+def pdf_diff( a, b ):
+    
+    r = {}
+    queue = []
+    
+    queue.append( ( a.trailer['Root'], b.trailer['Root'], 'Root' ) )
+    
+    while( queue != [] ):
+    
+        xr, yr, pth = queue.pop(0)
+        
+        x = a.getref(xr)
+        y = b.getref(yr)
+        
+        rk = ((xr.n,xr.u),(yr.n,yr.u))
+        if rk not in r :
+            r[rk] = ( pdf_item_diff(x,y,a,b,pth,queue), [pth] ) 
+        else :
+            r[rk][1].append(pth)
+        
+    str2 = lambda i : str(i[0])+'.'+str(i[1])
+    pr = [ [ '>'*30+' '+str2(ia)+' '+str2(ib)]+pths+v+['',''] 
+           for (ia,ib), (v,pths) in r.items() if v != None
+         ]
+    for ipr in pr :
+        for lr in ipr :
+            print lr
+
     
 if __name__ == '__main__':
     
     import sys
 
-    pdf = PDF()
+    helpinfo = """\
+pdf.py usage :
+
+    pdf.py dump xxx.pdf xxx.dump
+    pdf.py make xxx.dump xxx.pdf
+    pdf.py diff xxx yyy
+
+"""
     
-    if sys.argv[1] == 'load' :
-        pdf.load_pack( sys.argv[2] )
-        print 'load ok'
+    if len(sys.argv) != 4 or sys.argv[1].strip('-') in ('help', 'h') :
+        print helpinfo
+    
+    if sys.argv[1] == 'dump' :
+        pdf = PDF( sys.argv[2] )
+        pdf.dump_pack( sys.argv[3] )
+    elif sys.argv[1] == 'make' :
+        pdf = PDF( sys.argv[2] )
+        pdf.dump_pdf( sys.argv[3] )
+    elif sys.argv[1] == 'diff' :
+        pdf1 = PDF( sys.argv[2] )
+        pdf2 = PDF( sys.argv[3] )
+        pdf_diff( pdf1, pdf2 )
     else :
-        pdf.load( sys.argv[1] )
-        pdf.dump_pack( sys.argv[2] )
-    
+        print helpinfo
+        
+        
+        
+        
