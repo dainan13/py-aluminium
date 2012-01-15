@@ -1,6 +1,7 @@
 import sys
 import os
 import types
+import datetime
 
 import pprint
 import sys
@@ -32,6 +33,9 @@ class ObjRef( object ):
         
     def __repr__( self ):
         return 'obj('+str(self.n)+','+str(self.u)+')'
+        
+    def refto( self, objects ):
+        return objects[(self.n,self.u)]
 
 
 # fixed pickle load in ipython
@@ -42,14 +46,81 @@ if len(sys.argv)==0 and  sys.argv[0].endswith('/ipython'):
     m.Stream = Stream
     m.ObjRef = ObjRef
 
+class PDFTYPE( object ):
+    
+    def __init__( self, d, objs, v=None ) :
+        
+        if type(d) != types.DictType :
+            raise PDFError, 'PDFTYPE INIT ERROR.'
+        
+        self._v = v if v != None else d
+        
+        self.__d = d
+        self.__objs = objs
+        
+    def __dir__( self ):
+        
+        return self.__d.keys()
+        
+    def __getattr__( self, attr ):
+        
+        r = self.__d.get(attr, None)
+        
+        if r != None :
+            return PDFTYPE.__trans( r, self.__objs )
+        
+        return getattr( super( PDFTYPE, self ), attr )
+    
+    @staticmethod
+    def __trans( inp, objs ):
+        
+        if type(inp) == ObjRef :
+            inp = inp.refto(objs)
+        
+        if type(inp) == types.DictType and 'Type' in inp :
+            return PDFTYPE( inp, objs )
+        
+        if type(inp) == types.ListType :
+            #return [ PDFTYPE.trans( v, objs ) for v in inp ]
+            r = dict( ( 'l_'+str(i), PDFTYPE.__trans( v, objs ) ) for i, v in enumerate(inp) )
+            return PDFTYPE( r, objs, inp )
+        
+        if type(inp) == types.DictType :
+            #return dict( ( k, PDFTYPE.trans( v, objs ) ) for k, v in inp.items() )
+            r =  dict( ( 'd_'+k, PDFTYPE.__trans( v, objs ) ) for k, v in inp.items() )
+            return PDFTYPE( r, objs, inp )
+            
+        return inp
+        
+    def __repr__( self ):
+        
+        if type(self._v) == types.ListType:
+            return repr(self._v)
+            
+        if type(self._v) == types.DictType and 'Type' in self._v:
+            
+            v = self._v.copy()
+            t = v.pop('Type')
+            
+            ks = v.keys()
+            ks.sort()
+            
+            r = ', '.join( [ ( repr(k) + ' : ' + repr(v[k]) ) for k in ks ] )
+            
+            return t+'({'+r+'})'
+            
+        return repr(self._v)
 
 class PDF( object ):
     
     def __init__ ( self, fn = None ):
         
+        self.compressed = True
+        
         self.pdfver = '%PDF-1.3' # as default
         self.trailer = {}
         self.objects = {}
+        self.doc = None
         
         if fn :
             self.load( fn )
@@ -84,6 +155,8 @@ class PDF( object ):
                 if nx in self.objects :
                     continue
                 self.read_object( nx, xrefs, fp )
+                
+        self.doc = PDFTYPE( self.trailer, self.objects )
             
     def read_startxref( self, fp ):
         
@@ -147,7 +220,6 @@ class PDF( object ):
             if type(v) != types.DictType :
                 raise PDFError, 'pdf format error. wrong stream'
             
-            self.objects[(n, upd, None)] = v
             v = self.read_stream( v, fp )
             
         elif ln.startswith('endobj') :
@@ -318,22 +390,65 @@ class PDF( object ):
     
     def dump_pdf( self, fn ):
         
+        
         with open( fn, 'w' ) as fp :
             
+            d = datetime.datetime.now()
+            info = self.getref( self.trailer['Info'] )
+            info['CreationDate'] = "D:"+d.strftime('%Y%m%d%H%M%S')+"+08'00'"
+            
+            self.trailer.pop('ID',None)
+            
             fp.write( self.pdfver )
+            fp.write( '\n' )
+            fp.write( '%\xE4\xE3\xCF\xD2' )
             fp.write( '\n' )
             
             keys = self.objects.keys()
             keys.sort()
             
+            pos = []
+            
             for ki in keys :
+                pos.append( fp.tell() )
+                fp.write( '%d %d obj\n' % ki )
                 self.write_auto( self.objects[ki], fp )
+                fp.write( '\nendobj\n' )
+              
+            xref = [ (0,['0000000000 65535 f']) ]
+            for (n, u), p in zip( keys, pos ):
+                s, l = xref[-1]
+                if n == s+len(l) :
+                    l.append( '%010d %05d n' % (p,u) )
+                else :
+                    xref = [ ( n,['%010d %05d n' % (p,u)]) ]
+                    
+            xrefpos = fp.tell()
+            fp.write('xref\n')
+            for st, l in xref :
+                fp.write('%d %d\n' % (st, len(l)) )
+                for li in l :
+                    fp.write(li)
+                    fp.write('\n')
+            
+            fp.write('trailer\n')
+            self.write_auto( self.trailer, fp )
+            fp.write('\n')
+            
+            fp.write('startxref\n')
+            self.write_auto( xrefpos, fp )
+            fp.write('\n')
+            
+            fp.write('%%EOF\n')
     
     def write_auto( self, i, fp ):
         w = getattr( self, 'write_'+type(i).__name__ )
         w( i, fp )
     
     def write_int( self, i, fp ):
+        fp.write(str(i))
+    
+    def write_long( self, i, fp ):
         fp.write(str(i))
     
     def write_float( self, i, fp ):
@@ -359,22 +474,38 @@ class PDF( object ):
             self.write_auto( vi, fp )
             fp.write( '\n' )
             
-        fp.write( '>>\n' )
+        fp.write( '>>' )
         
     def write_Stream( self, i, fp ):
-        self.write_auto({Name('Length'):len(i)})
-        fp.write( 'stream' )
+        
+        if self.compressed == True :
+            i = zlib.compress(i)
+            streamdict = {Name('Length'):len(i),Name('Filter'):Name('FlateDecode')}
+        else :
+            streamdict = {Name('Length'):len(i)}
+            
+        self.write_auto( streamdict, fp )
+        fp.write( '\nstream\n' )
         fp.write( i )
-        fp.write( 'endstream' )
+        fp.write( '\nendstream' )
+        
+    def write_str( self, i, fp ):
+        fp.write( '<' )
+        fp.write( i.encode('hex').upper() )
+        fp.write( '>' )
         
     def write_Name( self, i, fp ):
         fp.write( '/' )
-        fp.write( i )
+        for c in i :
+            if c in '<>()[]{}/%\0\t\r\n \x0c' :
+                fp.write( '#%02x' % c )
+            else :
+                fp.write(c)
         
     def write_ObjRef( self, i, fp ):
-        self.write_auto(i.n)
+        self.write_auto( i.n, fp)
         fp.write( ' ' )
-        self.write_auto(i.u)
+        self.write_auto( i.u, fp)
         fp.write( ' R' )
         
     def load_pack( self, fn ):
@@ -382,7 +513,9 @@ class PDF( object ):
         with open( fn, 'r' ) as fp :
             fp.seek( len('%PDFPACK\n') )
             self.trailer, self.objects = pickle.load( fp )
-    
+        
+        self.doc = PDFTYPE( self.trailer, self.objects )
+        
     def dump_pack( self, fn ):
         
         with open( fn, 'w' ) as fp :
@@ -390,7 +523,24 @@ class PDF( object ):
             pickle.dump( ( self.trailer, self.objects ), fp )
             
     def getref( self, ref ):
-        return self.objects[(ref.n, ref.u)]
+        #return self.objects[(ref.n, ref.u)]
+        return ref.refto(self.objects)
+        
+    def walk( self, selector, cb=None ):
+        
+        i = 0
+        r = []
+        xcb = cb or ( lambda x, y : r.append(y) )
+        
+        for obj in self.objects.values() :
+            if type(obj) == types.DictType and obj.get('Type',None) == selector :
+                xcb( self, obj )
+                i += 1
+        
+        if cb is None :
+            return r
+        else :
+            return i
 
 import difflib
 import hashlib
@@ -496,7 +646,16 @@ def pdf_diff( a, b ):
     for ipr in pr :
         for lr in ipr :
             print lr
-
+    
+def antiwatermark( pdf, page ):
+    
+    if type( page["Contents"] ) == ObjRef :
+        nx = (page["Contents"].n, page["Contents"].u)
+        pdf.objects[ nx ] = Stream(pdf.objects[ nx ][:-62])
+    else :
+        page["Contents"] = page["Contents"][:-62]
+    
+    return
     
 if __name__ == '__main__':
     
@@ -508,6 +667,8 @@ pdf.py usage :
     pdf.py dump xxx.pdf xxx.dump
     pdf.py make xxx.dump xxx.pdf
     pdf.py diff xxx yyy
+    pdf.py font pdffile fontfile
+    pdf.py anti xxx.pdf yyy.pdf
 
 """
     
@@ -524,6 +685,10 @@ pdf.py usage :
         pdf1 = PDF( sys.argv[2] )
         pdf2 = PDF( sys.argv[3] )
         pdf_diff( pdf1, pdf2 )
+    elif sys.argv[1] == 'anti' :
+        pdf = PDF( sys.argv[2] )
+        pdf.walk( 'Page', antiwatermark )
+        pdf.dump_pdf( sys.argv[3] )
     else :
         print helpinfo
         
