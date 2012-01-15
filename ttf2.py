@@ -284,7 +284,7 @@ class TTFile(object):
     ebp.rebuild_namespaces()
     ebp.parsefile( 'ttf.protocol' )
     
-    def __init__( self ):
+    def __init__( self, fn=None, noglyph=False, check=True ):
         
         self.name = None
         self.nametuple = None
@@ -304,17 +304,22 @@ class TTFile(object):
         
         self.numGlyphs = None
         
+        if fn != None :
+            self.load( fn, noglyph, check )
         
     idxsort = ['head','maxp','cmap','loca','glyf','kern','hhea','hmtx','post','name','OS/2','prep','cvt ','fpgm']
     requiredtable = set(['head','maxp','cmap','loca','glyf','hhea','hmtx','post','name','OS/2',])
     #idxsort = dict( (n,i) for i, n in enumerate(idxsort) )
     
-    def load( self, fname, noglyph=False ):
+    pdfrequired = set(['head', 'loca', 'maxp', 'glyf', 'hhea', 'hmtx'])
+    # missing set(['OS/2', 'post', 'cmap', 'name'])
+    
+    def load( self, fname, noglyph=False, check=True ):
         
         if os.path.isdir(fname):
             self.load_packs( fname, noglyph )
         else :
-            self.load_ttf( fname, noglyph )
+            self.load_ttf( fname, noglyph, check )
         
     def load_packs( self, path, noglyph=False ):
         
@@ -358,7 +363,7 @@ class TTFile(object):
         
         return
     
-    def load_ttf( self, fname, noglyph=False ):
+    def load_ttf( self, fname, noglyph=False, check=True ):
         
         if noglyph :
             self.idxsort = self.idxsort[:]
@@ -378,7 +383,7 @@ class TTFile(object):
             ae = dict( (e['tag'],e) for e in entrys )
             
             for e in entrys :
-                self.read_entry( fp, e, ae )
+                self.read_entry( fp, e, ae, check )
                 
         if noglyph :
             
@@ -407,11 +412,15 @@ class TTFile(object):
         
         return
     
-    def read_entry( self, fp, e, ae ):
+    def read_entry( self, fp, e, ae, check=True ):
         
         fp.seek(e['offset'])
-        if e['tag'] != 'head' and e['checksum'] != checksum( fp.read( e['length'] ) ) :
-            raise TTFError, 'checksum error in ' + e['tag']
+        if check and e['tag'] != 'head' :
+            c = fp.read( e['length'] )
+            if len(c) != e['length'] :
+                raise TTFError, 'length error in ' + e['tag']
+            if e['checksum'] != checksum( c ) :
+                raise TTFError, 'checksum error in ' + e['tag']
         fp.seek(e['offset'])
         extent = getattr( self, 'read_' + e['tag'].replace('/','_').strip().lower(), self.read_default )
         
