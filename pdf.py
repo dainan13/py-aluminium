@@ -122,6 +122,8 @@ class PDF( object ):
         self.objects = {}
         self.doc = None
         
+        self.objiter = []
+        
         if fn :
             self.load( fn )
         
@@ -186,9 +188,15 @@ class PDF( object ):
                     continue
                 xrefs[(st+i, int(upd))] = int(pos)
                 
+                
             ln = fp.readline()
         
         fp.seek( -len(ln) , os.SEEK_CUR)
+        
+        ito = list( xrefs.items() )
+        ito.sort( key = lambda x : x[1] )
+        
+        self.objiter = zip(*ito)[0]
         
         return xrefs
     
@@ -388,6 +396,14 @@ class PDF( object ):
             raise PDFError, 'predictor not supported.'
         return zlib.decompress(s)
     
+    
+    def _objindex( self, k ):
+        
+        try :
+            return ( 0, self.objiter.index(k) )
+        except ValueError :
+            return k
+    
     def dump_pdf( self, fn ):
         
         
@@ -405,7 +421,7 @@ class PDF( object ):
             fp.write( '\n' )
             
             keys = self.objects.keys()
-            keys.sort()
+            keys.sort( key = lambda x : self._objindex(x) )
             
             pos = []
             
@@ -414,9 +430,12 @@ class PDF( object ):
                 fp.write( '%d %d obj\n' % ki )
                 self.write_auto( self.objects[ki], fp )
                 fp.write( '\nendobj\n' )
-              
+            
+            keys_pos = zip( keys, pos )
+            keys_pos.sort( key = lambda x : x[0] )
+            
             xref = [ (0,['0000000000 65535 f']) ]
-            for (n, u), p in zip( keys, pos ):
+            for (n, u), p in keys_pos:
                 s, l = xref[-1]
                 if n == s+len(l) :
                     l.append( '%010d %05d n' % (p,u) )
