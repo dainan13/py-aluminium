@@ -284,7 +284,7 @@ class TTFile(object):
     ebp.rebuild_namespaces()
     ebp.parsefile( 'ttf.protocol' )
     
-    def __init__( self, fn=None, noglyph=False, check=True ):
+    def __init__( self, fn=None, noglyph=False ):
         
         self.name = None
         self.nametuple = None
@@ -314,12 +314,12 @@ class TTFile(object):
     pdfrequired = set(['head', 'loca', 'maxp', 'glyf', 'hhea', 'hmtx'])
     # missing set(['OS/2', 'post', 'cmap', 'name'])
     
-    def load( self, fname, noglyph=False, check=True ):
+    def load( self, fname, noglyph=False ):
         
         if os.path.isdir(fname):
             self.load_packs( fname, noglyph )
         else :
-            self.load_ttf( fname, noglyph, check )
+            self.load_ttf( fname, noglyph )
         
     def load_packs( self, path, noglyph=False ):
         
@@ -363,7 +363,7 @@ class TTFile(object):
         
         return
     
-    def load_ttf( self, fname, noglyph=False, check=True ):
+    def load_ttf( self, fname, noglyph=False ):
         
         if noglyph :
             self.idxsort = self.idxsort[:]
@@ -383,7 +383,7 @@ class TTFile(object):
             ae = dict( (e['tag'],e) for e in entrys )
             
             for e in entrys :
-                self.read_entry( fp, e, ae, check )
+                self.read_entry( fp, e, ae, True )
                 
         if noglyph :
             
@@ -409,6 +409,25 @@ class TTFile(object):
             scs, das = zip(*ae['kern']['data'])
             das = [ [(il, ir, v) for l,r,v in da for il in inmap[l] for ir in inmap(r)] for da in das ]
             self.kern = zip(scs, das)
+        
+        return
+    
+    def read_CID( self, CID ):
+        
+        fp = Stream( CID[''] )
+        
+        directory = self.ebp.read( 'ttf', fp )['directory']
+        entrys = directory.pop('entry')
+        
+        self.sfntversion = directory['sfntversion']
+        
+        entrys = [ e for e in entrys if e['tag'] in self.idxsort ]
+        entrys.sort( key = lambda e : self.idxsort.index(e['tag']) )
+        
+        ae = dict( (e['tag'],e) for e in entrys )
+        
+        for e in entrys :
+            self.read_entry( fp, e, ae, True )
         
         return
     
