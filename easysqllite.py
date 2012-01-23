@@ -99,7 +99,7 @@ class ConnLite( object ):
         
         return
 
-    def query( self, sql, _unused ):
+    def query( self, sql, _unused = None ):
 
         return self.conn.query( sql )
 
@@ -166,8 +166,10 @@ class ConnLite( object ):
             verb = "INSERT IGNORE"
         else :
             verb = "INSERT"
-
-        sql = "%s INTO %s (%s) VALUES %s" % ( verb, tb, ks, vss )
+        try :
+            sql = "%s INTO %s (%s) VALUES %s" % ( verb, str(tb), ks, vss )
+        except :
+            raise
 
         return self.write( sql, replace or ignore )
 
@@ -182,7 +184,7 @@ class ConnLite( object ):
             
         kvs = ', '.join( '`%s` = %s' % ( k, formatvalue(v) ) for k, v in data.items() )
         
-        sql = "UPDATE %s SET %s" % ( tb, kvs, )
+        sql = "UPDATE %s SET %s" % ( str(tb), kvs, )
         
         if where:
             sql = "%s WHERE %s" % ( sql, makecond(where), )
@@ -197,7 +199,7 @@ class ConnLite( object ):
         else :
             tb = '`%s`' % (tb,)
             
-        sql = "DELETE FROM %s" %tb
+        sql = "DELETE FROM %s" % (str(tb),)
         
         if where:
             sql = "%s WHERE %s" % ( sql, makecond(where), )
