@@ -1,11 +1,23 @@
+import os, sys
+import socket
 import easyprotocol as ezp
 import pymysql
 import struct
 import datetime
 import types
-import easysqllite as esql
+import easysqllite
+import pprint
+import MySQLdb
+import threading
+import Queue
+import time
+import logging
 
-CnL = esql.ConnLite
+
+dumbLogger = logging.Logger( '_dumb_' )
+dumbLogger.setLevel( logging.CRITICAL )
+
+CnL = easysqllite.ConnLite
 
 class EasyRepError(Exception):
     pass
@@ -138,7 +150,6 @@ class RowType( ezp.ProtocolType ):
         
     def read( self, namespace, fp, lens, args ):
         
-        #print '!', lens
         
         x = fp.read(lens)
         
@@ -415,17 +426,37 @@ class EasyReplication(object):
     ebp.parsefile( 'replication.protocol' )
     
     def __init__( self, db, location,
-                        tablefilter=None, ):
+                        tablefilter = None,
+                        binlogposFilename = None,
+                        logger = dumbLogger ):
+
+        self.set_logger( logger )
+
+        self.logger.info( 'Replicant initialized: pos: %s, db: %s' % (
+                repr( location ), repr( db ) ) )
         
         self.conn = pymysql.connect( **db )
         self.dbarg = db
         self.serverid = 1
+
+
+        if binlogposFilename is None:
+            self.binlogposFilename = "./binlogpos_%s" % ( str( db[ 'port' ] ), )
+        else:
+            self.binlogposFilename = binlogposFilename
+
+        if location is not None:
+            self.logname, self.pos = location[ 0:2 ]
+        else:
+            try:
+                self.logname, self.pos = self.read_binlogpos()[ 0:2 ]
+            except Exception, e:
+                self.logname, self.pos = ( None, None )
         
-        self.logname, self.pos, self.tablest = location or (None,None,None)
         
-        if self.tablest == None :
-            self.tablest = {}
-            self.ebp.namespaces['rows'].sqlquery = self.executesqlone
+        self.tablest = {}
+        self.ebp.namespaces['rows'].sqlquery = self.executesqlone
+
         
         if type(tablefilter) == types.TupleType :
             
@@ -445,7 +476,25 @@ class EasyReplication(object):
         #self.dbfilter = dbfilter or ( lambda x : True )
         
         self.run_pos = None
-        
+
+
+    def read_binlogpos( self ):
+        binlogpos = read_file( self.binlogposFilename )
+        binlogpos = eval( binlogpos )
+        binlogpos = tuple( list( binlogpos ) + [ None ] )
+
+        return binlogpos
+
+
+    def write_binlogpos( self ):
+        atomic_write_file( self.binlogposFilename,
+                           repr( ( self.logname, self.pos ) ) )
+
+
+    def set_logger( self, logger ):
+        self.logger = logger
+
+
     def executesql( self, query ):
         
         cur = self.conn.cursor()
@@ -651,7 +700,10 @@ class EasyReplication(object):
         
         return
         
+        
     def querybinlog( self ):
+
+        self.logger.info( 'To query binlog: ' + repr( ( self.logname, self.pos ) ) )
         
         arg = struct.pack('<L',self.pos)
         arg = arg + struct.pack('<H',0)
@@ -691,8 +743,19 @@ class EasyReplication(object):
                                          coltype=coltype, 
                                          metadata=metadata,
                                          tst = self.tablest, idt=idt )
-            except ezp.ConnectionError, e:
-                self.conn = pymysql.connect( **self.dbarg )
+            except ( ezp.ConnectionError,
+                     socket.error) as e:
+
+                for ii in range( 3 ):
+                    time.sleep( 3 )
+                    try:
+                        self.conn = pymysql.connect( **self.dbarg )
+                        break
+                    except:
+                        pass
+                else:
+                    raise
+
                 self.querybinlog()
                 if onconn != None :
                     onconn(self.conn, self.logname, self.pos, self.tablest)
@@ -730,6 +793,8 @@ class EasyReplication(object):
             try :
                 op, d = r['body']['content']['event']['data'].items()[0]
             except KeyError, e :
+                self.logger.warn( repr( e ) )
+                self.logger.warn( 'Result: ' + repr( r ) )
                 yield None, None, None, None
                 continue
             
@@ -741,23 +806,29 @@ class EasyReplication(object):
                     table = [ x.strip('`') for x in _q[3].split('.',1)]
                     table = [dbname] + table if dbname else table  
                     yield None, table[0], self.stablest, None
+
                 elif q == ['alter','table'] :
                     table = [ x.strip('`') for x in _q[3].split('.',1)]
                     table = [dbname] + table if dbname else table  
                     yield None, table[0], self.stablest, None
                 else :
-                    yield None, None, None, None
+                    pass
+
+                    # print 'query', r
+                    # yield None, None, None, None
                 continue
             
             if op not in ('write_rows','update_rows','delete_rows') :
-                yield None, None, None, None
+                # print 'unrecognized:', r
+                # yield None, None, None, None
                 continue
                 
             self.pos = r['body']['content']['event']['header']['next_position']
             t = idt[d['table_id']]
             
             if not self.tablefilter(t) :
-                yield None, None, None, None
+                # print 'out of filter', r
+                # yield None, None, None, None
                 continue
             
             if op == 'write_rows' :
@@ -773,7 +844,12 @@ class EasyReplication(object):
                 for b, a in v[:-1] :
                     yield None, t, a, b
                     
-                yield (self.logname, self.pos, self.tablest), t, v[-1][1], v[-1][0]
+                try:
+                    yield (self.logname, self.pos, self.tablest), t, v[-1][1], v[-1][0]
+                except Exception, e:
+                    pass
+                    # TODO an error occur with this value of d:
+                    # {'bitmap_ai': [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1], 'columns_count': 22, 'value': [{u'CheckNumber': 0, u'ACL_Grantee': 'SAE0000000L30ZOO1WMZ', u'_UrlMD5': '', u'Last-Modified': datetime.datetime(2011, 12, 25, 21, 10, 1), u'ETag2': 'X\xa9\x13\xa7z\x0b\xa8\x00\xae\xa9>6\x1e\x8f\xb7dC\xf3\x88\x8b', u'Type': 'mage/jpeg\x15:\x04\x00=k\xe6\x05\x10\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xe4\x1f\x13h\xf9\x14\x10\n!F\xca#m8\x04\xfcBX\xd1\xb7K\x99\xe4\x00h\xcc\x1a\x90\'\x08\xf4\x04\x00\x00T\xe8\xc6\xaa)\x0018151258/82bc2f67d71751511fdf36336e6ed27d\x14SAE0000000L30ZOO1WMZ\x01\x0f\x14\x00SAE0000000L30ZOO1WMZ\x10\x82\xbc/g\xd7\x17QQ\x1f\xdf63nn\xd2}\x14X\xa9\x13\xa7z\x0b\xa8\x00\xae\xa9>6\x1e\x8f\xb7dC\xf3\x88\x8b\x16\x91\x00\x00\x00\x00\x00\x00\xa5Ho\x82J\x12\x00\x00\x1f\x00{"Content-Type": "image\\/jpeg"}\nimage/jpeg\x15:\x04\x00=k\xe6\x05\x10\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xe4\x1f\x13h\xf9\x14\x10\n!F\xca#m8\x04\xfcBX\xd1\xb7K\x99\xe4', u'_SID': 2865162324, u'ACL_MOD': '\x0f', u'Key': '18151258/82bc2f67d71751511fdf36336e6ed27d', u'File-Meta': '{"Content-Type": "image\\/jpeg"}', u'ExCheckNumber': None, u'Info': None, u'Info-Int': None, u'Origo': '', u'GroupID': 0, u'ProjectID': 1268, u'Expiration-Time': None, u'ExGroupID': None, u'ETag': '\x82\xbc/g\xd7\x17QQ\x1f\xdf63nn\xd2}', u'Owner': 'SAE0000000L30ZOO1WMZ', u'_ID': 136810522, u'Size': 37142}], 'bitmap': [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1], 'table_id': 17, 'm_flags': '\x01\x00'}
                 
             elif op == 'delete_rows' :
                 
@@ -784,23 +860,48 @@ class EasyReplication(object):
                 
             else :
                 
-                yield None, None, None, None
+                # yield None, None, None, None
+                continue
         
         return
     
 
+def read_file( fn ):
+    with open( fn, 'r' ) as f:
+        return f.read()
+
+def write_file(fn, fcont):
+    with open( fn, 'w' ) as f:
+        f.write( fcont )
+        f.flush()
+        os.fsync( f.fileno() )
+
+
+writelock = threading.RLock()
+
+def atomic_write_file( fn, fcont ):
+    writelock.acquire()
+    try:
+        tmpfn = fn + str( "._tmp_" )
+        write_file( tmpfn, fcont )
+
+        os.rename( tmpfn, fn )
+    finally:
+        writelock.release()
+
+
 if __name__ == '__main__':
     
-    import pprint
     
     # mysql -h10.210.74.143 -urepl test
-    
-    db = { 'host' : '10.210.74.143', 
-           'port' : 3306, 
-           'user' : 'repl',
+
+    db = { 'host' : '10.29.10.194',
+           'port' : 3377,
+           'user' : 'SinaStore_r',
+           'passwd' : '4eb871692703122b',
          }
 
-    erep = EasyReplication( db, ('mysql-bin.000002', 18724, None) )
+    erep = EasyReplication( db, ('apollo112-bin.000282', 46331139, None), tablefilter = ('SinaStore','Key') )
     
     #erep = EasyReplication( db, None, tablefilter=( lambda x: ( x[0] == 'test' ) ), dbfilter=( lambda x: ( x != 'log' ) ) )
     
