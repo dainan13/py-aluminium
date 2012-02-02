@@ -676,6 +676,40 @@ def antiwatermark( pdf, page ):
     
     return
     
+    
+class PDFFontCodec( object ):
+    
+    def __init__( self, tounicode ):
+        
+        self.trans = {}
+        
+        toun = tounicode.splitlines()
+        bfch = [ (i, l) for i, l in enumerate(toun) if l.endswith('beginbfchar') ]
+        bfch = [ (i, int(l[:-len(' beginbfchar'))) for i, l in bfch ]
+        bfch = [ [ i.split('>')[0] for i in l.split('<')[1:] ] 
+                 for i, j in bfch for l in toun[i:i+j] ]
+        bfch = [ ( unichr(int(i,16)), unichr(int(j,16)) ) for i, j in bfch ]
+        bfch = dict(bfch)
+        
+        self.trans.update(bfch)
+        
+    def encode( self, inp ):
+        pass
+        
+    def decode( self, inp ):
+        pass
+    
+class PSparser( object ):
+    """
+    parser of postscript
+    
+    eg :
+     'q\nBT\n/F1 24 Tf\n24 TL\n1 0 0.2126 1 50 700 Tm\n(\x00+\x00H\x00O\x00O\x00R\x00\x03\x00Z\x00R\x00U\x00O\x00G\x00\x04\x00\x03\x04L+\x82\x05\x96\x0f\xb3\x00\x03\x00\x04)Tj\n1 0 0.2126 1 50 676 Tm\n(\x00\x0b\x00V\x00D\x00\\\\\x00V\x00\x03\x003\x00\\\\\x00W\x00K\x00R\x00Q\x00\x0c)Tj\nET\nQ\n0.5335 0.8458 -0.8458 0.5335 88.5386 11.0368 cm\n3.7611 w\nBT\n/F2 125.3695 Tf\n1 Tr\n0 TL\n0 0 Td\n(zzzPsgiolePfrp)Tj\n1 w\nET\n'
+    """
+    
+    def __init__( self ):
+        pass
+    
 if __name__ == '__main__':
     
     import sys
