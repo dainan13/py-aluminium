@@ -1,9 +1,11 @@
+import postscript
+
 import sys
 import os
 import types
 import datetime
 
-import pprint
+import pprint_ex as pprint
 import sys
 import zlib
 
@@ -36,6 +38,8 @@ class ObjRef( object ):
         
     def refto( self, objects ):
         return objects[(self.n,self.u)]
+
+pprint.PrettyPrinter.colprinttype |= set( [Name,ObjRef] )
 
 
 # fixed pickle load in ipython
@@ -560,7 +564,42 @@ class PDF( object ):
             return r
         else :
             return i
-
+    
+    def decompile( self ):
+        
+        r = []
+        objs = self.objects.items()
+        objs.sort()
+        for k, v in objs :
+            
+            if type(v) == Stream :
+                if len(v) > 1000 :
+                    ir = 'Obj_%d_%d = ' % k
+                    ir += 'stream(length %d)' % (len(v),)
+                    r.append( ir )
+                    r.append('')
+                elif v.startswith('/') :
+                    ir = 'Obj_%d_%d = """' % k
+                    r.append(ir)
+                    r.append(v.strip())
+                    r.append('"""')
+                    r.append('')
+                else :
+                    #print repr(v)[1:-1].replace('\\n','\n')
+                    #print
+                    #r.append('')
+                    ir = 'def Obj_%d_%d () :' % k
+                    r.append( ir )
+                    r.extend([ ' '*4+l for l in postscript.ps.decompile(v) ])
+                    r.append('')
+            else :
+                ir = 'Obj_%d_%d = ' % k
+                ir += pprint.pformat(v, width=150)
+                r.append( ir )
+                r.append('')
+            
+        return r
+    
 import difflib
 import hashlib
 
@@ -685,7 +724,7 @@ class PDFFontCodec( object ):
         
         toun = tounicode.splitlines()
         bfch = [ (i, l) for i, l in enumerate(toun) if l.endswith('beginbfchar') ]
-        bfch = [ (i, int(l[:-len(' beginbfchar'))) for i, l in bfch ]
+        bfch = [ (i, int(l[:-len(' beginbfchar')])) for i, l in bfch ]
         bfch = [ [ i.split('>')[0] for i in l.split('<')[1:] ] 
                  for i, j in bfch for l in toun[i:i+j] ]
         bfch = [ ( unichr(int(i,16)), unichr(int(j,16)) ) for i, j in bfch ]
@@ -697,17 +736,6 @@ class PDFFontCodec( object ):
         pass
         
     def decode( self, inp ):
-        pass
-    
-class PSparser( object ):
-    """
-    parser of postscript
-    
-    eg :
-     'q\nBT\n/F1 24 Tf\n24 TL\n1 0 0.2126 1 50 700 Tm\n(\x00+\x00H\x00O\x00O\x00R\x00\x03\x00Z\x00R\x00U\x00O\x00G\x00\x04\x00\x03\x04L+\x82\x05\x96\x0f\xb3\x00\x03\x00\x04)Tj\n1 0 0.2126 1 50 676 Tm\n(\x00\x0b\x00V\x00D\x00\\\\\x00V\x00\x03\x003\x00\\\\\x00W\x00K\x00R\x00Q\x00\x0c)Tj\nET\nQ\n0.5335 0.8458 -0.8458 0.5335 88.5386 11.0368 cm\n3.7611 w\nBT\n/F2 125.3695 Tf\n1 Tr\n0 TL\n0 0 Td\n(zzzPsgiolePfrp)Tj\n1 w\nET\n'
-    """
-    
-    def __init__( self ):
         pass
     
 if __name__ == '__main__':
@@ -722,11 +750,13 @@ pdf.py usage :
     pdf.py diff xxx yyy
     pdf.py font pdffile fontfile
     pdf.py anti xxx.pdf yyy.pdf
+    pdf.py decompile xxx.pdf
 
 """
     
-    if len(sys.argv) != 4 or sys.argv[1].strip('-') in ('help', 'h') :
+    if len(sys.argv) not in (3,4) or sys.argv[1].strip('-') in ('help', 'h') :
         print helpinfo
+        sys.exit(-1)
     
     if sys.argv[1] == 'dump' :
         pdf = PDF( sys.argv[2] )
@@ -742,6 +772,11 @@ pdf.py usage :
         pdf = PDF( sys.argv[2] )
         pdf.walk( 'Page', antiwatermark )
         pdf.dump_pdf( sys.argv[3] )
+    elif sys.argv[1] == 'decompile' :
+        pdf = PDF( sys.argv[2] )
+        r = pdf.decompile( )
+        for ir in r :
+            print ir
     else :
         print helpinfo
         
