@@ -6,9 +6,9 @@ EXPRESSION := (TYPE, SAFESPACES?)*, DELIMITER
 DELIMITER  := [\r\n]+
 SAFESPACES := [ \t]+
 COMMENT    := '%', [a-zA-Z0-9 \t]*, ('\r\n' / '\n')
-TYPE       := STRING / NUMBERIC / BOOLEAN / NAME / NULL / OPERATOR / ARRAY / DICTIONARY
+TYPE       := STRING / NUMBERIC / BOOLEAN / NAME / NULL / OPERATOR / ARRAY / DICTIONARY / SECTION
 BOOLEAN    := 'true' / 'false'
-OPERATOR   := ([a-zA-Z]+, '*'?) / '"' / '\''
+OPERATOR   := ([a-zA-Z], [a-zA-Z0-9]*, '*'?) / '"' / '\''
 SPACES     := [ \t\r\n]+ / COMMENT+
 NUMBERIC   := FLOAT / INTEGER 
 INTEGER    := [+-]?, [0-9]+
@@ -20,54 +20,74 @@ NAME       := '/', -[\x5B\x5D()<>{}\/\%\0\t\r\n \x0C]+
 NULL       := 'null'
 ARRAY      := '[' , SPACES?, (TYPE, SPACES?)*, ']'
 DICTIONARY := '<<' , SPACES?, (TYPE, SPACES?)*, '>>'
+SECTION    := '{', SPACES?, (TYPE, SPACES?)*, '}'
 '''
 
+#         1 .   .   2         3        4          5
+#123456789012345678901234567890123456789012345678901234567890123456789012345678
 #operators  argc info
 type4 = r'''
-add         2   %(1)s + %(2)s
-sub         2   %(1)s - %(2)s
-mul         2   %(1)s * %(2)s
-div         2   float(%(1)s) / %(2)s
-ldiv        2   %(1)s / %(2)s
-mod         2   %(1)s %% %(2)s
-neg         1   -%(1)s
-abs         1   abs(%(1)s)
-ceiling     1   math.ceil(%(1)s)
-floor       1   math.floor(%(1)s)
-round       1   int(round(%(1))s)
-truncate    1   math.trunc(%(1)s)
-sqrt        1   math.sqrt(%(1)s)
-sin         1   math.sin(%(1)s)
-cos         1   math.cos(%(1)s)
-atan        1   math.atan(%(1)s)
-exp         1   math.atan(%(1)s)
-ln          1   math.log(%(1)s)
-log         1   math.log10(%(1)s)
-cvl         1   int(%(1)s)
-cvr         1   float(%(1)s)
-eq          2   %(1)s == %(2)s
-ne          2   %(1)s != %(2)s
-gt          2   %(1)s > %(2)s
-ge          2   %(1)s >= %(2)s
-lt          2   %(1)s < %(2)s
-le          2   %(1)s <= %(2)s
-and         2   %(1)s and %(2)s
-or          2   %(1)s or %(2)s
-xor         2   %(1)s xor %(2)s
-not         1   not %(1)s
-bitshift    2   %(1)s << %(s)s
+add         2   %(0)s + %(1)s
+sub         2   %(0)s - %(1)s
+mul         2   %(0)s * %(1)s
+div         2   float(%(0)s) / %(1)s
+ldiv        2   %(0)s / %(1)s
+mod         2   %(0)s %% %(1)s
+neg         1   -%(0)s
+abs         1   abs(%(0)s)
+ceiling     1   math.ceil(%(0)s)
+floor       1   math.floor(%(0)s)
+round       1   int(round(%(0))s)
+truncate    1   math.trunc(%(0)s)
+sqrt        1   math.sqrt(%(0)s)
+sin         1   math.sin(%(0)s)
+cos         1   math.cos(%(0)s)
+atan        1   math.atan(%(0)s)
+exp         1   math.atan(%(0)s)
+ln          1   math.log(%(0)s)
+log         1   math.log10(%(0)s)
+cvl         1   int(%(0)s)
+cvr         1   float(%(0)s)
+eq          2   %(0)s == %(1)s
+ne          2   %(0)s != %(1)s
+gt          2   %(0)s > %(1)s
+ge          2   %(0)s >= %(1)s
+lt          2   %(0)s < %(1)s
+le          2   %(0)s <= %(1)s
+and         2   %(0)s and %(1)s
+or          2   %(0)s or %(1)s
+xor         2   %(0)s xor %(1)s
+not         1   not %(0)s
+bitshift    2   %(0)s << %(1)s
+R           2   Obj_$(0)s_$(1)s
+'''
+#         1 .   .   2         3        4          5
+#123456789012345678901234567890123456789012345678901234567890123456789012345678
+#operators  argc info
+
+#operators argc rst py
+type4ext = r'''
+if         2    0   if %(0)s : 
+                        %(1)s
+                   
+ifelse     3    0   if %(0)s :
+                        %(1)s 
+                    else : 
+                        %(2)s
+                   
+pop        1    0   %(0)
+
+exch       2    2   %(r0), %(r1) = %(0)s, %(1)s
+
+dup        1    2   %(r0) = %(r1) = %(0)s
 '''
 
-#operators  argc 
-type4ext = r'''
-if          2      if %(1)s : %(2)s
-ifelse      3      if %(1)s : %(2)s else : %(3)s
-pop         1      %(1)
-exch        2      a, b = %(1)s, %(2)s 
-dup         2      a = %(1)s
-copy        -
-index       -
-roll        -
+type4ext2 = r'''
+copy       1+N  N   %(r1_N) = %(1_n)                 r1_N, r1_N
+
+index      1+N  N   %(r1), ..., %(rn) = %(1)s, ..., %(n)s
+
+roll       2+N  N   
 '''
 
 #operators      argc
@@ -87,7 +107,7 @@ selectfont      2
 setcachedevice  6    
 setcharwidth    2    
 setcmykcolor    4     
-setcolor        (n)
+setcolor        N
 setcolorspace   1    
 setdash         2    
 setflat         1    
@@ -102,7 +122,7 @@ show            1
 stroke          0    
 '''
 
-#         11    1   2         3        4      4   5
+#         1.    .   2         3        4      .   5
 #123456789012345678901234567890123456789012345678901234567890123456789012345678
 #operators argc ps                            description
 pdfop329 = r'''
@@ -215,8 +235,6 @@ pdfopers = [ pdfop329, pdfop407, pdfop409, pdfop410, pdfop411, pdfop424,
              pdfop1007,
            ]
 
-data = 'q\nBT\n/F1 24 Tf\n24 TL\n1 0 0.2126 1 50 700 Tm\n(\x00+\x00H\x00O\x00O\x00R\x00\x03\x00Z\x00R\x00U\x00O\x00G\x00\x04\x00\x03\x04L+\x82\x05\x96\x0f\xb3\x00\x03\x00\x04)Tj\n1 0 0.2126 1 50 676 Tm\n(\x00\x0b\x00V\x00D\x00\\\\\x00V\x00\x03\x003\x00\\\\\x00W\x00K\x00R\x00Q\x00\x0c)Tj\nET\nQ\n0.5335 0.8458 -0.8458 0.5335 88.5386 11.0368 cm\n3.7611 w\nBT\n/F2 125.3695 Tf\n1 Tr\n0 TL\n0 0 Td\n(zzzPsgiolePfrp)Tj\n1 w\nET\n'
-
 def initialpostscript( cls ):
     
     parser = Parser( declaration, 'EXPRESSION' )
@@ -233,9 +251,20 @@ def initialpostscript( cls ):
     op_sec = [ (n, True if arg.startswith('+') else False if arg.startswith('-') else None ) 
                for n, arg, f, d in opers ]    
     
+    t4 = [ l.strip() for l in type4.splitlines() ]
+    t4 = [ (l[:12].strip(), l[12:16].strip(), l[12:16].strip()) for l in t4 if l ]
+    
+    #print t4
+    
+    t4_ps = [ (n,f) for n, arg, f in t4 ]
+    t4_cnt = [ (n,int(arg)) for n, arg, f in t4 ]
+    
     cls.pdfopers = dict(op_pdf2ps)
     cls.pdfopers_argc = dict(op_cnt)
     cls.pdfopers_sec = dict(op_sec)
+    
+    cls.type4opers = dict(t4_ps)
+    cls.type4opers_argc = dict(t4_cnt)
     
     return cls
 
@@ -250,18 +279,21 @@ class PostScript(object):
         pos = 0
         success = 1
         
+        r = []
+        
         while( success ):
             success, tree, nchar = self.parser.parse( inp[pos:] )
             #print '----'
-            raw = data[pos:pos+nchar]
+            raw = inp[pos:pos+nchar]
             pos += nchar
             #print raw
             #print tree
             prefix = ' '*(4*len(self.section))
-            print prefix + (prefix+'\n').join( self._d(tree, raw, []) )
+            r.extend( prefix+str(l) for l in self._d(tree, raw, []) )
+            #print prefix + (prefix+'\n').join( )
             #print
         
-        return
+        return r
         
     def _d( self, inps, raw, stacks ):
         
@@ -295,6 +327,15 @@ class PostScript(object):
         
         t, s, e, subs = inps
         f = raw[s:e]
+        
+        argc = self.type4opers_argc.get( f, None )
+        if argc :
+            args = [ str(stacks.pop(-1)) for i in range(argc)]
+            args.reverse()
+            args = dict(enumerate(args))
+            ps_opers = self.type4opers[f]
+            stacks.append( ps_opers % args )
+            return
         
         if self.pdfopers_sec[f] == False :
             self.section.pop(-1)
@@ -338,6 +379,12 @@ class PostScript(object):
         stacks.append(v)
         return v
         
+    def _d_R( self, inps, raw, stacks ):
+        t, s, e, subs = inps
+        stacks.pop(v)
+        
+        return
+        
     def compile( self ):
         pass
 
@@ -345,5 +392,30 @@ ps = PostScript()
 
 if __name__ == '__main__' :
     
-    ps.decompile(data)
+    data = '''q
+BT
+/F1 24 Tf
+24 TL
+1 0 0.2126 1 50 700 Tm
+(\x00+\x00H\x00O\x00O\x00R\x00\x03\x00Z\x00R\x00U\x00O\x00G\x00\x04\x00\x03\x04L+\x82\x05\x96\x0f\xb3\x00\x03\x00\x04)Tj
+1 0 0.2126 1 50 676 Tm
+(\x00\x0b\x00V\x00D\x00\\\\\x00V\x00\x03\x003\x00\\\\\x00W\x00K\x00R\x00Q\x00\x0c)Tj
+ET
+Q
+0.5335 0.8458 -0.8458 0.5335 88.5386 11.0368 cm
+3.7611 w
+BT
+/F2 125.3695 Tf
+1 Tr
+0 TL
+0 0 Td
+(zzzPsgiolePfrp)Tj
+1 w
+ET
+'''
+    
+    r = ps.decompile(data)
+    for ir in r :
+        print ir
+    
     
