@@ -748,13 +748,13 @@ pdf.py usage :
     pdf.py dump xxx.pdf xxx.dump
     pdf.py make xxx.dump xxx.pdf
     pdf.py diff xxx yyy
-    pdf.py font pdffile fontfile
+    pdf.py extract pdffile objnum upnum
     pdf.py anti xxx.pdf yyy.pdf
     pdf.py decompile xxx.pdf
 
 """
     
-    if len(sys.argv) not in (3,4) or sys.argv[1].strip('-') in ('help', 'h') :
+    if len(sys.argv) not in (3,4,5) or sys.argv[1].strip('-') in ('help', 'h') :
         print helpinfo
         sys.exit(-1)
     
@@ -768,6 +768,9 @@ pdf.py usage :
         pdf1 = PDF( sys.argv[2] )
         pdf2 = PDF( sys.argv[3] )
         pdf_diff( pdf1, pdf2 )
+    elif sys.argv[1] == 'extract' :
+        pdf = PDF( sys.argv[2] )
+        print pdf.objects[int(sys.argv[3]),int(sys.argv[4])]
     elif sys.argv[1] == 'anti' :
         pdf = PDF( sys.argv[2] )
         pdf.walk( 'Page', antiwatermark )

@@ -8,6 +8,9 @@ import types
 import os.path
 import cPickle as pickle
 
+
+import hashlib
+
 import pprint
 
 
@@ -393,6 +396,8 @@ class TTFile(object):
             chrdef = zip( ae['post']['data'],
                           ae['glyf']['data'], 
                           ae['hmtx']['data'] )
+            
+            self.cmap = dict( ae['cmap']['data'] )
             self.char_defines = dict( (k, chrdef[v]) for k, v in ae['cmap']['data'] )
         
 
@@ -412,9 +417,12 @@ class TTFile(object):
         
         return
     
-    def read_CID( self, CID ):
+    def load_CID( self, CID ):
         
-        fp = Stream( CID[''] )
+        if issubclass( type(CID), str ) :
+            fp = cStringIO.StringIO( CID )
+        else :
+            fp = CID
         
         directory = self.ebp.read( 'ttf', fp )['directory']
         entrys = directory.pop('entry')
@@ -427,10 +435,34 @@ class TTFile(object):
         ae = dict( (e['tag'],e) for e in entrys )
         
         for e in entrys :
-            self.read_entry( fp, e, ae, True )
+            self.read_entry( fp, e, ae, False )
+        
+        self.ae = ae
         
         return
     
+    def antidefines( self, another ):
+        
+        t = another.antidefines_table()
+        
+        gmd5 = [ hashlib.md5(g).hexdigest() for g in self.ae['glyf']['data'] ]
+        
+        r = [ t[g] for g in gmd5 ]
+        
+        return r, [ another.cmap[ir[0]] for ir in r ]
+    
+    def antidefines_table( self ):
+        
+        ad = [ ( hashlib.md5(g[1]).hexdigest(), c ) 
+               for c, g in self.char_defines.items() ]
+        
+        r = {}
+        for gmd5, c in ad :
+            r.setdefault(gmd5,[])
+            r[gmd5].append(c)
+        
+        return r
+        
     def read_entry( self, fp, e, ae, check=True ):
         
         fp.seek(e['offset'])
@@ -1286,7 +1318,7 @@ if __name__ == '__main__' :
         sys.argv[1:],
         'o:s:S:c:gen:m:I:rx:X:t:y:lih',
         ['output=','extract',
-         'info',
+         'info', 'cid=',
          'rename=',
          'subset=','subset-file=','decoding=','ignore',
          'map=','integrate=','replace',
@@ -1314,6 +1346,9 @@ command arguments :
     
  for display font info :
     --info        -i       : show font file infomations
+ 
+ for pdf embedded font :
+    --cid                  : show font file infomations for pdf embedded
  
  for change font info :
     --rename      -n name  : rename the font file
@@ -1364,6 +1399,7 @@ command arguments :
     integrate = []
     
     info = False
+    cid = None
     
     text = None
     textdecoding = 'ascii'
@@ -1451,6 +1487,9 @@ command arguments :
     
         elif k in ( 'info', 'i' ):
             info = True
+            
+        elif k in ( 'cid', ):
+            cid = v
     
     if type(text) == types.StringType :
         d = 'utf-8' if textdecoding == 'ascii' else textdecoding
@@ -1472,7 +1511,23 @@ command arguments :
     if text and (subset or integrate):
         print >> sys.stderr, 'can not both parse text and subset/integrate.'
     
-    if info :
+    
+    if cid :
+        et = TTFile()
+        et.load_CID( open(cid, 'r') )
+        t = TTFile()
+        t.load( args[0] )
+        r, s = et.antidefines(t)
+        for i, (chrs,snum) in enumerate(zip(r,s)) :
+            #print i, ':', ' '.join( [ repr(iir)[1:-1] for iir in ir ] )
+            print i, chrs, snum
+            
+        print '-'*20
+        print et.fix_entrys['fpgm']
+        print '-'*20
+        print t.fix_entrys['fpgm']
+    
+    elif info :
     
         t = TTFile()
         t.load( args[0], noglyph=True )
