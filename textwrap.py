@@ -25,27 +25,35 @@ def split_word( s ):
         if onword :
             
             if c in letter or c in tails :
+                spacepos = i
                 innerspace = False
                 continue
+                
             elif c in initials :
+                spacepos = i
                 innerspace = True
                 continue
+                
             elif c == ' ' :
                 spacepos = i
                 if not innerspace :
                     onword = False
                 continue
+                
             elif c in '\t\r\n' :
                 spacepos = i
                 r.append( (wordpos, spacepos) )
                 wordpos, spacepos = i, i
                 innerspace = False
+                continue
+                
             else : # for chnchr
                 wordpos, spacepos = i+1, i+1
-                r.append( (wordpos, spacepos) )
+                #r.append( (wordpos, spacepos) )
                 innerspace = False
                 onword = False
                 continue
+                
         else :
             
             if c in letter :
@@ -75,7 +83,7 @@ def split_word( s ):
                 innerspace = False
                 continue
                 
-            else :
+            else : # for chnchr
                 wordpos, spacepos = i+1, i+1
                 r.append( (wordpos, spacepos) )
                 innerspace = False
