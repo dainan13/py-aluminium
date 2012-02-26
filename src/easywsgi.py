@@ -1,6 +1,7 @@
 import pprint
 import types
 
+import urllib
 import json
 
 
@@ -118,6 +119,18 @@ class Server( object ):
     
     def make_workentry( self, env ):
         
+        qs = env['QUERY_STRING'].split('&')
+        
+        method = None
+        
+        if qs and '=' not in qs[0] :
+            method = qs[0]
+            qs = [x.split('=',1) for x in qs[1:]]
+            qs = dict( (k, urllib.unquote(v)) for k, v in qs )
+        
+        if method :
+            return make_objectentry( env, method, qs )
+        
         try :
             r = self.workentrys[(env['REQUEST_METHOD'],env['PATH_INFO'])]
             return r['work'], r['status'], r['resptype']
@@ -129,6 +142,12 @@ class Server( object ):
             return r['work'], r['status'], r['resptype']
         except :
             pass
+        
+        raise NotFound, 'not found'
+    
+    def make_objectentry( env, method, qs ):
+        
+        objtype, obj = env['PATH_INFO'].split('/',2)[1:]
         
         raise NotFound, 'not found'
     
@@ -151,18 +170,17 @@ class Server( object ):
     
     def run( self, env, start_response ):
         
-        work, status, resp = self.make_workentry(env)
-        work = getattr( self, work )
-        
         r = None
         
         try :
+            work, status, resp = self.make_workentry(env)
+            work = getattr( self, work )
+            
             headers, r = work()
         except Exception, e:
             work, status, resp = self.make_errorentry( e, env )
             work = getattr( self, work )
             headers, r = work()
-            return
             
         if resp :
             resp = getattr( self, resp )
@@ -183,6 +201,10 @@ class Server( object ):
         return ''
         
     __call__ = run
+    
+    @error(NotFound, status='404 NOT FOUND')
+    def notfound( self ):
+        return [], ''
     
     
 if __name__ in ('uwsgi_file_index','__main__') :
