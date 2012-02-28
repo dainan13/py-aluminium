@@ -1,5 +1,6 @@
 import pprint
 import types
+import inspect
 
 import urllib
 import json
@@ -49,6 +50,24 @@ def resp( resp ):
 
 
 
+class WObject(dict):
+    
+    def method(self, name, verb, resp='json', status='200 OK' ):
+        
+        def _method(w):
+            self['methods'][(verb,name)] = \
+                                { 'status':status, 'resptype':resp, 'work':w }
+            return w
+            
+        return _method
+
+def obj( urlprefix ):
+    
+    def _obj( o ):
+        return WObject({ 'url':urlprefix, 'work':o, 'methods': {} })
+    
+    return _obj
+
 
 class MetaServer( type ):
     
@@ -77,7 +96,28 @@ class MetaServer( type ):
         attrs['response'] = MetaServer.get_attr( attrs, bases, 'response') or {}
         attrs['response'].update(metas)
         
+        antiattrs = dict( (v,k) for k, v in attrs.items() 
+                          if MetaServer.hashable(v) )
+        
+        metas, methods = MetaServer.split_method_and_meta( alist, WObject )
+        attrs.update(methods)
+        metas = [ (m.pop('url'),m) for m in metas ]
+        for u, m in metas :
+            for me in m['methods'].values() :
+                me['work'] = antiattrs[me['work']] 
+                                 
+        attrs['objentrys'] = MetaServer.get_attr( attrs, bases, 'objentrys') or []
+        attrs['objentrys'].extend( metas )
+        
         return type.__new__( cls, name, bases, attrs )
+    
+    @staticmethod
+    def hashable( i ):
+        try :
+            hash(i)
+            return True
+        except :
+            return None
     
     @staticmethod
     def split_method_and_meta( alist, t ):
@@ -115,41 +155,51 @@ class Server( object ):
     
     workentrys = {}
     errorentrys = {}
+    objentrys = []
     response = {}
     
     def make_workentry( self, env ):
         
         qs = env['QUERY_STRING'].split('&')
         
-        method = None
+        method = ''
         
         if qs and '=' not in qs[0] :
             method = qs[0]
             qs = [x.split('=',1) for x in qs[1:]]
-            qs = dict( (k, urllib.unquote(v)) for k, v in qs )
+        else :
+            qs = [x.split('=',1) for x in qs]
+            
+        qs = dict( (k, urllib.unquote(v)) for k, v in qs )
         
-        if method :
-            return make_objectentry( env, method, qs )
+        
+        for urlprefix, obj in self.objentrys:
+            if env['PATH_INFO'].startswith( urlprefix ):
+                return self.make_objentry( urlprefix, obj, method, env, qs )
         
         try :
-            r = self.workentrys[(env['REQUEST_METHOD'],env['PATH_INFO'])]
-            return r['work'], r['status'], r['resptype']
+            r = self.workentrys[(env['REQUEST_METHOD'], env['PATH_INFO'])]
+            return None, r['work'], qs, r['status'], r['resptype']
         except KeyError, e :
             pass
             
         try :
-            r = self.workentrys[(None,env['PATH_INFO'])]
-            return r['work'], r['status'], r['resptype']
+            r = self.workentrys[(None, env['PATH_INFO'])]
+            return None, r['work'], qs, r['status'], r['resptype']
         except :
             pass
         
         raise NotFound, 'not found'
     
-    def make_objectentry( env, method, qs ):
+    def make_objentry( self, urlprefix, objinfo, method, env, qs ):
         
-        objtype, obj = env['PATH_INFO'].split('/',2)[1:]
+        try :
+            obj = getattr( self, objinfo['work'])( env['PATH_INFO'][len(urlprefix):] )
+            m = objinfo['methods'][(env['REQUEST_METHOD'],method)]
         
-        raise NotFound, 'not found'
+            return obj, m['work'], qs, m['status'], m['resptype']
+        except KeyError, e :
+            raise NotFound, 'not found'
     
     def make_errorentry( self, e, env ):
         
@@ -173,10 +223,13 @@ class Server( object ):
         r = None
         
         try :
-            work, status, resp = self.make_workentry(env)
+            obj, work, args, status, resp = self.make_workentry(env)
             work = getattr( self, work )
             
-            headers, r = work()
+            obj = [obj] if obj else []
+            
+            headers, r = work(*obj, **args)
+            
         except Exception, e:
             work, status, resp = self.make_errorentry( e, env )
             work = getattr( self, work )
@@ -202,7 +255,7 @@ class Server( object ):
         
     __call__ = run
     
-    @error(NotFound, status='404 NOT FOUND')
+    @error( NotFound, status='404 NOT FOUND' )
     def notfound( self ):
         return [], ''
     
@@ -212,10 +265,20 @@ if __name__ in ('uwsgi_file_index','__main__') :
     class Test(Server):
         
         @work( '/', 'GET', 'json' )
-        def index( self ):
+        def index( self, **kwargs ):
+            return [], ['hello','world',{'args':kwargs}]
             
-            return [], ['hello','world']
-            
+        @obj( '/path/' )
+        def upath( self, inp ):
+            return str(inp)
+        
+        @upath.method('', 'GET', 'json')
+        def upath_get( self, obj ):
+            return [], obj
+        
+        @upath.method('split', 'GET', 'json')
+        def upath_split( self, obj ):
+            return [], obj.split('/')
             
     
 if __name__ == 'uwsgi_file_index' : 
@@ -228,9 +291,9 @@ elif __name__ == '__main__' :
     from wsgiref.simple_server import make_server
     
     t = Test()
-    httpd = make_server( '', 8000, t.run )
+    httpd = make_server( '', 9000, t.run )
     
-    print "Serving on port 8000..."
+    print "Serving on port 9000..."
     httpd.serve_forever()
 
     
