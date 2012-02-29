@@ -1,3 +1,6 @@
+
+from wsgiref.simple_server import make_server
+
 import pprint
 import types
 import inspect
@@ -158,6 +161,8 @@ class Server( object ):
     objentrys = []
     response = {}
     
+    staticroot = './'
+    
     def make_workentry( self, env ):
         
         qs = env['QUERY_STRING'].split('&')
@@ -249,6 +254,16 @@ class Server( object ):
     def json( self, headers, r ):
         return json.dumps(r)
         
+    @resp('raw')
+    def raw( self, headers, r ):
+        return r
+        
+    @resp('static')
+    def static( self, headers, r ):
+        with open( self.staticroot + r, 'r' ) as fp :
+            return fp.read()
+        raise NotFound, 'static file not found'
+        
     @resp(None)
     def none( self, headers, r ):
         return ''
@@ -258,6 +273,14 @@ class Server( object ):
     @error( NotFound, status='404 NOT FOUND' )
     def notfound( self ):
         return [], ''
+    
+    
+    def httpd( self, host, port ):
+        
+        httpd = make_server( '', 9000, self.run )
+        httpd.serve_forever()
+        
+        return
     
     
 if __name__ in ('uwsgi_file_index','__main__') :
@@ -288,13 +311,8 @@ if __name__ == 'uwsgi_file_index' :
     
 elif __name__ == '__main__' :
     
-    from wsgiref.simple_server import make_server
-    
     t = Test()
-    httpd = make_server( '', 9000, t.run )
-    
-    print "Serving on port 9000..."
-    httpd.serve_forever()
+    t.httpd()
 
     
     
