@@ -15,7 +15,9 @@ class WorkError( Exception ):
 class NotFound( WorkError ):
     pass
 
-
+class StaticNotFound( NotFound ):
+    pass
+    
 
 class Work(dict):
     pass
@@ -262,12 +264,12 @@ class Server( object ):
     def static( self, headers, r ):
         with open( self.staticroot + r, 'r' ) as fp :
             return fp.read()
-        raise NotFound, 'static file not found'
+        raise StaticNotFound, 'static file not found'
         
     @resp(None)
     def none( self, headers, r ):
         return ''
-        
+
     __call__ = run
     
     @error( NotFound, status='404 NOT FOUND' )
@@ -281,7 +283,40 @@ class Server( object ):
         httpd.serve_forever()
         
         return
+        
+    def info( self ):
+        
+        urls_m = (zip( *self.workentrys.keys() ) or [[],[]])[1]
+        urls_o = (zip( *self.objentrys ) or [[]] )[0]
+        
+        urls = set( list(urls_m) + list(urls_o) )
+        errors = set( e.__name__ for e in self.errorentrys.keys() )
+        responses = set(self.response.keys())
+        
+        return {
+            'urls' : urls,
+            'errors' : errors,
+            'responses' : responses,
+            'name' : self.__class__.__name__.lower(),
+        }
     
+    def url_move( self, f, t ):
+        
+        m = [ (v, url) for v, url in self.workentrys.keys() if url==f ]
+        
+        for v, url in m :
+            self.workentrys[(v,t)] = self.workentrys.pop((v,url))
+        
+        return
+    
+    def url_alias( self, f, t ):
+        
+        m = [ (v, url) for v, url in self.workentrys.keys() if url==f ]
+        
+        for v, url in m :
+            self.workentrys[(v,t)] = self.workentrys[(v,url)]
+        
+        return
     
 if __name__ in ('uwsgi_file_index','__main__') :
     
