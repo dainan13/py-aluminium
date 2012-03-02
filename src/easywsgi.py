@@ -7,6 +7,7 @@ import inspect
 
 import urllib
 import json
+import cgi
 
 
 class WorkError( Exception ):
@@ -165,6 +166,28 @@ class Server( object ):
     
     staticroot = './'
     
+    @staticmethod
+    def fs_load( f ):
+        if f.filename :
+            return {'filename': f.filename, 'file' : f.file }
+        return f.value
+    
+    @staticmethod
+    def post_file_save( f, pth ):
+        if 'file' not in f :
+            raise TypeError, 'type error'
+        
+        inp = f['file']
+        
+        with open( pth, 'w' ) as fp:
+            while(True):
+                c = inp.read(1024*1024)
+                if c == '' :
+                    break
+                fp.write( c )
+                
+        return
+    
     def make_workentry( self, env ):
         
         qs = env['QUERY_STRING'].split('&')
@@ -177,8 +200,14 @@ class Server( object ):
         else :
             qs = [x.split('=',1) for x in qs]
             
-        qs = dict( (k, urllib.unquote(v)) for k, v in qs )
+        qs = [ (k, urllib.unquote(v)) for k, v in qs ]
         
+        if env['REQUEST_METHOD'] == 'POST' :
+            form = cgi.FieldStorage( fp=env['wsgi.input'], environ=env )
+            form = [ (k, self.fs_load(form[k])) for k in form.keys() ]
+            qs = qs + form
+        
+        qs = dict(qs)
         
         for urlprefix, obj in self.objentrys:
             if env['PATH_INFO'].startswith( urlprefix ):
@@ -228,6 +257,7 @@ class Server( object ):
     def run( self, env, start_response ):
         
         r = None
+        st2 = None
         
         try :
             obj, work, args, status, resp = self.make_workentry(env)
@@ -244,9 +274,9 @@ class Server( object ):
             
         if resp :
             resp = getattr( self, resp )
-            r = resp( headers, r )
+            st2, headers, r = resp( headers, r )
         
-        start_response( status, headers )
+        start_response( st2 or status, headers )
         
         yield r
         
@@ -254,21 +284,26 @@ class Server( object ):
         
     @resp('json')
     def json( self, headers, r ):
-        return json.dumps(r)
+        return None, headers, json.dumps(r)
         
     @resp('raw')
     def raw( self, headers, r ):
-        return r
+        return None, headers, r
         
     @resp('static')
     def static( self, headers, r ):
         with open( self.staticroot + r, 'r' ) as fp :
-            return fp.read()
+            return None, headers, fp.read()
         raise StaticNotFound, 'static file not found'
+        
+    @resp('redirect')
+    def redirect( self, headers, r ):
+        headers.append( ('Location',r) ) 
+        return '302 Temporary Redirect', headers, ''
         
     @resp(None)
     def none( self, headers, r ):
-        return ''
+        return None, headers, ''
 
     __call__ = run
     
@@ -347,7 +382,7 @@ if __name__ == 'uwsgi_file_index' :
 elif __name__ == '__main__' :
     
     t = Test()
-    t.httpd()
+    t.httpd( '', 9000 )
 
     
     
