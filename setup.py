@@ -9,6 +9,7 @@ setup(name='py-aluminium',
       author='Dai,Nan',
       author_email='dainan13@gmail.com',
       license = 'BSD',
-      packages=['Al','Al.__furture__'],
-      package_dir={'Al':'src'}
+      packages=['Al','Al.__furture__','Al.protocols'],
+      package_dir = {'Al':'src'},
+      package_data = {'Al.protocols':['*']},
      )

@@ -1,0 +1,401 @@
+
+# http://developer.apple.com/fonts/TTRefMan/RM06/Chap6.html
+# http://bbs.chinaunix.net/thread-2041402-1-1.html
+
+# BYTE     8-bit unsigned integer.
+# CHAR     8-bit signed integer.
+# USHORT   16-bit unsigned integer.
+# SHORT    16-bit signed integer.
+# ULONG    32-bit unsigned integer.
+# LONG     32-bit signed integer.
+# FIXED    32-bit signed fixed-point number (16.16)
+# FUNIT    Smallest measurable distance in the em space.
+# FWORD    16-bit signed integer (SHORT) that describes a quantity in FUnits.
+# UFWORD   Unsigned 16-bit integer (USHORT) that describes a quantity in FUnits. 
+# F2DOT14   16-bit signed fixed number with the low 14 bits of fraction (2.14).
+
+
+ttf TTF(auto)
+    
+    directory TableDirectory   # 12 bytes
+    
+        sfntversion   FIX
+            major         uint_b(2)
+            sub           uint_b(2)
+        numberTables  uint_b(2)
+        searchRange   uint_b(2) # (Maximum power of 2 numTables) x 16.
+        entrySelector uint_b(2) # Log2(maximum power of 2 numTables).
+        rangeShift    uint_b(2) # NumTables x 16-searchRange.
+        
+        entry TableEntry[numberTables]
+        
+            tag           char[4]
+            checksum      uint_b(4)
+            offset        uint_b(4)
+            length        uint_b(4)
+
+
+
+
+## Required Table
+# cmap    character to glyph mapping
+# glyf    glyph data
+# head    font header
+# hhea    horizontal header
+# hmtx    horizontal metrics
+# loca    index to location
+# maxp    maximum profile
+# name    naming table
+# post    PostScript information
+# OS/2    OS/2 and Windows specific metrics
+
+## Optional Table
+# cvt     Control Value Table
+# EBDT    Embedded bitmap data
+# EBLC    Embedded bitmap location data
+# EBSC    Embedded bitmap scaling data
+# fpgm    font program
+# gasp    grid-fitting and scan conversion procedure (grayscale)
+# hdmx    horizontal device metrics
+# kern    kerning
+# LTSH    Linear threshold table
+# prep    CVT Program
+# PCLT    PCL5
+# VDMX    Vertical Device Metrics table
+# vhea    Vertical Metrics header
+# vmtx    Vertical Metrics
+
+head    TTF_head
+    
+    version            FIX
+    reversion          FIX
+    checkSumAdjustment uint_b(4)
+    magicNumber        uint_b(4) # =0x5F0F3CF5
+    flags              uint_b(2)
+    unitsPerEm         uint_b(2)
+    created            uint[8]
+    modified           uint[8]
+    xMin               int_b(2) #FWORD
+    yMin               int_b(2) #FWORD
+    xMax               int_b(2) #FWORD
+    yMax               int_b(2) #FWORD
+    macStyle           uint_b(2)
+    lowestRecPPEM      uint_b(2)
+    fontDirectionHint  int_b(2)
+    indexToLocFormat   int_b(2)
+    glyphDataFormat    int_b(2)
+    
+    
+    
+
+cmap    TTF_cmap
+
+    version              uint_b(2)
+    numberEncodingTable  uint_b(2)
+    
+    cmap                 TTF_cmap_data[numberEncodingTable]
+        platformID           uint_b(2)
+        encodingID           uint_b(2)
+        offset               uint_b(4)
+    
+# unicode
+#    0    3    Unicode
+# macintosh
+#    1    0    mac os roman
+# iso
+#    2
+# windows
+#    3    0    Symbol
+#    3    1    Unicode
+#    3    2    ShiftJIS
+#    3    3    Big5
+#    3    4    PRC
+#    3    5    Wansung
+#    3    6    Johab
+
+cmaptable TTF_cmap_table(.length)
+
+    format         uint_b(2)
+    length         uint_b(2)
+    version        uint_b(2)
+
+    cmap           TTF_cmap_t(auto){format}
+
+        0:format0      TTF_cmap0(auto)
+            plyphIdArray   uint_b(2)[256]
+            
+            
+        # http://svn.apache.org/repos/asf/pdfbox/trunk/fontbox/src/main/java/org/apache/fontbox/ttf/CMAPEncodingEntry.java
+        2:format2      TTF_cmap2(auto)
+            subHeaderKeys       uint_b(2)[256]
+            subHeaders          TTF_cmap2_subHeader[add(div(max(subHeaderKeys),8),1)]
+                firstCode           uint_b(2)
+                entryCount          uint_b(2)
+                idDelta             int_b(2)
+                idRangeOffset       uint_b(2)
+            plyphIdArray        uint_b(2)[auto]
+            # charCode = (charCode << 8 ) + (firstCode + j);
+            
+        4:format4      TTF_cmap4(auto)
+            segCountX2          uint_b(2)                     # 2 x segCount
+            searchRange         uint_b(2)                     # 2 x (2**floor(log2(segCount)))
+            entrySelector       uint_b(2)                     # log2(searchRange/2)
+            rangeShift          uint_b(2)                     # 2 x segCount - searchRange
+            endCount            uint_b(2)[div(segCountX2,2)]  # End characterCode for each segment, last =0xFFFF.
+            reservedPad         uint_b(2)                     # set to 0
+            startCount          uint_b(2)[div(segCountX2,2)]  # Start character code for each segment.
+            idDelta             uint_b(2)[div(segCountX2,2)]  
+            idRangeOffset       uint_b(2)[div(segCountX2,2)]
+            plyphIdArray        uint_b(2)[auto]
+
+        6:format6      TTF_cmap6(auto)
+            firstCode           uint_b(2)
+            entryCount          uint_b(2)
+            plyphIdArray        uint_b(2)[auto]
+            
+        *:formatd      byte[auto]
+
+
+loca    TTF_loca
+
+    loca    TTF_loca_u{$indexToLocFormat}
+
+        0:loca_short  uint_b(2)[add($numGlyphs,1)]
+        1:loca_long   uint_b(4)[add($numGlyphs,1)]
+
+
+name    TTF_name($length)
+    
+    formatSelector       uint_b(2)
+    numNameRecords       uint_b(2)
+    dataOffset           uint_b(2)
+    
+    nameRecords          TTF_NAME_RECORDS[numNameRecords]
+    
+        platformID           uint_b(2)           
+        encodingID           uint_b(2)
+        LanguageID           uint_b(2)
+        NameID               uint_b(2)
+        stringLength         uint_b(2)
+        stringOffset         uint_b(2)
+    
+    other                byte[auto]
+    data                 byte[sub($length,dataOffset)]
+    
+    # NameID
+    # 0 copyright
+    # 1 family name
+    # 2 sub family name
+    # 3 unique identifier
+    # 4 full name
+    # 5 version X.XX format
+    # 6 postscript name
+    # 7 trademark
+
+
+
+glyf                 TTF_glyf
+
+    numberOfContours     int_b(2)
+    xMin                 int_b(2) #FWORD
+    yMin                 int_b(2) #FWORD
+    xMax                 int_b(2) #FWORD
+    yMax                 int_b(2) #FWORD
+    
+    
+glyphDescription     TTF_glyph_desc
+
+    glyphdesc            TTF_glyph_desc_u(auto){ ge($numberOfContours,0) }
+
+        true:simple             TTF_glyph_desc_simple
+            
+            endPtsOfContours     uint_b(2)[$numberOfContours]
+            instructionLength    uint_b(2)
+            instructions         byte[instructionLength]
+            
+            #http://java.freehep.org/vectorgraphics/xref/org/freehep/graphicsio/font/truetype/TTFGlyfTable.html
+            flags                flags{add(last(endPtsOfContours),1)}
+            #flags                flags{last(endPtsOfContours)}
+            
+            xCoordinates         coords{flags,$true}   #return array
+            yCoordinates         coords{flags,$false}  #return array
+
+
+
+post    TTF_post($length)
+    
+    formatType           FIX
+    atalicAngle          FIX
+    underlinePosition    int_b(2) #FWORD
+    underlineThickness   int_b(2) #FWORD
+    isFixedPitch         uint_b(4)
+    minMemType42         uint_b(4)
+    maxMemType42         uint_b(4)
+    minMemType1          uint_b(4)
+    maxMemType1          uint_b(4)
+    
+    glyphNames           TTF_glyphNames(auto){add(mul(formatType.major,10),formatType.sub)}
+        10:Format10          TTF_glyphNames_Format10(auto)
+            pad                  byte[auto]
+        20:Format20          TTF_glyphNames_Format20(auto)
+            numGlyphs            uint_b(2)
+            index                uint_b(2)[numGlyphs]
+            stt_names            TTF_glyphNames_Format20_Name_s(auto)[sub(max(index),257)]
+                namelen              uint(1)
+                name                 byte[namelen]
+        25:Format25          TTF_glyphNames_Format25
+            index                uint_b(2)[$numGlyphs]
+        30:Format30          TTF_glyphNames_Format30(auto)
+            pad                  byte[auto]
+        
+
+
+
+os_2   TTF_os2
+    
+    version              uint_b(2)
+    xAvgCharWidth        int_b(2)
+    usWeightClass        uint_b(2)
+    usWidthClass         uint_b(2)
+    fsType               int_b(2)
+    ySubscriptXSize      int_b(2)
+    ySubscriptYSize      int_b(2)
+    ySubscriptXOffset    int_b(2)
+    ySubscriptYOffset    int_b(2)
+    ySuperscriptXSize    int_b(2)
+    ySuperscriptYSize    int_b(2)
+    ySuperscriptXOffset  int_b(2)
+    ySuperscriptYOffset  int_b(2)
+    yStrikeoutSize       int_b(2)
+    yStrikeoutPosition   int_b(2)
+    sFamilyClass         int_b(2)
+    
+    panose               TTF_PANOSE
+    
+        bFamilyType          byte
+        bSerifStyle          byte
+        bWeight              byte
+        bProportion          byte
+        bContrast            byte
+        bStrokeVariation     byte
+        bArmStyle            byte
+        bLetterform          byte
+        bMidline             byte
+        bXHeight             byte
+    
+    ulUnicodeRange1      uint_b(4)  # Bits 0–31
+    ulUnicodeRange2      uint_b(4)  # Bits 32–63
+    ulUnicodeRange3      uint_b(4)  # Bits 64–95
+    ulUnicodeRange4      uint_b(4)  # Bits 96–127
+    achVendID            byte[4]
+    fsSelection          uint_b(2)
+    usFirstCharIndex     uint_b(2)
+    usLastCharIndex      uint_b(2)
+    sTypoAscender        uint_b(2)
+    sTypoDescender       uint_b(2)
+    sTypoLineGap         uint_b(2)
+    usWinAscent          uint_b(2)
+    usWinDescent         uint_b(2)
+    ulCodePageRange1     uint_b(4)  # Bits 0-31
+    ulCodePageRange2     uint_b(4)  # Bits 32-63
+
+
+
+maxp    TTF_maxp
+    
+    version               FIX
+    numGlyphs             uint_b(2)
+    maxPoints             uint_b(2)
+    maxContours           uint_b(2)
+    maxCompositePoints    uint_b(2)
+    maxCompositeContours  uint_b(2)
+    maxZones              uint_b(2)
+    maxTwilightPoints     uint_b(2)
+    maxStorage            uint_b(2)
+    maxFunctionDefs       uint_b(2)
+    maxInstructionDefs    uint_b(2)
+    maxStackElements      uint_b(2)
+    maxSizeOfInstructions uint_b(2)
+    maxComponentElements  uint_b(2)
+    maxComponentDepth     uint_b(2)
+
+
+
+hhea    TTF_hhea
+
+    version               FIX
+    ascender              int_b(2)   #FWORD
+    descender             int_b(2)   #FWORD
+    lineGap               int_b(2)   #FWORD
+    advanceWidthMax       uint_b(2)  #UFWORD
+    minLeftSideBearing    int_b(2)   #FWORD
+    minRightSideBearing   int_b(2)   #FWORD
+    xMaxExtent            int_b(2)   #FWORD
+    caretSlopeRise        int_b(2)
+    caretSlopeRun         int_b(2)
+    reversed1             int_b(2)
+    reversed2             int_b(2)
+    reversed3             int_b(2)
+    reversed4             int_b(2)
+    reversed5             int_b(2)
+    metricDataFormat      int_b(2)
+    numberOfHMetrics      uint_b(2)
+    
+
+
+hmtx    TTF_hmtx
+    
+    hMetrics                      TTF_longHorMetric[$numberOfHMetrics]
+        advanceWidth                  uint_b(2) #uFWord
+        leftSideBearing               int_b(2)  #FWord
+        
+    nonHorizontalLeftSideBearing  int_b(2)[sub($numGlyphs,$numberOfHMetrics)] #FWord
+
+
+kern    TTF_kern(auto)
+
+    version               uint_b(2)
+    nTables               uint_b(2)
+    
+    subTables             TTF_kern_table(.length)[nTables]
+    
+        version               uint_b(2)
+        length                uint_b(2)
+        #coverage              uint_b(2)
+        format                uint_b(1)
+        subcoverage           uint_b(1)
+        
+        field                 TTF_kern_field(auto){format}
+        
+            0:format0             TTF_kern_field0(auto)
+            
+                nPairs                uint_b(2)
+                searchRange           uint_b(2)
+                entrySelector         uint_b(2)
+                rangeShift            uint_b(2)
+                
+                values            TTF_kern_v[nPairs]
+                
+                    left              uint_b(2)
+                    right             uint_b(2)
+                    value             int_b(2)
+                    
+            # only supported format 0
+            
+            
+prep    TTF_prep($length)
+    vars          byte[auto]
+
+cvt     TTF_cvt($length)
+    vars          uint_b(2)[auto]
+
+fpgm    TTF_fpgm($length)
+    instructions  byte[auto]
+
+
+checksum  TTF_checksum($length)    
+    data   uint_b(4)[auto]
+
+
+
+
