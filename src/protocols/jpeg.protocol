@@ -1,0 +1,12 @@
+jpeg JPEG
+
+    appmark    segmark
+    content    JPEG_SEGMENT{ appmark }
+        
+        0xD8:content none[0]
+        0xD9:content none[0]
+        
+        *:content    JSeg(.length)
+            length        uint_b(2)
+            r             none(1)[auto]
+    

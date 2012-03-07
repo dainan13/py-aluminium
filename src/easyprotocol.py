@@ -1,6 +1,7 @@
 
 import re
 import types
+import os
 
 class EasyBinaryProtocolError( Exception ):
     pass
@@ -178,6 +179,8 @@ class TypeStruct( ProtocolType ):
         
         for i, m in enumerate(self.members) :
             
+            #print m
+            
             if m['array'][0] == 0 : #None
                 
                 if m['length'][0] == 1 : #auto
@@ -187,7 +190,10 @@ class TypeStruct( ProtocolType ):
                         lens = complength( lens, r, namespace )
                     le = lens - l - lx
                 else :
-                    le = complength( m['length'], r, namespace )
+                    try :
+                        le = complength( m['length'], r, namespace )
+                    except KeyError :
+                        le = m['length']
                 
                 a = complength( m['arg'], r, namespace )
                 
@@ -255,7 +261,8 @@ class TypeUnion( ProtocolType ):
                     self.members[False] = m
                     continue
                 
-                keys = [ int(i) for i in m['seg'].strip(':').split(',') if i ]
+                keys = [ int(i, ( 16 if i.startswith('0x') else 10 ) )
+                         for i in m['seg'].strip(':').split(',') if i ]
                 for k in keys :
                     self.members[k] = m
                 i = max(keys)
@@ -295,7 +302,10 @@ class TypeUnion( ProtocolType ):
                 le = lens - l
                 
             else :
-                le = complength( m['length'], r, namespace )
+                try :
+                    le = complength( m['length'], r, namespace )
+                except KeyError :
+                    le = m['length']
             
             a = complength( m['arg'], r, namespace )
             
@@ -322,7 +332,10 @@ class TypeUnion( ProtocolType ):
         else :
             
             array = complength( m['array'], r, namespace )
-            le = complength( m['length'], r, namespace )
+            try :
+                le = complength( m['length'], r, namespace )
+            except KeyError :
+                le = m['length']
             
             a = complength( m['arg'], r, namespace )
             
@@ -471,6 +484,29 @@ class BuildinTypeBYTE( ProtocolType ):
         
         return s, mlens
 
+class BuildinTypeNone( ProtocolType ):
+    
+    def __init__( self ):
+        
+        self.name = 'none'
+        self.cname = 'void *'
+        
+        self.identifiable = True
+        self.stretch = False
+        
+        self.variables = []
+        
+    def length( self, lens, array ):
+        return array
+    
+    def read( self, namespace, fp, lens, args ):
+        fp.seekcur(1)
+        return None, 1
+        
+    def read_multi( self, namespace, fp, lens, mlens, args ):
+        fp.seekcur(mlens)
+        return None, mlens
+
 class BuildinTypeBIT( ProtocolType ):
     
     def __init__( self ):
@@ -521,6 +557,18 @@ class SafeIO( object ):
             raise ConnectionError, 'Connection Error'
         return r
         
+    def seekcur( self, lens ):
+        s = getattr( self.io, 'seek', None )
+        if s :
+            self.io.seek( lens-1, os.SEEK_CUR )
+            r = self.io.read(1)
+            if len(r) != 1 :
+                raise ConnectionError, 'Connection Error'
+        else :
+            r = self.io.read( lens )
+            if len(r) != lens :
+                raise ConnectionError, 'Connection Error'
+        return
 
 class EasyBinaryProtocol( object ):
     
@@ -530,6 +578,7 @@ class EasyBinaryProtocol( object ):
                      BuildinTypeBIT(),
                      BuildinTypeINTB(),
                      BuildinTypeUINTB(),
+                     BuildinTypeNone(),
                    ]
     
     buildinfunction = [ ( 'add', (lambda a, b: a+b) ),
@@ -552,7 +601,7 @@ class EasyBinaryProtocol( object ):
     
     def __init__( self ):
         
-        seg = r'(?P<seg>([0-9,*]*|true|false):)'
+        seg = r'(?P<seg>([0-9,*]*|0x[0-9A-Fa-f]+|true|false):)'
         var = r'(?P<var>[a-zA-Z_]\w*)'
         name = r'(?P<name>[a-zA-Z_]\w*)'
         length = r'\((?P<length>\s*\S+?\s*)\)'
@@ -560,7 +609,7 @@ class EasyBinaryProtocol( object ):
         #arg = r'\{(?P<arg>\s*\S+\s*)\}'
         arg = r'\{(?P<arg>.*)\}'
 
-        self.pat = '%s?%s\s+%s(%s)?(%s)?(%s)?' % (seg,var, name, length, array, arg)
+        self.pat = '%s?%s\s+%s(%s)?(%s)?(%s)?' % (seg, var, name, length, array, arg)
         
         self.namespaces = dict( (bt.name, bt) for bt in self.buildintypes )
         self.p_globals = {}
