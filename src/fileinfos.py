@@ -69,7 +69,6 @@ class JPEG( dict ):
             while( True ):
                 d = self.ebp.read( 'jpeg', fp )
                 name = self.segnames.get( d['appmark'], d['appmark'] )
-                print name
                 self[name] = d['content']
                 if name == 'EOI' :
                     break
@@ -138,15 +137,15 @@ def auto_match( f ):
     ext = os.path.splitext( f )[-1]
     
     if ext in ('.jpeg','.jpg','.jpe') :
-        print JPEG
+        return JPEG
     elif ext in ('.png',):
-        print PNG
+        return PNG
     elif ext in ('.bmp',):
-        print BMP
+        return BMP
     elif ext in ('.gif',):
-        print GIF
+        return GIF
     
-    raise NotMatch, 'not supported format'
+    raise NotMatch, ('not supported format',ext)
 
 if __name__ == '__main__' :
     
