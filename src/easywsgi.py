@@ -207,6 +207,9 @@ class Server( object ):
             form = [ (k, self.fs_load(form[k])) for k in form.keys() ]
             qs = qs + form
         
+        if env['REQUEST_METHOD'] == 'PUT' :
+            qs = qs + [('_input', json.load(env['wsgi.input'],encoding='utf-8'))]
+        
         qs = dict(qs)
         
         for urlprefix, obj in self.objentrys:
