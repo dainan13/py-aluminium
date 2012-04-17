@@ -124,11 +124,16 @@ class GIF( dict ):
 
             x = fp.read(4)
             if x != 'GIF8' :
-                raise ezp.ConnectionError, ('bmp PREFIX error')
+                raise ezp.ConnectionError, ('gif PREFIX error')
             
-            fp.seek(-2, os.SEEK_END)
-            if fp.read(2) != '\x00\x3B' :
-                raise ezp.ConnectionError, ('bmp error')
+            #fp.seek(-4, os.SEEK_END)
+            #end = fp.read(4)
+            #if end != '\x00\x3B\x0D\x0A' and end[2:] != '\x00\x3B' :
+            #    raise ezp.ConnectionError, ('gif error')
+            fp.seek(-64, os.SEEK_END)
+            end = fp.read(64)
+            if '\x00\x3B' not in end :
+                raise ezp.ConnectionError, ('gif error')
         
 
 
