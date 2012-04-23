@@ -992,7 +992,11 @@ class Table( Grid ):
         
         ks = [ tuple(k[:i]) for k, pth, v in tbv for i in range(1,len(k)+1) ]
         ks = list( set( ks ) )
-        #ks.sort()
+        
+        if 'cols' in format :
+            ks = format['cols'](ks)
+        else :
+            ks.sort()
         
         kcs = [ ( k, sum( 1 for _k in ks 
                             if len(_k) > len(k) and _k[:len(k)] == k ) ) 
@@ -1096,19 +1100,25 @@ if __name__ == '__main__' :
     
     d = [ { 'colA' : 'A.1.alpha\r\nA.1.beta' ,
             'colB' : [1,2],
-            'colC' : 'B.1.alpha\r\nB.1.beta\r\nB.1.gamma\r\nB.1.delta',
+            'colC' : 'C.1.alpha\r\nC.1.beta\r\nC.1.gamma\r\nC.1.delta',
           },
           { 'colA' : 'A.2.alpha\r\nA.2.beta' ,
             'colB' : [0.1,0.9,0.3,0,-1],
-            'colC' : [3,0.7,{'B.2.alpha':'z','B.1':'qew' },True,False],
+            'colC' : [3,0.7,{'C.2.alpha':'z','C.1':'qew' },True,False],
           },
         ]
     
-    ep = Table( d, convert = { 
+    def sorted( z ):
+        z.sort()
+        z = z[1:] + z[:1]
+        return z
+    
+    ep = Table( d, convert = {
                         ('colB',) : ( lambda x : [ Bar(_x, width=15) for _x in x ] ), 
                         ('colA',) : ( lambda x : AutoNode( x, padding=Padding([0,2]*2), align='right', width=20 ) ), 
                    }, 
-                   formatter = {
+                   format = {
+                        'cols' : sorted,
                    },
               )
     
@@ -1117,6 +1127,6 @@ if __name__ == '__main__' :
     ep = Table( d, convert = { 
             ('colB',) : (lambda x : [ Bar(_x) for _x in x ]), 
         } )
-        
+      
     ep.htmlprint()
 
