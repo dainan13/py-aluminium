@@ -9,6 +9,8 @@ import urllib
 import json
 import cgi
 
+import uuid
+import hashlib
 
 class WorkError( Exception ):
     pass
@@ -154,7 +156,6 @@ class MetaServer( type ):
         return 
 
 
-
 class Server( object ):
     
     __metaclass__ = MetaServer
@@ -163,6 +164,8 @@ class Server( object ):
     errorentrys = {}
     objentrys = []
     response = {}
+    
+    binary_upload = {}
     
     staticroot = './'
     
@@ -202,13 +205,30 @@ class Server( object ):
             
         qs = [ (k, urllib.unquote(v)) for k, v in qs ]
         
-        if env['REQUEST_METHOD'] == 'POST' :
-            form = cgi.FieldStorage( fp=env['wsgi.input'], environ=env )
-            form = [ (k, self.fs_load(form[k])) for k in form.keys() ]
-            qs = qs + form
+        if env['PATH_INFO'] in self.binary_upload :
+            
+            p = self.binary_upload[env['PATH_INFO']].rstrip('/')+'/'
+            fname = str( uuid.uuid4() )
+            md5 = hashlib.md5()
+            
+            with open( p+fname, 'wb' ) as fp :
+                cnt = env['wsgi.input'].read(1024*1024)
+                while cnt != '' :
+                    md5.update(cnt)
+                    fp.write(cnt)
+                    cnt = env['wsgi.input'].read(1024*1024)
+            
+            qs = qs + [ ('_path', fname ), ('_md5', md5.hexdigest()) ]
         
-        if env['REQUEST_METHOD'] == 'PUT' :
-            qs = qs + [('_input', json.load(env['wsgi.input'],encoding='utf-8'))]
+        else :
+            
+            if env['REQUEST_METHOD'] == 'POST' :
+                form = cgi.FieldStorage( fp=env['wsgi.input'], environ=env )
+                form = [ (k, self.fs_load(form[k])) for k in form.keys() ]
+                qs = qs + form
+            
+            if env['REQUEST_METHOD'] == 'PUT' :
+                qs = qs + [('_input', json.load(env['wsgi.input'],encoding='utf-8'))]
         
         qs = dict(qs)
         
@@ -265,6 +285,8 @@ class Server( object ):
         try :
             obj, work, args, status, resp = self.make_workentry(env)
             work = getattr( self, work )
+            
+            args.pop(None,None)
             
             obj = [obj] if obj else []
             
@@ -355,6 +377,16 @@ class Server( object ):
             self.workentrys[(v,t)] = self.workentrys[(v,url)]
         
         return
+    
+    
+class DebugServer( Server ):
+
+    def run( self, env, start_response ):
+        
+        for k, v in env.items():
+            print k.rjust(25), v
+        
+        return super( DebugServer, self ).run( env, start_response )
     
 if __name__ in ('uwsgi_file_index','__main__') :
     
