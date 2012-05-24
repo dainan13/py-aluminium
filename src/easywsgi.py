@@ -165,7 +165,7 @@ class Server( object ):
     objentrys = []
     response = {}
     
-    binary_upload = {}
+    binary_upload = {None:'/'}
     
     staticroot = './'
     
@@ -205,7 +205,13 @@ class Server( object ):
             
         qs = [ (k, urllib.unquote(v)) for k, v in qs ]
         
-        if env['PATH_INFO'] in self.binary_upload :
+        sys_args = dict( (k, v) for k, v in qs if k.startswith('_') )
+        
+        qs = [ (k, v) for k, v in qs if not k.startswith('_') ]
+        
+        env['REQUEST_METHOD'] = sys_args.get( '_method', env['REQUEST_METHOD'] )
+        
+        if env['PATH_INFO'] in self.binary_upload or env['REQUEST_METHOD'] == 'BIN':
             
             p = self.binary_upload[env['PATH_INFO']].rstrip('/')+'/'
             fname = str( uuid.uuid4() )
@@ -224,7 +230,7 @@ class Server( object ):
             
             if env['REQUEST_METHOD'] == 'POST' :
                 form = cgi.FieldStorage( fp=env['wsgi.input'], environ=env )
-                form = [ (k, self.fs_load(form[k])) for k in form.keys() ]
+                form = [ (k, self.fs_load(form[k])) for k in form.keys() if not k.startswith('_') ]
                 qs = qs + form
             
             if env['REQUEST_METHOD'] == 'PUT' :
