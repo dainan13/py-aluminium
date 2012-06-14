@@ -300,7 +300,7 @@ class Server( object ):
             
         except Exception, e:
             work, status, resp = self.make_errorentry( e, env )
-            work = getattr( self, work )
+            work = work if callable(work) else getattr( self, work )
             headers, r = work()
             
         if resp :
