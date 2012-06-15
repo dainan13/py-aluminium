@@ -751,6 +751,7 @@ class SQLConnectionPool( object ):
                         host=conn_args[0], port=conn_args[1], db=conn_args[4],
                         user=conn_args[2], passwd=conn_args[3],
                         connect_timeout = self.default_timeout,
+                        use_unicode=True, charset="utf8",
                     )
             except MySQLdb.OperationalError, e :
                 self._traceback( infos, wrt, tuple(conn_args), sql, 0, self.connectionfailed )
@@ -2012,7 +2013,10 @@ def getdbnames( host, port, user, passwd ):
     
     #conn_args = ( host, port, user, passwd )
     
-    conn = MySQLdb.Connection( host=host, port=port, user=user, passwd=passwd )
+    conn = MySQLdb.Connection( 
+        host=host, port=port, user=user, passwd=passwd,
+        use_unicode=True, charset="utf8",
+    )
     
     dbnames = p._read( conn, "SHOW DATABASES" )
     
