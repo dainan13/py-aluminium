@@ -180,22 +180,26 @@ def _print( v, cols ):
         return ' '.join([ _print(vi, cols[2][i]) for i, vi in enumerate(v) ])
     else :
         j = cols[1].get( '__just__', 'left' )
+        
         if callable(j):
             j = j(v)
         
-        #if j == 'right' :
-        #    return v.rjust(cols[1]['__width__'])
-        #elif j == 'center' :
-        #    return v.center(cols[1]['__width__'])
-        #    
-        #return v.ljust(cols[1]['__width__'])
         if j == 'right' :
             return ' '*(cols[1]['__width__'] - safelen(v))+v
         elif j == 'center' :
             n = (cols[1]['__width__'] - safelen(v))/2
             m = cols[1]['__width__'] - n
             return ' '*m+v+' '*n
+            
         return v + ( ' '*(cols[1]['__width__'] - safelen(v)) )
+
+def _grid( v, cols ):
+    
+    if type(v) == types.TupleType :
+        return sum( [ _grid(vi, cols[2][i]) for i, vi in enumerate(v) ], [] )
+        
+    padcols = max( [len( cols[2] ), 1 ] ) - 1
+    return [v] + ['']*padcols
 
 def eprint( v, cols ):
     
@@ -206,6 +210,10 @@ def eformat( v, cols ):
     
     return '\r\n'.join( [ _print( vi, cols ) for vi in v ] )
     
+def egrid( v, cols ):
+    
+    return [ _grid( vi, cols ) for vi in v ]
+
 
 def ifdict( di ):
     
@@ -236,6 +244,36 @@ def easyprint( data, cols = None ):
     
     return
 
+def easygrid( data, cols = None ):
+    
+    if type(data) == types.DictType :
+        data = ifdict(data)
+    
+    # get the cols if not fixed
+    if cols == None :
+        cols = getcols( data )
+    elif type(cols) == types.IntType :
+        cols = getcols( data, cols )
+    
+    if len(cols[2]) == 0 :
+        return [], []
+    
+    #print cols
+    #print '--cols--'
+    #pprint(cols)
+    #print '--------'
+    
+    fdata = _format( data, cols )
+    width( fdata, cols )
+    
+    cdata = _coldata( cols )
+    cdata = _format( cdata, cols )
+    
+    #print '--cdata--'
+    #pprint(cdata)
+    #print '--------'
+    
+    return egrid( cdata, cols ), egrid( fdata, cols )
 
 def easyformat( data, cols = None ):
     
