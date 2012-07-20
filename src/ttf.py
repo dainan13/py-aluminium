@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
 
-#import easyprotocol as ezp
-from . import easyprotocol as ezp
+import easyprotocol as ezp
+#from . import easyprotocol as ezp
 
 import cStringIO
 import struct
@@ -14,6 +14,9 @@ import cPickle as pickle
 import hashlib
 
 import pprint
+
+
+__filepath__ = str(os.path.realpath(__file__).rsplit('/',1)[0])
 
 
 class TTFError(Exception):
@@ -203,8 +206,9 @@ def load_unicode_block( fname ):
 
 def init_unicodemap( unicodemap ):
     
-    #block = load_unicode_block( os.path.realpath(__file__).rsplit('/')[0]+'Blocks-6.1.0d1.txt' )
-    block = load_unicode_block( os.path.dirname(__file__)+'/protocols/Blocks-6.1.0d1.txt' )
+    p = __filepath__ + '/protocols/Blocks-6.1.0d1.txt'
+    block = load_unicode_block( p )
+    #block = load_unicode_block( os.path.dirname(__file__)+'/protocols/Blocks-6.1.0d1.txt' )
     
     namesearch = dict( (name, (st,ed)) for st, ed, name in block )
     charsearch = [ name for st, ed, name in block for s in range(st>>8,(ed>>8)+1) ]
@@ -288,7 +292,7 @@ class TTFile(object):
     ebp.buildintypes.append(FLAGSType())
     ebp.buildintypes.append(COORDSType())
     ebp.rebuild_namespaces()
-    ebp.parsefile( os.path.dirname(__file__)+'/protocols/ttf.protocol' )
+    ebp.parsefile( __filepath__+'/protocols/ttf.protocol' )
     
     def __init__( self, fn=None, noglyph=False ):
         
@@ -1431,6 +1435,9 @@ command arguments :
                     d = 'utf-16'
                 elif h == '\xfe\xff' :
                     d = 'utf-16BE'
+                elif h == '\xef\xbb' :
+                    d = 'utf-8'
+                    fp.read(1)
                 else :
                     fp.seek(0)
                 subset += fp.read().decode(d)

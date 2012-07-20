@@ -40,6 +40,10 @@ def _namescore( name ):
         score += 100
         score -= len(name)-2
     
+    if name.endswith('type') :
+        score += 81
+        score -= len(name)-4
+    
     if name.endswith('name') :
         score += 80
         score -= len(name)-4
