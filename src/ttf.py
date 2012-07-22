@@ -1,8 +1,12 @@
 # -*- coding: utf-8 -*-
 
-
-import easyprotocol as ezp
-#from . import easyprotocol as ezp
+if __name__ == '__main__' :
+    try :
+        import easyprotocol as ezp
+    except :
+        from Al import easyprotocol as ezp
+else :
+    from . import easyprotocol as ezp
 
 import cStringIO
 import struct
