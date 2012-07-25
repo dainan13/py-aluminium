@@ -747,7 +747,35 @@ class TTFile(object):
             
         return
     
-    def dump_ttf( self, fname, onlyrequiredtable=False ):
+    def _dump_ttf_write( self, fp, ks, charidx, entrydatas, pads, entrys ):
+        
+        for ed, pa, e in zip(entrydatas, pads, entrys) :
+            
+            st = fp.tell()
+            
+            if st != e[2] :
+                raise TTFError, ( e[0], 'write file error.(offset)', st, e[2] )
+            
+            if callable(ed) :
+                ed = ed( ks, charidx, entrys )[2]
+            
+            if type(ed) != types.StringType :
+                
+                for edi in ed :
+                    fp.write(edi)
+            else :
+                fp.write(ed)
+            
+            ed = fp.tell()
+            
+            if e[3] != ed - st :
+                raise TTFError, ( e[0], 'write file error.(length)', ed-st, e[3] )
+            
+            fp.write(chr(0)*pa)
+                
+        return
+    
+    def dump_ttf( self, fname=None, onlyrequiredtable=False ):
         
         
         ks = self.char_defines.keys()
@@ -800,32 +828,23 @@ class TTFile(object):
         entrydatas = [directory] + list(entrydatas)
         pads = [ le_pad ] + pads
         
-        with open( fname, 'wb' ) as fp :
+        
+        if fname == None :
             
-            for ed, pa, e in zip(entrydatas, pads, entrys) :
-                
-                st = fp.tell()
-                
-                if st != e[2] :
-                    raise TTFError, ( e[0], 'write file error.(offset)', st, e[2] )
-                
-                if callable(ed) :
-                    ed = ed( ks, charidx, entrys )[2]
-                
-                if type(ed) != types.StringType :
-                    
-                    for edi in ed :
-                        fp.write(edi)
-                else :
-                    fp.write(ed)
-                
-                ed = fp.tell()
-                
-                if e[3] != ed - st :
-                    raise TTFError, ( e[0], 'write file error.(length)', ed-st, e[3] )
-                
-                fp.write(chr(0)*pa)
-                
+            fp = cStringIO.StringIO()
+            self._dump_ttf_write( fp, ks, charidx, entrydatas, pads, entrys )
+            
+            return fp.getvalue()
+        
+        elif type( fname ) in types.Strings :
+            
+            with open( fname, 'wb' ) as fp :
+                self._dump_ttf_write( fp, ks, charidx, entrydatas, pads, entrys )
+            
+        else :
+            
+            self._dump_ttf_write( fname, ks, charidx, entrydatas, pads, entrys )
+            
         return
         
     @staticmethod
@@ -1092,7 +1111,7 @@ class TTFile(object):
         
         le_record = len(self.nametuple)*2
         
-        strings = [ s.encode('mac_roman') for s in self.nametuple ] + \
+        strings = [ s.encode('mac_roman', errors='ignore') for s in self.nametuple ] + \
                   [ s.encode('utf-16BE') for s in self.nametuple ]
         stringlens = [ len(s) for s in strings ]
         strlen = sum(stringlens)
@@ -1140,7 +1159,7 @@ class TTFile(object):
         
         another.sfntversion = self.sfntversion
         
-        another.bold, another.italic = self.bolb, self.italic
+        another.bold, another.italic = self.bold, self.italic
         another.indexToLocFormat = self.indexToLocFormat
         another.glyphDataFormat = self.glyphDataFormat
         
@@ -1149,7 +1168,7 @@ class TTFile(object):
         
         another.char_defines = self.char_defines.copy()
         
-        if char_kern != None :
+        if self.char_kern != None :
             another.char_kern = [ (sc, field[:]) for sc, field in self.char_kern ]
         
         another.char_dup = self.char_dup[:]
