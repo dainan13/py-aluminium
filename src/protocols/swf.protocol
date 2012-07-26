@@ -1,0 +1,37 @@
+
+
+
+swf SWF(.filesize)
+    
+    signature     char[3]
+    version       uint(1)
+    filesize      uint(4)
+    
+    #framesize     struct()
+    #    nbits       uint(1)
+    #    padding     char[8]
+    
+    framesize     rect
+    
+    framerate     FIX 
+        sub         uint(1)
+        major       uint(1)
+        
+    framecount    uint(2)
+    
+    
+    
+tag TAG()
+    
+    code_and_length   TagCodeAndLenght
+    content           byte[.code_and_length.length]
+    
+    
+# DefineFont4
+tag91 TAG91($length)
+    
+    fontID            uint(2)
+    fontflag          uint(1)
+    fontname          string
+    fontdata          byte[auto]
+    
