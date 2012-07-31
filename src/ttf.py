@@ -290,6 +290,10 @@ class UnicodeMapSet( object ):
         return set( s for s in other if s >= st or s <= ed )
 
 
+
+                
+                
+                
 class TTFile(object):
     
     ebp = ezp.EasyBinaryProtocol()
@@ -1334,6 +1338,84 @@ class TTFile(object):
         return
 
 
+
+
+class CFF(TTFile):
+    
+    ebp = ezp.EasyBinaryProtocol()
+    ebp.buildintypes.append(FLAGSType())
+    ebp.buildintypes.append(COORDSType())
+    ebp.rebuild_namespaces()
+    ebp.parsefile( __filepath__+'/protocols/ttf.protocol' )
+    
+    def __init__( self, fn=None, noglyph=False ):
+        
+        self.name = None
+        self.nametuple = None
+        
+        self.sfntversion = None
+        
+        self.fix_entrys = {}
+        self.stt_entrys = {}
+        self.char_defines = {}
+        self.char_kern = None
+        self.char_dup = []
+        
+        self.bold = False
+        self.italic = False
+        self.indexToLocFormat = None
+        self.glyphDataFormat = None
+        
+        self.numGlyphs = None
+        
+        if fn != None :
+            self.load( fn, noglyph )
+        
+    idxsort = ['head','maxp','cmap','CFF ','VORG','kern','hhea','hmtx','post','name','OS/2',]
+    requiredtable = set(['head','maxp','cmap','CFF ','VORG','hhea','hmtx','post','name','OS/2',])
+    #idxsort = dict( (n,i) for i, n in enumerate(idxsort) )
+    
+    def load( self, fname, noglyph=False ):
+        
+        self.load_otf( fname )
+            
+    def load_otf( self, fname ):
+            
+        with open(fname) as fp :
+            
+            directory = self.ebp.read( 'ttf', fp )['directory']
+            entrys = directory.pop('entry')
+            
+            self.sfntversion = directory['sfntversion']
+            
+            entrys = [ e for e in entrys if e['tag'] in self.idxsort ]
+            entrys.sort( key = lambda e : self.idxsort.index(e['tag']) )
+            
+            ae = dict( (e['tag'],e) for e in entrys )
+            
+            for e in entrys :
+                self.read_entry( fp, e, ae, True )
+
+    def read_cff( self, fp, e, ae ):
+        
+        cff = self.ebp.read('cff', fp, length=e['length'])
+        
+        #cff['name'] = [ ]
+        
+        _cff = cff.copy()
+        _cff.pop('data')
+        print _cff
+        
+        self.stt_entrys['cff'] = cff
+
+
+
+
+
+
+
+
+
 transmapdefault = '⋯…≪《≫》'.decode('utf-8')
 transmapdefault = dict(zip(transmapdefault[::2],transmapdefault[1::2]))
 
@@ -1347,7 +1429,7 @@ if __name__ == '__main__' :
     opts, args = getopt.gnu_getopt(
         sys.argv[1:],
         'o:s:S:c:gen:m:I:rx:X:t:y:lih',
-        ['output=','extract',
+        ['output=','extract','cff',
          'info', 'cid=',
          'rename=',
          'subset=','subset-file=','decoding=','ignore',
@@ -1373,6 +1455,7 @@ command arguments :
  common :
     --output      -o file  : output file or path
     --extract     -e       : extract the font file instead build a new ttf file
+    --cff                  : as cff font
     
  for display font info :
     --info        -i       : show font file infomations
@@ -1437,6 +1520,8 @@ command arguments :
     transmap = {}
     symbol = u''
     stripline = False
+    
+    cff = False
     
     for k, v in opts :
         
@@ -1523,6 +1608,14 @@ command arguments :
             
         elif k in ( 'cid', ):
             cid = v
+            
+        elif k in ( 'cff', ):
+            cff = True
+    
+    if cff :
+        c = CFF()
+        c.load( args[0] )
+        sys.exit(-1)
     
     if type(text) == types.StringType :
         d = 'utf-8' if textdecoding == 'ascii' else textdecoding

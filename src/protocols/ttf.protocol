@@ -399,3 +399,99 @@ checksum  TTF_checksum($length)
 
 
 
+
+
+## OTF/CFF Files
+
+## Required Table
+# cmap    character to glyph mapping
+# head    font header
+# hhea    horizontal header
+# hmtx    horizontal metrics
+# maxp    maximum profile
+# name    naming table
+# OS/2    OS/2 and Windows specific metrics
+# post    PostScript information
+
+## TrueType
+# loca    index to location (R)
+# glyf    glyph data (R)
+# fpgm    font program
+# cvt     Control Value Table
+# prep    CVT Program
+
+## PostScript
+# CFF     PostScript font program (compact font format)  (OTF)
+# VORG    VerticalOrigin  (OTF)
+
+## Bitmap
+# EBDT    Embedded bitmap data
+# EBLC    Embedded bitmap location data
+# EBSC    Embedded bitmap scaling data
+
+## Optional Table
+# DSIG    Digital signature (OTF)
+# gasp    grid-fitting and scan conversion procedure (grayscale)
+# hdmx    horizontal device metrics
+# kern    kerning
+# LTSH    Linear threshold table
+# PCLT    PCL5
+# VDMX    Vertical Device Metrics table
+# vhea    Vertical Metrics header
+# vmtx    Vertical Metrics
+
+
+
+cff    OTF_cff($length)
+    
+    header   OTF_cff_header()
+        major       uint(1)
+        minor       uint(1)
+        hdrSize     uint(1)
+        offSize     uint(1)
+        
+    name     OTF_cff_index()
+        count       uint_b(2)
+        offSize     uint(1)
+        offSet      uint_b(offSize)[add(count,1)]
+        vars        char[sub(last(offSet),1)]
+    
+    top      OTF_cff_index()
+    
+    strings  OTF_cff_index()
+    
+    data            byte[auto]
+    
+vorg    TTF_vorg($length)
+    data            byte[auto]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
