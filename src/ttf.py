@@ -525,7 +525,7 @@ class TTFile(object):
                   for cmapt in _cmap['cmap'] ]
         _cmap = dict(_cmap)
         
-        cmapt = _cmap.get( (0,3), None ) or _cmap.get( (3,1), None )
+        cmapt = _cmap.get( (0,3), None ) or _cmap.get( (3,1), None ) or _cmap.get( (0, 4), None )
         if cmapt == None :
             raise TTFError, ('cmap read error.', _cmap)
         
@@ -1338,7 +1338,7 @@ class TTFile(object):
         return
 
 
-
+import cff_ps
 
 class CFF(TTFile):
     
@@ -1395,16 +1395,43 @@ class CFF(TTFile):
             
             for e in entrys :
                 self.read_entry( fp, e, ae, True )
-
+    
+    def _read_index( self, index ):
+        
+        datas = index['vars']
+        offsets = index['offSet']
+        
+        return [ datas[i-1:j-1] for i, j in zip( offsets[:-1], offsets[1:] ) ]
+    
     def read_cff( self, fp, e, ae ):
+        
+        #print repr( fp.read(e['length']) )
+        #return
+        
+        import cff_ps
         
         cff = self.ebp.read('cff', fp, length=e['length'])
         
-        #cff['name'] = [ ]
+        cff['name'] = self._read_index(cff['name'])
+        cff['strings'] = self._read_index(cff['strings'])
+        #cff['globalsubr'] = self._read_index(cff['globalsubr'])
+        
+        cff['top'] = self._read_index(cff['top'])[0]
+        topdict = cff_ps.TopDict( cff['strings'] )
+        topdict.decompile(cff['top'])
+        cff['top'] = topdict.getDict()
         
         _cff = cff.copy()
-        _cff.pop('data')
-        print _cff
+        #print '>>>', len(_cff.pop('data'))
+    
+        pprint.pprint( _cff )
+        
+        print e['length']
+        print len(cff['top'])
+        print len(cff['strings'])
+        #print len(cff['globalsubr'])
+        print len(cff['data'])
+        print e['length'] - len(cff['data'])
         
         self.stt_entrys['cff'] = cff
 
@@ -1615,6 +1642,10 @@ command arguments :
     if cff :
         c = CFF()
         c.load( args[0] )
+        
+        #with open( 'dump.cff', 'wb' ) as fp :
+        #    fp.write(c.fix_entrys['CFF '])
+        
         sys.exit(-1)
     
     if type(text) == types.StringType :

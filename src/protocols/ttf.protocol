@@ -444,21 +444,25 @@ checksum  TTF_checksum($length)
 
 cff    OTF_cff($length)
     
-    header   OTF_cff_header()
+    header      OTF_cff_header()
         major       uint(1)
         minor       uint(1)
         hdrSize     uint(1)
         offSize     uint(1)
         
-    name     OTF_cff_index()
+    # if count == 0
+    # len(OTF_cff_index) == 3
+    name        OTF_cff_index()
         count       uint_b(2)
         offSize     uint(1)
         offSet      uint_b(offSize)[add(count,1)]
         vars        char[sub(last(offSet),1)]
     
-    top      OTF_cff_index()
+    top         OTF_cff_index()
     
-    strings  OTF_cff_index()
+    strings     OTF_cff_index()
+    
+    #globalsubr  OTF_cff_index()
     
     data            byte[auto]
     

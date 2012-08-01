@@ -250,7 +250,7 @@ if __name__ == '__main__' :
     opts, args = getopt.gnu_getopt(
         sys.argv[1:],
         'o:ih',
-        ['output=', 'info', 'font=', 'help']
+        ['output=', 'info', 'font=', 'dump-font=', 'help']
     )
     
     helpinfo = '''\
@@ -271,8 +271,9 @@ command arguments :
  for display info :
     --info        -i           : show file infomations
  
- for embedded font :
+ for font resource :
     --font           name:font : embed font
+    --dump-font      name      : dump font
  
  for help :
     --help        -h           : to show this help info.
@@ -283,10 +284,12 @@ command arguments :
         sys.exit(-1)
         
     
-    swf = ShockwaveFile( sys.argv[1] )
+    swf = ShockwaveFile( args[0] )
 
     output = None
     info = False
+    dump_type = None
+    dump_res = None
     
     for k, v in opts :
         
@@ -297,14 +300,26 @@ command arguments :
             with open(fontfile, 'rb') as fp :
                 swf.fonts[name]['fontdata'] = fp.read()
                 
+        elif k in ('dump-font',):
+            dump_type = 'font'
+            dump_res = v
+            
         elif k in ('output','o') :
             output = v
             
         elif k in ('info', 'i'):
             info = True
             
-    if output != None :
+            
+    if dump_type != None :
         
+        if dump_type == 'font' :
+            with open( output, 'wb' ) as fp:
+                fp.write( swf.fonts[dump_res]['fontdata'] )
+        else :
+            raise Exception, 'unkown dump type.'
+        
+    elif output != None :
         swf.dump_swf( output )
         
     if info :
