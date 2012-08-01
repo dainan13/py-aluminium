@@ -455,16 +455,24 @@ cff    OTF_cff($length)
     name        OTF_cff_index()
         count       uint_b(2)
         offSize     uint(1)
-        offSet      uint_b(offSize)[add(count,1)]
-        vars        char[sub(last(offSet),1)]
+        offSet      uint_b(offSize)[add_nz(count,1)]
+        vars        char[sub(last_default(offSet,1),1)]
     
     top         OTF_cff_index()
     
     strings     OTF_cff_index()
     
-    #globalsubr  OTF_cff_index()
+    globalsubr  OTF_cff_index()
     
     data            byte[auto]
+    
+    
+charsets    OTF_cff_charsets
+    
+    format      uint(1)
+    
+    #data        OTF_cff_charsets_data{format}
+    #    0:format1   OTF_cff_charsets_data0
     
 vorg    TTF_vorg($length)
     data            byte[auto]

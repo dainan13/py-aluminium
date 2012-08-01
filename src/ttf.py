@@ -1338,7 +1338,7 @@ class TTFile(object):
         return
 
 
-import cff_ps
+#import cff_ps
 
 class CFF(TTFile):
     
@@ -1408,7 +1408,7 @@ class CFF(TTFile):
         #print repr( fp.read(e['length']) )
         #return
         
-        import cff_ps
+        #import cff_ps
         
         cff = self.ebp.read('cff', fp, length=e['length'])
         
@@ -1417,9 +1417,9 @@ class CFF(TTFile):
         #cff['globalsubr'] = self._read_index(cff['globalsubr'])
         
         cff['top'] = self._read_index(cff['top'])[0]
-        topdict = cff_ps.TopDict( cff['strings'] )
-        topdict.decompile(cff['top'])
-        cff['top'] = topdict.getDict()
+        #topdict = cff_ps.TopDict( cff['strings'] )
+        #topdict.decompile(cff['top'])
+        #cff['top'] = topdict.getDict()
         
         _cff = cff.copy()
         #print '>>>', len(_cff.pop('data'))
