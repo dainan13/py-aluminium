@@ -290,15 +290,59 @@ class UnicodeMapSet( object ):
         return set( s for s in other if s >= st or s <= ed )
 
 
-
+class OTF_CFF_charset_ranage( ezp.ProtocolType ):
+    
+    def __init__( self ):
+        
+        self.name = 'OTF_cff_charset_range'
+        self.cname = 'struct OTF_cff_charset_range'
+        
+        self.identifiable = True
+        self.stretch = True
+        
+        self.variables = []
+        
+    def length( self, lens, array ):
+        return None
+        
+    def read( self, namespace, fp, lens, args ):
+        
+        format, nG = args
+        
+        count = 1
+        
+        r = []
+        le = 0
+        
+        while( count != nG ):
+            
+            first = fp.read(2)
+            le += 2
+            
+            first = ord(first[0])*256 + ord(first[1])
+            nLeft = ord(fp.read(1))
+            le += 1
+            
+            if format == 2 :
+                nLeft = nLeft*256 + ord(fp.read(1))
+                le += 1
                 
-                
-                
+            count += nLeft + 1
+            
+            r.append( {'first':first,'nLeft':nLeft} )
+        
+        r.sort(key = lambda d : d['first'])
+        
+        return r, le
+        
+        
+    
 class TTFile(object):
     
     ebp = ezp.EasyBinaryProtocol()
     ebp.buildintypes.append(FLAGSType())
     ebp.buildintypes.append(COORDSType())
+    ebp.buildintypes.append(OTF_CFF_charset_ranage())
     ebp.rebuild_namespaces()
     ebp.parsefile( __filepath__+'/protocols/ttf.protocol' )
     
@@ -553,6 +597,8 @@ class TTFile(object):
             r = [(0,0)] + r
         
         e['data'] = [ (unichr(k), v) for k, v in r ]
+    
+        print 'cmap', e['data']
     
     def read_kern( self, fp, e, ae ):
         
@@ -1338,15 +1384,9 @@ class TTFile(object):
         return
 
 
-#import cff_ps
+import cff_ps
 
 class CFF(TTFile):
-    
-    ebp = ezp.EasyBinaryProtocol()
-    ebp.buildintypes.append(FLAGSType())
-    ebp.buildintypes.append(COORDSType())
-    ebp.rebuild_namespaces()
-    ebp.parsefile( __filepath__+'/protocols/ttf.protocol' )
     
     def __init__( self, fn=None, noglyph=False ):
         
@@ -1408,34 +1448,49 @@ class CFF(TTFile):
         #print repr( fp.read(e['length']) )
         #return
         
-        #import cff_ps
+        #cff = self.ebp.read('cff', fp, length=e['length'])
         
-        cff = self.ebp.read('cff', fp, length=e['length'])
+        pos = fp.tell()
+        cff = self.ebp.read('cff', fp)
         
         cff['name'] = self._read_index(cff['name'])
         cff['strings'] = self._read_index(cff['strings'])
-        #cff['globalsubr'] = self._read_index(cff['globalsubr'])
+        cff['globalsubr'] = self._read_index(cff['globalsubr'])
         
         cff['top'] = self._read_index(cff['top'])[0]
-        #topdict = cff_ps.TopDict( cff['strings'] )
-        #topdict.decompile(cff['top'])
-        #cff['top'] = topdict.getDict()
+        topdict = cff_ps.TopDict( cff['strings'] )
+        topdict.decompile(cff['top'])
+        cff['top'] = topdict.getDict()
         
-        _cff = cff.copy()
-        #print '>>>', len(_cff.pop('data'))
-    
-        pprint.pprint( _cff )
         
-        print e['length']
-        print len(cff['top'])
-        print len(cff['strings'])
+        #print e['length']
+        #print len(cff['top'])
+        #print len(cff['strings'])
         #print len(cff['globalsubr'])
-        print len(cff['data'])
-        print e['length'] - len(cff['data'])
+        #print len(cff['data'])
+        #print e['length'] - len(cff['data'])
+        
+        safepos = fp.tell() - pos
+        
+        if cff['top']['CharStrings'] < safepos or cff['top']['CharStrings'] > e['length'] :
+            raise Exception, 'offset error'
+        
+        fp.seek( pos+cff['top']['CharStrings'] )
+        cff['CharStrings'] = self.ebp.read('charstrings', fp)
+        cff['CharStrings'] = self._read_index(cff['CharStrings'])
+        
+        
+        
+        if cff['top']['charset'] < safepos or cff['top']['charset'] > e['length'] :
+            raise Exception, 'offset error'
+        
+        fp.seek( pos+cff['top']['charset'] )
+        cff['charset'] = self.ebp.read('charset', fp, nglyph=len(cff['CharStrings']) )
+        #cff['CharStrings'] = self._read_index(cff['CharStrings'])
+        
+        pprint.pprint( cff )
         
         self.stt_entrys['cff'] = cff
-
-
 
 
 

@@ -372,6 +372,38 @@ class BuildinTypeUINT( ProtocolType ):
         
         return r, lens
         
+        
+        
+class BuildinTypeUINTNZ( ProtocolType ):
+    
+    def __init__( self ):
+        
+        self.name = 'uint_nz'
+        self.cname = 'unsigned long'
+        
+        self.identifiable = True
+        self.stretch = True
+        
+        self.variables = []
+        
+    def length( self, lens, array ):
+        return None
+        
+    def read( self, namespace, fp, lens, args ):
+        
+        if args == 0 :
+            return 0, 0
+        
+        chrs = fp.read(lens)
+        
+        r = 0
+        
+        for i, c in enumerate(chrs) :
+            r += ord(c) * ( 256**i )
+        
+        return r, lens
+        
+        
 
 class BuildinTypeUINTB( ProtocolType ):
     
@@ -574,6 +606,7 @@ class EasyBinaryProtocol( object ):
     
     buildintypes = [ BuildinTypeCHAR(),
                      BuildinTypeUINT(),
+                     BuildinTypeUINTNZ(),
                      BuildinTypeBYTE(),
                      BuildinTypeBIT(),
                      BuildinTypeINTB(),
@@ -583,6 +616,7 @@ class EasyBinaryProtocol( object ):
     
     buildinfunction = [ ( 'add', (lambda a, b: a+b) ),
                         ( 'sub', (lambda a, b: a-b) ),
+                        ( 'nz', (lambda a, b: (b if a != 0 else 0) ) ),
                         ( 'add_nz', (lambda a, b: (a+b if a != 0 else 0) ) ),
                         ( 'sub_nz', (lambda a, b: (a-b if a != 0 else 0) ) ),
                         ( 'mul', (lambda a, b: a*b) ),
