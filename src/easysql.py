@@ -606,6 +606,8 @@ class SQLConnectionPool( object ):
         { 'Records': 2, 'Duplicates': 1, 'Warnings': 0 }
         { 'Rows matched': 1, 'Changed': 0, 'Warnings': 0 }
         '''
+        
+        print 'w>', sql, type(sql)
         conn.query(sql)
         
         affect = conn.affected_rows()
@@ -751,7 +753,8 @@ class SQLConnectionPool( object ):
                         host=conn_args[0], port=conn_args[1], db=conn_args[4],
                         user=conn_args[2], passwd=conn_args[3],
                         connect_timeout = self.default_timeout,
-#                        use_unicode=True, charset="utf8",
+#                        use_unicode=True, 
+                        charset="utf8",
                     )
             except MySQLdb.OperationalError, e :
                 self._traceback( infos, wrt, tuple(conn_args), sql, 0, self.connectionfailed )
@@ -826,13 +829,15 @@ class Tablet( object ) :
         rows = [ [ r.get( c, 'DEFAULT' ) for c in cols ]
                  for r in rows ]
         
+        print rows, [self.name], dup
+        
         sql = ' '.join( [
             
             'INSERT',
             # LOW_PRIORITY or DELAYED or ''
             'IGNORE' if ignore else '',
             'INTO',
-            '`'+self.name+'`',
+            '`'+str(self.name)+'`',
             '(%s)' % ( ','.join( [ '`%s`' % (str(c),) for c in cols ] ) ),
             'VALUES',
             ','.join( [ '(%s)' % ( ','.join(r), ) for r in rows ] ),
@@ -840,6 +845,8 @@ class Tablet( object ) :
                 ( ','.join( [ '`%s`=%s' % i for i in dup.items() ] ), )
             ) if dup else '',
         ] )
+        
+        print sql, type(sql), sql.encode('hex')
         
         return sql
     
@@ -2015,7 +2022,8 @@ def getdbnames( host, port, user, passwd ):
     
     conn = MySQLdb.Connection( 
         host=host, port=port, user=user, passwd=passwd,
-#        use_unicode=True, charset="utf8",
+        #use_unicode=True, 
+        charset="utf8",
     )
     
     dbnames = p._read( conn, "SHOW DATABASES" )
