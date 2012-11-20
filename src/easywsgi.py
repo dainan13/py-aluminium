@@ -171,6 +171,10 @@ class Server( object ):
     
     @staticmethod
     def fs_load( f ):
+        
+        if type(f) == types.ListType :
+            return [ Server.fs_load(i) for i in f ]
+        
         if f.filename :
             return {'filename': f.filename, 'file' : f.file }
         return f.value
@@ -230,7 +234,10 @@ class Server( object ):
             
             if env['REQUEST_METHOD'] == 'POST' :
                 form = cgi.FieldStorage( fp=env['wsgi.input'], environ=env )
-                form = [ (k, self.fs_load(form[k])) for k in form.keys() if not k.startswith('_') ]
+                
+                #print [ (k, form[k]) for k in form.keys() ]
+                
+                form = [ (k.replace('[','').replace(']',''), self.fs_load(form[k])) for k in form.keys() if not k.startswith('_') ]
                 qs = qs + form
             
             if env['REQUEST_METHOD'] == 'PUT' :

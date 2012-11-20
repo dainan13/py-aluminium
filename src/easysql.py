@@ -607,7 +607,7 @@ class SQLConnectionPool( object ):
         { 'Rows matched': 1, 'Changed': 0, 'Warnings': 0 }
         '''
         
-        print 'w>', sql, type(sql)
+        #print 'w>', sql, type(sql)
         conn.query(sql)
         
         affect = conn.affected_rows()
@@ -789,10 +789,10 @@ class Tablet( object ) :
         
         self.conn_args = conn_args
         
-        self.name = name
+        self.name = str(name)
         
-        self.cols = cols
-        self.defaultcols = [ c for c in cols if not c.startswith('_') ]
+        self.cols = [ str(c) for c in cols ]
+        self.defaultcols = [ str(c) for c in cols if not c.startswith('_') ]
         
         
     def _buildrow( self, row ):
@@ -829,7 +829,7 @@ class Tablet( object ) :
         rows = [ [ r.get( c, 'DEFAULT' ) for c in cols ]
                  for r in rows ]
         
-        print rows, [self.name], dup
+        #print rows, [self.name], dup
         
         sql = ' '.join( [
             
@@ -837,7 +837,7 @@ class Tablet( object ) :
             # LOW_PRIORITY or DELAYED or ''
             'IGNORE' if ignore else '',
             'INTO',
-            '`'+str(self.name)+'`',
+            '`'+self.name+'`',
             '(%s)' % ( ','.join( [ '`%s`' % (str(c),) for c in cols ] ) ),
             'VALUES',
             ','.join( [ '(%s)' % ( ','.join(r), ) for r in rows ] ),
@@ -846,7 +846,7 @@ class Tablet( object ) :
             ) if dup else '',
         ] )
         
-        print sql, type(sql), sql.encode('hex')
+        #print sql, type(sql), sql.encode('hex')
         
         return sql
     
