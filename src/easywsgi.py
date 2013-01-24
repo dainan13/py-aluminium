@@ -37,10 +37,10 @@ def work( url, verb='GET', resp='json', status='200 OK' ):
 class Error(dict):
     pass
 
-def error( et, resp=None, status='500 Server Error' ):
+def error( et, resp=None, status='500 Server Error', exception=False, hasargs=False ):
     
     def _error( w ):
-        return Error({'error':et, 'status':status, 'resptype':resp, 'work':w})
+        return Error({'error':et, 'status':status, 'resptype':resp, 'work':w, 'exception':exception, 'hasargs':hasargs})
     
     return _error
 
@@ -273,7 +273,7 @@ class Server( object ):
         except KeyError, e :
             raise NotFound, 'not found'
     
-    def make_errorentry( self, e, env ):
+    def make_errorentry( self, e, env, args ):
         
         et = e.__class__
         
@@ -284,7 +284,15 @@ class Server( object ):
             if et == None :
                 raise
         
-        return ee['work'], ee['status'], ee['resptype']
+        rargs = []
+        
+        if ee['exception'] == True :
+            rargs.append(e)
+            
+        if ee['hasargs'] == True :
+            rargs.append(args)
+            
+        return ee['work'], rargs, ee['status'], ee['resptype']
     
     def make_response( self, rtype ):
         
@@ -294,6 +302,8 @@ class Server( object ):
         
         r = None
         st2 = None
+        
+        args = None
         
         try :
             obj, work, args, status, resp = self.make_workentry(env)
@@ -306,9 +316,9 @@ class Server( object ):
             headers, r = work(*obj, **args)
             
         except Exception, e:
-            work, status, resp = self.make_errorentry( e, env )
+            work, e_args, status, resp = self.make_errorentry( e, env, args )
             work = work if callable(work) else getattr( self, work )
-            headers, r = work()
+            headers, r = work(*e_args)
             
         if resp :
             resp = getattr( self, resp )
