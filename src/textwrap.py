@@ -9,26 +9,54 @@ class TextWrapper(object):
     x = ['Word','Compound','Blank','Empty']
     y = ['space','initials','tails','letter','terminal']
     
-    statmachine = [
-        # Word                     Compound               Blank                     Empty
-        [(None ,'SP','Blank'   ),  (None ,'SP',None   ),  (None ,'SP',None      ),  (None ,'SP','Blank'   ),], # Space
-        [(None ,'W' ,'Compound'),  (None ,'W' ,None   ),  ('End','W' ,'Compound'),  ('End','W' ,'Compound'),], # Initials
-        [(None ,'W' ,None      ),  (None ,'W' ,'Word' ),  (None ,'W' ,'Word'    ),  (None ,'W' ,'Word'    ),], # tails
-        [(None ,'W' ,None      ),  (None ,'W' ,'Word' ),  ('End','W' ,'Word'    ),  ('End','W' ,'Word'    ),], # letters
-        [('End','W' ,'Empty'   ),  (None ,'W' ,'Empty'),  ('End','W' ,'Empty'   ),  ('End','W' ,None      ),], # chinese
-    ]
+    statmachine = {
+        'EL':('W',False),
+        'EI':('C',False),
+        'ET':('A',False),
+        'Ei':('C',False),
+        'Et':('A',False),
+        'ES':('E',False),
+        'EH':('S',False),
+        
+        'CL':('W',False),
+        'CI':('C',False),
+        'CT':('A',False),
+        'Ci':('C',False),
+        'Ct':('A',False),
+        'CS':('E',True),
+        'CH':('S',False),
+
+        'AL':('W',True),
+        'AI':('C',True),
+        'AT':('A',False),
+        'Ai':('W',False),
+        'At':('W',False),
+        'AS':('A',False),
+        'AH':('S',True),
+        
+        'WL':('W',False),
+        'WI':('C',True),
+        'WT':('A',False),
+        'Wi':('W',False),
+        'Wt':('W',False),
+        'WS':('E',True),
+        'WH':('S',True),
+        
+        'SL':('W',True),
+        'SI':('C',True),
+        'ST':('A',False),
+        'Si':('C',True),
+        'St':('W',False),
+        'SS':('E',True),
+        'SH':('S',True),
+    }
     
     initials = u'([{<$'\
                u'￥（【“‘《'
                
     tails = u'!%)]:;>?,.'\
             u'·！…）】、：；”’》，。？'
-               
-    letter = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'\
-             'abcdefghijklmnopqrstuvwxyz'\
-             '0123456789'\
-             '~`@#^&*_-+=|\\"\'/'
-
+    
     def __init__(self,
                  width=70,
                  initial_indent="",
@@ -51,53 +79,56 @@ class TextWrapper(object):
 
     @classmethod
     def chrtype( cls, c ):
+        
         if c == ' ':
-            return 0
+            return 'S'
         elif c in cls.initials :
-            return 1
+            return 'i' if ord(c) < 256 else 'I'
         elif c in cls.tails :
-            return 2
-        elif c in cls.letter :
-            return 3
+            return 't' if ord(c) < 256 else 'T'
+        elif ord(c) < 256 and c != '-' :
+            return 'L'
         else :
-            return 4
+            return 'H'
     
     def _split_iter( self, inp ):
         
-        s = self.x.index('Compound')
+        s = 'E'
         start = 0
         cur = 0
-        
-        width = 0
-        width_cur = 0
         
         for i, c in enumerate(inp) :
             
             ctype = self.chrtype(c)
-            ending, acc, nxt = self.statmachine[ctype][s]
+            print c, s+ctype, '->', 
+            s, ending = self.statmachine[s+ctype]
+            print s, ending, cur, i
             
             if ending :
-                yield start, cur+1, i, width_cur
+                print 'word>', inp[start:cur+1]
+                width = self.getwordwidth(inp, start, cur+1 )
+                yield start, cur+1, i, width
                 start = i
-                width = 0
-                width_cur = 0
                 
-            width += self.getchrwidth(c)
-            
-            if acc == 'W' :
+            if ctype != 'S' :
                 cur = i
-                width_cur = width
-                
-            if nxt :
-                s = self.x.index(nxt)
-                
-        yield start, cur+1, i, width_cur
+            
+        width = self.getwordwidth(inp,start,cur+1)
+        yield start, cur+1, i, width
         
         return
-        
+    
     @staticmethod
-    def getchrwidth( c ):
-        return 1 if ord(c) < 256 else 2
+    def getwordwidth( w, st, ed ):
+        return sum( [ (1 if ord(c) < 256 else 2) for c in w[st:ed] ] )
+    
+    @staticmethod
+    def getwordwidth_iter( w, st, ed ):
+        
+        for c in w[st:ed] :
+            yield (1 if ord(c) < 256 else 2)
+        
+        return
     
     @classmethod
     def _wrap_long_word( cls, word, width ):
@@ -105,18 +136,20 @@ class TextWrapper(object):
         anticur = width
         start = 0
         
-        for i, c in enumerate(word) :
-            
-            w = cls.getchrwidth(c)
-            anticur -= w
-            
-            if anticur < 0 :
-                yield start, i+1, None
-                
-                start = i
-                anticur = width - w
-            
-        yield start, i+1, anticur
+        yield 0, len(word), width
+        
+        #for i, c in enumerate(word) :
+        #    
+        #    w = cls.getchrwidth(c)
+        #    anticur -= w
+        #    
+        #    if anticur < 0 :
+        #        yield start, i+1, None
+        #        
+        #        start = i
+        #        anticur = width - w
+        #    
+        #yield start, i+1, anticur
         
         return
     
