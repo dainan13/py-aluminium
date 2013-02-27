@@ -205,7 +205,8 @@ class TextWrapper(object):
                     for subst, subed, subcur in self._wrap_long_word( word, width ):
                         
                         yield word[subst:subed]
-                        ln_st = ln_st or subst
+                        #ln_st = ln_st or subst
+                        ln_st = ln_st if ln_st is not None else wst
                         ln_ed = subed
                         if subcur == None:
                             yield None
@@ -215,14 +216,16 @@ class TextWrapper(object):
                 else :
                     
                     yield text[wst:bst]
-                    ln_st = ln_st or wst
+                    #ln_st = ln_st or wst
+                    ln_st = ln_st if ln_st is not None else wst
                     ln_ed = bst
                     anticur -= ww
                     
             else :
                 
                 yield text[wst:bst]
-                ln_st = ln_st or wst
+                #ln_st = ln_st or wst
+                ln_st = ln_st if ln_st is not None else wst
                 ln_ed = bst
                 anticur -= ww
                 
