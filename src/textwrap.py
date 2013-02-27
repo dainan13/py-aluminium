@@ -76,7 +76,8 @@ class TextWrapper(object):
         self.break_long_words = break_long_words
         self.drop_whitespace = drop_whitespace
         self.break_on_hyphens = break_on_hyphens
-
+        self.eliminate_error = False
+        
     @classmethod
     def chrtype( cls, c ):
         
@@ -100,12 +101,12 @@ class TextWrapper(object):
         for i, c in enumerate(inp) :
             
             ctype = self.chrtype(c)
-            print c, s+ctype, '->', 
+            #print c, s+ctype, '->', 
             s, ending = self.statmachine[s+ctype]
-            print s, ending, cur, i
+            #print s, ending, cur, i
             
             if ending :
-                print 'word>', inp[start:cur+1]
+                #print 'word>', inp[start:cur+1]
                 width = self.getwordwidth(inp, start, cur+1 )
                 yield start, cur+1, i, width
                 start = i
@@ -175,17 +176,28 @@ class TextWrapper(object):
         
         return
     
-    def _wrap_iter( self, text, width=70 ):
+    def _wrap_iter( self, text, width=70, maxwidth=None ):
         
         anticur = width
         
+        leave = (maxwidth-width) if maxwidth else 0
+        leave = max(0,leave)
+        
+        ln_st = None
+        ln_ed = None
+        
         for wst, bst, ed, ww in self._split_iter(text):
             
-            if anticur < ww :
+            if self.eliminate_error and ( anticur+leave < ww or anticur < 0 ):
+                #print self.getwordwidth( text, ln_st, ln_ed ), width-anticur
+                anticur = width - self.getwordwidth( text, ln_st, ln_ed )
+                
+            if anticur+leave < ww or anticur < 0 :
                 
                 yield None
+                ln_st = ln_ed = None
                 anticur = width
-                    
+                
                 if ww > width :
                     
                     word = text[wst:bst]
@@ -193,23 +205,33 @@ class TextWrapper(object):
                     for subst, subed, subcur in self._wrap_long_word( word, width ):
                         
                         yield word[subst:subed]
+                        ln_st = ln_st or subst
+                        ln_ed = subed
                         if subcur == None:
                             yield None
+                            ln_st = ln_ed = None
                         anticur = subcur
                         
                 else :
+                    
                     yield text[wst:bst]
+                    ln_st = ln_st or wst
+                    ln_ed = bst
                     anticur -= ww
+                    
             else :
+                
                 yield text[wst:bst]
+                ln_st = ln_st or wst
+                ln_ed = bst
                 anticur -= ww
                 
-            blankwidth = ed-bst
+            #blankwidth = ed-bst
             
-            if anticur >= blankwidth :
-                yield ' '*blankwidth
+            #if anticur >= blankwidth :
+            #    yield ' '*blankwidth
                 
-            anticur -= blankwidth
+            #anticur -= blankwidth
         
         return
   
