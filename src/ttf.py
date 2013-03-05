@@ -598,7 +598,7 @@ class TTFile(object):
         
         e['data'] = [ (unichr(k), v) for k, v in r ]
     
-        print 'cmap', e['data']
+        #print 'cmap', e['data']
     
     def read_kern( self, fp, e, ae ):
         
@@ -844,6 +844,8 @@ class TTFile(object):
         if onlyrequiredtable == True :
             ae = [ e for e in ae if e in self.requiredtable ]
         
+        #ae = [ e for e in as if e in self.e]
+        
         entrys = [ getattr( self, 'dump_'+e.replace('/','_').strip().lower() ) for e in ae ]
         entrys = [ e( ks, charidx ) for e in entrys ]
         entrys = zip(entrys, ae)
@@ -886,7 +888,7 @@ class TTFile(object):
             
             return fp.getvalue()
         
-        elif type( fname ) in types.Strings :
+        elif type( fname ) in types.StringTypes :
             
             with open( fname, 'wb' ) as fp :
                 self._dump_ttf_write( fp, ks, charidx, entrydatas, pads, entrys )
@@ -1193,10 +1195,14 @@ class TTFile(object):
         return checksum(prep), len(prep), prep
         
     def dump_cvt( self, ks, charidx ):
+        if 'cvt ' not in self.fix_entrys :
+            return
         cvt = self.fix_entrys['cvt ']
         return checksum(cvt), len(cvt), cvt
 
     def dump_fpgm( self, ks, charidx ):
+        if 'fpgm' not in self.fix_entrys :
+            return
         fpgm = self.fix_entrys['fpgm']
         return checksum(fpgm), len(fpgm), fpgm
     
@@ -1381,6 +1387,12 @@ class TTFile(object):
                           '.', self.stt_entrys['post']['atalicAngle']['sub']
         print '  numGlyphs :', self.numGlyphs
         
+        print 
+        print '= More Infos ='
+        print 'Names :'
+        for n in self.nametuple :
+            print '    ', n
+        
         return
 
 
@@ -1517,6 +1529,7 @@ if __name__ == '__main__' :
          'subset=','subset-file=','decoding=','ignore',
          'map=','integrate=','replace',
          'text=','text-file=','text-code=','output-code=','translate=','use-symbol=','stripline',
+         'dump-cmap=',
          'help']
     )
     
@@ -1535,41 +1548,44 @@ examples :
 command arguments :
 
  common :
-    --output      -o file  : output file or path
-    --extract     -e       : extract the font file instead build a new ttf file
-    --cff                  : as cff font
+    --output      -o file   : output file or path
+    --extract     -e        : extract the font file instead build a new ttf file
+    --cff                   : as cff font
     
  for display font info :
-    --info        -i       : show font file infomations
+    --info        -i        : show font file infomations
  
  for pdf embedded font :
-    --cid                  : show font file infomations for pdf embedded
+    --cid                   : show font file infomations for pdf embedded
  
  for change font info :
-    --rename      -n name  : rename the font file
+    --rename      -n name   : rename the font file
  
  for subset :
-    --subset      -s text  : set subset charactors
-    --subset-file -S file  : set subset charactors from file
-    --decoding    -c codec : set subset charactors or file coding
-    --ignore      -g       : ignore if subset charactor not found
+    --subset      -s text   : set subset charactors
+    --subset-file -S file   : set subset charactors from file
+    --decoding    -c codec  : set subset charactors or file coding
+    --ignore      -g        : ignore if subset charactor not found
     
  for integrate :
-    --map         -m block : set the integrate subset, using unicode block name
-    --integrate   -I file  : integrate a font to your font
-    --replace     -r       : integrate the charactor even it in your font
+    --map         -m block  : set the integrate subset, using unicode block name
+    --integrate   -I file   : integrate a font to your font
+    --replace     -r        : integrate the charactor even it in your font
     
  for parse text file :
-    --text        -x text  : text to parse
-    --text-file   -X file  : read the text from file
-    --text-code      codec : text codec
-    --output-code    codec : output file's codec
-    --translate   -t text  : translate map, odd is key, even is value
-    --use-symbol  -y text  : replace the invisionable charactor
-    --stripline   -l       : strip the invisionable charactor by line
+    --text        -x text   : text to parse
+    --text-file   -X file   : read the text from file
+    --text-code      codec  : text codec
+    --output-code    codec  : output file's codec
+    --translate   -t text   : translate map, odd is key, even is value
+    --use-symbol  -y text   : replace the invisionable charactor
+    --stripline   -l        : strip the invisionable charactor by line
+    
+ for dump cmap set:
+    --dump-cmap      format : dump cmap and set output format
     
  for help :
-    --help        -h       : to show this help info.
+    --help        -h        : to show this help info.
 '''
     
     optks = zip(opts)[0] if opts else []
@@ -1602,6 +1618,8 @@ command arguments :
     transmap = {}
     symbol = u''
     stripline = False
+    
+    dump_cmap = None
     
     cff = False
     
@@ -1691,6 +1709,9 @@ command arguments :
         elif k in ( 'cid', ):
             cid = v
             
+        elif k in ( 'dump-cmap', ):
+            dump_cmap = v
+            
         elif k in ( 'cff', ):
             cff = True
     
@@ -1720,11 +1741,22 @@ command arguments :
         fp.close()
     
     
-    if text and (subset or integrate):
+    if text and (subset or integrate) and dump_cmap:
         print >> sys.stderr, 'can not both parse text and subset/integrate.'
     
-    
-    if cid :
+    if dump_cmap :
+        
+        t = TTFile()
+        t.load( args[0], noglyph=True )
+        
+        import json
+        
+        with open( output, 'w' ) as fp :
+            chars = zip(*t.char_defines.keys())[0]
+            print 'total : ', len(chars), 'char(s)'
+            json.dump( chars, fp )
+        
+    elif cid :
         et = TTFile()
         et.load_CID( open(cid, 'r') )
         t = TTFile()
