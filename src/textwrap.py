@@ -237,11 +237,29 @@ class TextWrapper(object):
             #anticur -= blankwidth
         
         return
-  
-
-
-
-
+    
+    def _line_iter( self, text, width=70, maxwidth=None ):
+        
+        for txln in text.splitlines() :
+            
+            print txln
+            
+            ln = []
+            
+            for i in self._wrap_iter( txln, width, maxwidth ):
+                
+                if i != None :
+                    ln.append(i)
+                else :
+                    yield ''.join(ln)
+                    ln = []
+                    
+            if ln != [] :
+                yield ''.join(ln)
+        
+        return
+        
+        
 import re
 # the function in follows is copy from textwrap in standard lib 
 

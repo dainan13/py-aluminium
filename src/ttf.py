@@ -708,7 +708,7 @@ class TTFile(object):
                 if (pid,eid,lcid) in _ids ]
         
         if ids == [] :
-            raise TTFError, 'get name error.'
+            raise TTFError, ('get name error.', _ids)
         
         for pid, eid, lcid in ids :
             
@@ -731,6 +731,23 @@ class TTFile(object):
             
             self.nametuple = [ n.decode(deco) for n in nrs ][:8]
             self.name = self.nametuple[4]
+            return
+        
+        nrs = [ nr for nr in _name['nameRecords'] 
+                if (nr['platformID'], nr['encodingID'], nr['LanguageID']) == (1,0,0) ]
+        
+        if len(nrs) >= 6 :
+            
+            nrsid = [ nm['NameID'] for nm in nrs ]
+            nrs = [ (nm['stringOffset'],nm['stringLength']) for nm in nrs ]
+            nrs = [ (off,off+le) for off, le in nrs ]
+            nrs = [ _name['data'][st:ed] for st, ed in nrs ]
+            
+            nametuple = [ n.decode('mac_roman') for n in nrs ]
+            namedict = dict( zip(nrsid,nametuple) )
+            self.nametuple = [ namedict.get(i,'none') for i in range(8) ]
+            self.name = self.nametuple[4]
+            
             return
         
         nrs = [ [ nr for nr in _name['nameRecords'] 
@@ -831,7 +848,10 @@ class TTFile(object):
         ks = self.char_defines.keys()
         ks.sort()
         
-        if ks == [] or ord(ks[0]) != 0 :
+        if ks == [] :
+            raise TTFError, 'empty char defines.'
+        
+        if ord(ks[0]) != 0 :
             raise TTFError, 'must have char 0x0000'
         
         charidx = [ (k,i) for i, k in enumerate(ks) ] 
