@@ -98,6 +98,7 @@ class TextWrapper(object):
         start = 0
         cur = 0
         
+        i = 0
         for i, c in enumerate(inp) :
             
             ctype = self.chrtype(c)
