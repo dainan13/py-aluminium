@@ -1,7 +1,13 @@
+"""easy sql
+@author: dn13(dn13@gmail.com)
+@author: Fibrizof(dfang84@gmail.com)
+"""
+
 import types
 import struct
 import pymysql
 import datetime
+import time
 
 class EasySqlLiteException( Exception ):
     pass
@@ -77,7 +83,6 @@ class ConnLite( object ):
         cur.execute( sql )
         dsc = cur.description
         dsc = [ d[0] for d in dsc ]
-
         rst = cur.fetchall()
         cur.close()
 
@@ -118,10 +123,12 @@ class ConnLite( object ):
 
             cs = ', '.join( c.join(['`','`']) for c in cs )
 
-        if where is None or where == {} :
+        if where is None or where == {} or where == []:
             where = ''
-        else :
-            #where = ' WHERE ' + ' AND '.join( [ formatcond(k,v) for k, v in where.items() ] )
+        elif type(where) == types.ListType:
+            where = "(" + ") OR (".join([makecond(w) for w in where]) + ")"
+            where = ' WHERE ' + where
+        elif type(where) == types.DictType:
             where = ' WHERE ' + makecond(where)
 
         if order is None :
@@ -266,6 +273,12 @@ class Connection( ConnLite ):
 
         return
 
+    def __del__(self):
+        try:
+            self.conn.close()
+        except:
+            pass
+
     def reconnect( self ):
         for i in range(5):
             try :
@@ -274,9 +287,40 @@ class Connection( ConnLite ):
                 return
             except pymysql.OperationalError, e :
                 continue
+            except Exception as e:
+                continue
         raise
             
+    def read_with_desc( self, sql ):
+        for i in range( self.retrytimes ):
+            try :
+                cur = self.conn.cursor()
+                cur.execute( sql )
+                dsc = cur.description
+                if dsc:
+                    dsc = [ d[0] for d in dsc ]
 
+                rst = cur.fetchall()
+                cur.close()
+
+                break
+
+            except pymysql.OperationalError, e:
+                if e.args[0] in ( 2006, 2013 ) :
+                    self.reconnect()
+                else :
+                    raise
+            except pymysql.ProgrammingError, e :
+                e.args = tuple( list(e.args)+[sql,] )
+                raise
+
+        else :
+            raise
+
+        if dsc:
+            return (dsc, [ dict(zip(dsc,r)) for r in rst ])
+        else:
+            return (None, [])
     def read( self, sql ):
         
         #print 'ESQL, read>', sql
@@ -387,13 +431,18 @@ class Table( object ):
 
 class Database( object ):
 
-    def __init__( self, dbopt ):
+    def __init__( self, dbopt, tablefilter=None ):
 
         self.db = dbopt['db']
 
         self.conn = Connection(dbopt)
 
         tbs = self.conn.gettables()
+
+        if type(tablefilter) == types.FunctionType:
+            tbs = [x for x in tbs if tablefilter(x)]
+        elif type(tablefilter) in (types.ListType, types.TupleType):
+            tbs = [x for x in tbs if x in tablefilter]
 
         tbdefs = [ [ c['Field'] for c in self.conn.getcols(tb) ]
                    for tb in tbs ]
@@ -424,7 +473,7 @@ if __name__ == '__main__' :
            'db' : 'yourdb'
          }
 
-    edb = Database(db)
+    edb = Database(db, tablefilter=lambda x: True)
 
     #print edb.stt_cpuall_fivemin.gets(['AN','coreid','ctime','iowait'],where = {'ctime':(None,'2011-08-22 00:00:00')},order = ['ctime'],reverse = True,limit = '10')
     #print edb.table_info.puts([{'table_name':'tname'},{'table_name':'tname2'}])
