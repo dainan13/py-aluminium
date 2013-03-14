@@ -1,3 +1,9 @@
+#!/usr/bin/env python
+
+"""
+@author: dn13(dn13@gmail.com)
+@author: Fibrizof(dfang84@gmail.com)
+"""
 
 import types
 import xml.sax.saxutils

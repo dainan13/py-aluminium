@@ -1,3 +1,4 @@
+# coding: utf-8
 """easyprint
 @author: dn13(dn13@gmail.com)
 @author: Fibrizof(dfang84@gmail.com)
@@ -6,6 +7,7 @@
 import types
 import unicodedata
 import xml.sax.saxutils as saxutils
+import re
 from Al import realnum
 
 
@@ -1080,9 +1082,177 @@ class Table( Grid ):
         
         return super( Table, self )._console_print_( w, h )
         
-        
-        
-        
+class Chart( object ):
+    #
+    #⠀ ⠁ ⠂ ⠃ ⠄ ⠅ ⠆ ⠇ ⠈ ⠉ ⠊ ⠋ ⠌ ⠍ ⠎ ⠏ ⠐ ⠑ ⠒ ⠓ ⠔ ⠕ ⠖ ⠗ ⠘ ⠙ ⠚ ⠛ ⠜ ⠝ ⠞ ⠟
+    #⠠ ⠡ ⠢ ⠣ ⠤ ⠥ ⠦ ⠧ ⠨ ⠩ ⠪ ⠫ ⠬ ⠭ ⠮ ⠯ ⠰ ⠱ ⠲ ⠳ ⠴ ⠵ ⠶ ⠷ ⠸ ⠹ ⠺ ⠻ ⠼ ⠽ ⠾ ⠿
+    #⡀ ⡁ ⡂ ⡃ ⡄ ⡅ ⡆ ⡇ ⡈ ⡉ ⡊ ⡋ ⡌ ⡍ ⡎ ⡏ ⡐ ⡑ ⡒ ⡓ ⡔ ⡕ ⡖ ⡗ ⡘ ⡙ ⡚ ⡛ ⡜ ⡝ ⡞ ⡟
+    #⡠ ⡡ ⡢ ⡣ ⡤ ⡥ ⡦ ⡧ ⡨ ⡩ ⡪ ⡫ ⡬ ⡭ ⡮ ⡯ ⡰ ⡱ ⡲ ⡳ ⡴ ⡵ ⡶ ⡷ ⡸ ⡹ ⡺ ⡻ ⡼ ⡽ ⡾ ⡿
+    #⢀ ⢁ ⢂ ⢃ ⢄ ⢅ ⢆ ⢇ ⢈ ⢉ ⢊ ⢋ ⢌ ⢍ ⢎ ⢏ ⢐ ⢑ ⢒ ⢓ ⢔ ⢕ ⢖ ⢗ ⢘ ⢙ ⢚ ⢛ ⢜ ⢝ ⢞ ⢟
+    #⢠ ⢡ ⢢ ⢣ ⢤ ⢥ ⢦ ⢧ ⢨ ⢩ ⢪ ⢫ ⢬ ⢭ ⢮ ⢯ ⢰ ⢱ ⢲ ⢳ ⢴ ⢵ ⢶ ⢷ ⢸ ⢹ ⢺ ⢻ ⢼ ⢽ ⢾ ⢿
+    #⣀ ⣁ ⣂ ⣃ ⣄ ⣅ ⣆ ⣇ ⣈ ⣉ ⣊ ⣋ ⣌ ⣍ ⣎ ⣏ ⣐ ⣑ ⣒ ⣓ ⣔ ⣕ ⣖ ⣗ ⣘ ⣙ ⣚ ⣛ ⣜ ⣝ ⣞ ⣟
+    #⣠ ⣡ ⣢ ⣣ ⣤ ⣥ ⣦ ⣧ ⣨ ⣩ ⣪ ⣫ ⣬ ⣭ ⣮ ⣯ ⣰ ⣱ ⣲ ⣳ ⣴ ⣵ ⣶ ⣷ ⣸ ⣹ ⣺ ⣻ ⣼ ⣽ ⣾ ⣿
+    #
+
+    chartchar = [ u'\u2800\u2880\u28a0\u28b0\u28b8',
+                  u'\u2840\u28C0\u28E0\u28F0\u28F8',
+                  u'\u2844\u28C4\u28E4\u28F4\u28FC',
+                  u'\u2846\u28C6\u28E6\u28F6\u28FE',
+                  u'\u2847\u28C7\u28E7\u28F7\u28FF',
+                  ]
+
+    chartline = '⣀⠤⠒⠉'.decode('utf-8')
+    chartlinex = '⡀⠄⠂⠁'.decode('utf-8')
+
+    SIprefixes = " kMGTPEZY"
+    IECprefixes = ["  ", "Ki","Mi","Gi","Ti","Pi","Ei","Zi","Yi"]
+
+    def __init__( self, data, **args):
+        self.data = data
+        self.args = args
+
+    @staticmethod
+    def humanreadable(a, f=2, iec=False ):
+
+        p = 1024 if iec else 1000
+
+        s = '%%.%df%%s' % (f,)
+
+        for i in range(8,0,-1):
+            z = float(a) / (p**i)
+            if z >= 1 :
+                return s % ( z, Chart.IECprefixes[i] if iec else Chart.SIprefixes[i]  )
+
+        if type(a) in ( types.IntType , types.LongType ):
+            return str(a)
+
+        return s % ( float(a), '' )
+
+    def show_chart( self, n, maxn = None, ratio = None):
+
+        maxn = maxn or max(n)
+
+        ratio = ratio or maxn/40
+        ratio = ratio or 1
+
+        maxh = maxn/ratio
+
+        hs = [ min(x/ratio, maxh) for x in n ]
+        hs = [ [x%4]+[4]*(x/4) for x in hs ]
+        hs = [ [0]*(maxh/4-len(x)) + x for x in hs ]
+
+        rs = zip(*hs)
+        rs = [ list(r)+[0] for r in rs ]
+        rs = [ zip(r[::2],r[1::2]) for r in rs ]
+
+        chrs = [ [ Chart.chartchar[a][b] for a, b in r ] for r in rs ]
+        chrs = [ ''.join(cs) for cs in chrs ]
+
+        for r in chrs :
+            print r
+
+        return
+
+
+    def smart_show_chart( self, data, height=10, points=None, iec=False, unit='', rjust=0, color=True ):
+
+        maxdata = max(data)
+
+        segmax = maxdata
+        shrink = 1
+        enlarge = 1
+
+        if not iec or segmax < 1:
+            while( segmax >= 100 ):
+                segmax = segmax/10
+                shrink = shrink*10
+            while( segmax < 10 ):
+                segmax = segmax*10
+                enlarge = enlarge*10
+            segmax = int(segmax)
+            segmax = ((segmax/10)+1)*10 if segmax >= 20 else ((segmax/5)+1)*5
+            step = 5 if segmax <= 20 else 10 if segmax <= 50 else 20
+            vpoints = [ (float(x)*shrink/enlarge, x*4*height/segmax) for x in range(0,segmax,step) ]
+        else :
+            while( segmax >= 16 ):
+                segmax = segmax/4
+                shrink = shrink*4
+            while( segmax < 4 ):
+                segmax = segmax*4
+                enlarge = enlarge*4
+            segmax = int(segmax)
+            segmax = segmax+1
+            step = 1 if segmax <= 4 else 2 if segmax <= 8 else 4
+            vpoints = [ (float(x)*shrink/enlarge, x*4*height/segmax) for x in range(0,segmax,step) ]
+
+        maxdata = float(segmax)*shrink/enlarge
+
+        if maxdata > 1 :
+            vpoints = [ ( Chart.humanreadable(p, iec=iec)+unit, x ) for p, x in vpoints ]
+            maxp = Chart.humanreadable(maxdata, iec=iec)+unit
+        else :
+            vpoints = [ ( str(p)+unit, x ) for p, x in vpoints ]
+            maxp = str(p)+unit
+
+        vpointslen = max( len(p) for p, x in vpoints )
+        vpointslen = max(vpointslen, len(maxp))+rjust
+        vpoints = dict( (int(x)/4,(p,int(x)%4)) for p, x in vpoints )
+
+        hs = [ min(x*4*height/maxdata, 4*height) for x in data ]
+        hs = [ [int(x)%4]+[4]*(int(x)/4) for x in hs ]
+        hs = [ [0]*(height-len(x)) + x for x in hs ]
+
+        rs = zip(*hs)
+        rs = [ list(r)+[0] for r in rs ]
+        rs = [ zip(r[::2],r[1::2]) for r in rs ]
+
+        chrs = [ [ Chart.chartchar[a][b] for a, b in r ] for r in rs ]
+        chrs = [ ''.join(cs) for cs in chrs ]
+
+        maxp = maxp.rjust(vpointslen)
+
+        if color :
+            print maxp+Chart.chartlinex[0]+\
+                  u'\033[38;5;237m'+Chart.chartline[0]*((len(data)+1)/2)+ u'\033[0m'
+        else :
+            print maxp+Chart.chartlinex[0]
+
+        for i, r in enumerate( chrs ) :
+            p, c = vpoints.get(height-i-1,('',None))
+            p = p.rjust(vpointslen)
+            if c is not None:
+                #r = re.sub("([ ]+)",r'<\1>',"abc   def    ghi")
+                r = re.sub(u"([\u2800]+)",u'\033[38;5;237m\\1\033[0m',r)
+                r = r.replace(u'\u2800', Chart.chartline[c])
+                c = Chart.chartlinex[c]
+            else :
+                c = ' '
+            print p+c+r
+
+        if points != None :
+            points = points+[None,]
+            points = [ (str(p) if p else None) for p in points ]
+            points = zip(points[::2],points[1::2])
+            points = [ ( a or b ) for a, b in points ]
+            points = [ (i, x) for i, x in enumerate(points) if x ]
+            pp, sp = zip(*points)
+            if pp[0] != 0 :
+                pplen = zip( [0]+list(pp), list(pp)+[0] )
+                sp = ['',]+list(sp)
+            else :
+                pplen = zip( list(pp), list(pp[1:])+[0] )
+            pplen = [ max( e-s, 0 ) for s, e in pplen ]
+            lp = [ '|' if spi else ' ' for spi in sp ]
+            lp = [ lpi.ljust(e) for lpi, e in zip(lp,pplen) ]
+            sp = [ spi[:(e or None)].ljust(e) for spi, e in zip(sp,pplen) ]
+            print ' '*(vpointslen+1)+''.join(lp)
+            print ' '*(vpointslen+1)+''.join(sp)
+
+        return
+
+    def smart_show(self):
+        self.smart_show_chart(self.data, **self.args)
+
 if __name__ == '__main__' :
     
     # over
@@ -1126,3 +1296,15 @@ if __name__ == '__main__' :
         
     ep.htmlprint()
 
+    chart = Chart([ x*123 for x in range(100) ])
+    chart.smart_show()
+
+    chart = Chart([ x*123 for x in range(100) ],
+        points = [ ( x if x%10==0 else None ) for x in range(100)],
+        iec=True, unit='Byte')
+    chart.smart_show()
+
+    chart = Chart([ x*0.000345 for x in range(100) ],
+        points = [ ( x if x%10==0 else None ) for x in range(100)],
+        iec=True, unit='$')
+    chart.smart_show()
