@@ -102,12 +102,9 @@ class TextWrapper(object):
         for i, c in enumerate(inp) :
             
             ctype = self.chrtype(c)
-            #print c, s+ctype, '->', 
             s, ending = self.statmachine[s+ctype]
-            #print s, ending, cur, i
             
             if ending :
-                #print 'word>', inp[start:cur+1]
                 width = self.getwordwidth(inp, start, cur+1 )
                 yield start, cur+1, i, width
                 start = i
@@ -190,7 +187,6 @@ class TextWrapper(object):
         for wst, bst, ed, ww in self._split_iter(text):
             
             if self.eliminate_error and ( anticur+leave < ww or anticur < 0 ):
-                #print self.getwordwidth( text, ln_st, ln_ed ), width-anticur
                 anticur = width - self.getwordwidth( text, ln_st, ln_ed )
                 
             if anticur+leave < ww or anticur < 0 :
@@ -243,13 +239,11 @@ class TextWrapper(object):
         
         for txln in text.splitlines() :
             
-            print txln
-            
             ln = []
             
             for i in self._wrap_iter( txln, width, maxwidth ):
                 
-                if i != None :
+                if i is not None :
                     ln.append(i)
                 else :
                     yield ''.join(ln)
