@@ -3,57 +3,75 @@ from simpleparse.parser import Parser
 class EasyScript(object):
     
     grammer = r'''
-        statement  := assignment / expression / forstate / ifstate / whilestate
+        file       := ( [ ]*, (statement, [ ]*)?, ( ';' / '\n' ) )*
+        >block<    := ( [ ]*, (statement, [ ]*)?, ( ';' / '\n' ) )*
+        
+        statement  := ifstate / forstate / whilestate / assignment / expression
         assignment := var, [ ]*, '=', [ ]*, expr
         expression := expr
         
-        forstate   := 'for', [ ]+, var, [ ]+, 'in', [ ]+, expr, ':'
-        ifstate    := 'if', [ ]*, expr, [ ]*, ':'
-        whilestate := 'while', [ ]*, expr, [ ]*, ':'
+        forstate   := 'for', [ ]+, var, [ ]+, 'in', [ ]+, expr, [ ]*, '{', '}'
+        whilestate := 'while', [ ]*, expr, [ ]*, '{', block, '}'
+        ifstate    := 'if', [ ]*, expr, [ ]*, '{', block, '}', elifstate*, elsestate?
+        elifstate  := [ \n]*, 'elif', [ ]*, expr, [ ]*, '{', block, '}'
+        elsestate  := [ \n]*, 'else', [ \n]*, '{', block, '}'
         
         expr       := expr2, ( [ ]*, relop, [ ]*, expr2 )*
         >expr2<    := funcexpr / number / ( '(', expr, ')' ) / var
         funcexpr   := var, '(', [ ]*, args?, [ ]*, ')'
         args       := expr, ( [ ]*, ',', [ ]*, expr )*
         
-        relop      := [+-*/]
+        relop      := [-+*/] / '==' / '!='
         
         var        := [a-zA-Z_]+, [a-zA-Z0-9_]*
         number     := [0-9]+, ( '.', [0-9]+ )?
     '''
     
-    parser = Parser(grammer,'statement')
+    parser = Parser(grammer,'file')
     
     def __init__( self ):
         
         self.namespace = {}
         self.stack = []
         self.code = []
+        self.segpos = {}
         
         return
         
     def compile( self, script ):
         
-        for ln in script.splitlines():
-            
-            ln = ln.strip()
-            if ln == '' :
-                continue
+        gtree = vm.parser.parse(script)
         
-            gtree = vm.parser.parse(ln)
-            self._compile( ln, gtree[1][0] )
-            
+        print script[gtree[0]:gtree[-1]]
+        
+        for st in gtree[1] :
+            self._compile( script, st )
+        
+        for i, code in enumerate(self.code) :
+            if code.startswith('jump') or code.startswith('jmp') :
+                cmd, arg = code.split()
+                self.code[i] = '%s %s' % (cmd, self.segpos[arg]-i-1)
+        
+        self.code.append('halt 0')
+        
         return 
         
+    def setsegname( self, segname ):
+        self.segpos[segname] = len(self.code)
+        return
     
     op_pri = {
         '+':1,
         '-':1,
         '*':0,
         '/':0,
+        '==':2,
+        '!=':2,
+        'and':3,
+        'or':3,
     }
     
-    def _compile( self, script, node ):
+    def _compile( self, script, node, pst=None ):
         
         name, st, ed, children = node
         
@@ -74,6 +92,63 @@ class EasyScript(object):
             
             self.code.append( 'pop 1' )
         
+        elif name == 'whilestate' :
+            
+            self.setsegname( '%sWHILESTART' % (st,) )
+            condexpr = children.pop(0)
+            self._compile( script, condexpr )
+            self.code.append( 'jmpf %sWHILEEND' % (st,) )
+            
+            while( children and children[0][0] == 'statement' ):
+                child = children.pop(0)
+                self._compile( script, child )
+            
+            self.code.append( 'jump %sWHILESTART' % (st,) )
+            self.setsegname( '%sWHILEEND' % (st,) )
+            
+        elif name == 'ifstate' :
+            
+            condexpr = children.pop(0)
+            self._compile( script, condexpr )
+            self.code.append( 'jmpf %sIFFAILD' % (st,) )
+            
+            
+            while( children and children[0][0] == 'statement' ):
+                child = children.pop(0)
+                self._compile( script, child )
+                
+            endif = len(self.segpos)
+            self.code.append( 'jump %sENDIF' % (st,) )
+            self.setsegname( '%sIFFAILD' % (st,) )
+            
+            while( children and children[0][0] == 'elifstate' ):
+                child = children.pop(0)
+                self._compile( script, child, st )
+                
+            if children and children[0][0] == 'elsestate' :
+                child = children.pop(0)
+                self._compile( script, child )
+            
+            self.setsegname( '%sENDIF' % (st,) )
+            
+        elif name == 'elifstate' :
+            
+            condexpr = children.pop(0)
+            self._compile( script, condexpr )
+            self.code.append( 'jmpf %sIFFAILD' % (st,) )
+            
+            while( children and children[0][0] == 'statement' ):
+                child = children.pop(0)
+                self._compile( script, child )
+                self.code.append( 'jump %sENDIF' % (pst,) )
+                self.setsegname( '%sIFFAILD' % (st,) )
+            
+        elif name == 'elsestate' :
+            
+            while( children and children[0][0] == 'statement' ):
+                child = children.pop(0)
+                self._compile( script, child )
+            
         elif name == 'funcexpr' :
             
             func = children.pop(0)
@@ -112,6 +187,11 @@ class EasyScript(object):
             for child in children :
                 self._compile( script, child )
             
+        elif name == 'statement' :
+            
+            for child in children :
+                self._compile( script, child )
+            
         else :
             
             raise Exception, ('unkown node', name)
@@ -123,9 +203,16 @@ class EasyScript(object):
         if ns != None :
             self.namespace.update(ns)
         
-        for code in self.code :
+        cp = 0
+        
+        while( True ):
             
-            cmd, arg = code.split()
+            cmd, arg = self.code[cp].split()
+            
+            #print cmd, arg, self.stack
+            
+            if cmd == 'halt' :
+                break
             
             if cmd == 'pop' :
                 for i in range(int(arg)):
@@ -157,9 +244,78 @@ class EasyScript(object):
                     self.stack.append( a*b )
                 elif arg == '/' :
                     self.stack.append( a/b )
+            
+            elif cmd == 'jmpf' :
                 
+                c = self.stack.pop(-1)
+                if not c :
+                    cp += int(arg)
+                    
+            elif cmd == 'jump' :
+                
+                cp += int(arg)
+                
+            cp += 1
+            
+            
         return
     
+    
+    
+class GrammerChecker(object):
+    
+    grammer = r'''
+        file       := ( [ ]*, (statement, [ ]*)?, ( ';' / '\n' ) )*
+        >block<    := ( [ ]*, (statement, [ ]*)?, ( ';' / '\n' ) )*
+        
+        statement  := ifstate / forstate / whilestate / assignment / expression
+        assignment := var, [ ]*, '=', [ ]*, expr
+        expression := expr
+        
+        forstate   := 'for', [ ]+, var, [ ]+, 'in', [ ]+, expr, [ ]*, '{', block, '}'
+        whilestate := 'while', [ ]*, expr, [ ]*, '{', block, '}'
+        ifstate    := 'if', [ ]*, expr, [ ]*, '{', block, '}', elifstate*, elsestate?
+        elifstate  := [ \n]*, 'elif', [ \n]*, '{', block, '}'
+        elsestate  := [ \n]*, 'else', [ \n]*, '{', block, '}'
+        
+        expr       := expr2, ( [ ]*, relop, [ ]*, expr2 )*
+        >expr2<    := funcexpr / number / ( '(', expr, ')' ) / var
+        funcexpr   := var, '(', [ ]*, args?, [ ]*, ')'
+        args       := expr, ( [ ]*, ',', [ ]*, expr )*
+        
+        relop      := [-+*/] / '==' / '!=' / 'and' / 'or'
+        
+        var        := [a-zA-Z_]+, [a-zA-Z0-9_]*
+        number     := [0-9]+, ( '.', [0-9]+ )?
+    '''
+    
+    parser = Parser(grammer,'file')
+    
+    def check( self, script ):
+        
+        st, nodes, ed = self.parser.parse(script)
+        
+        if ed == len(script):
+            print 'Grammer OK'
+        else :
+            print 'Grammer ERROR'
+            print script[:ed]
+        
+        for node in nodes :
+            self.info( script, node, 0 )
+        
+        return
+        
+    def info( self, script, node, lv ):
+        
+        name, st, ed, children = node
+        
+        print ' '*(lv*4), name, script[st:ed] if children == [] else ''
+        
+        for child in children :
+            self.info( script, child, lv+1 )
+        
+        return
     
 def foo( a, b ):
     
@@ -178,18 +334,23 @@ a = a+1
 a = 1+a
 print(a)
 print(b)
+if a-11 {
+    print(123)
+} elif a-10 {
+    print(456)
+} else {
+    print(789)
+}
+while (a) {
+    print(a)
+    a=a-1
+}
 '''
     
     import pprint
     print '== code tree =='
-    for ln in script.splitlines():
-        
-        ln.strip()
-        if ln == '' :
-            continue
-            
-        pprint.pprint( vm.parser.parse(ln) )
-    
+    checker = GrammerChecker()
+    checker.check(script)
     
     print
     print
