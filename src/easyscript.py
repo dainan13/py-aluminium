@@ -244,7 +244,15 @@ class EasyScript(object):
                     self.stack.append( a*b )
                 elif arg == '/' :
                     self.stack.append( a/b )
-            
+                elif arg == '==' :
+                    self.stack.append( a==b )
+                elif arg == '!=' :
+                    self.stack.append( a!=b )
+                elif arg == 'and' :
+                    self.stack.append( a and b )
+                elif arg == 'or' :
+                    self.stack.append( a or b )
+                
             elif cmd == 'jmpf' :
                 
                 c = self.stack.pop(-1)
