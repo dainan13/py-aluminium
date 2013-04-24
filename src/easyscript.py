@@ -1,6 +1,60 @@
 from simpleparse.parser import Parser
+from simpleparse import generator
 
 import types
+
+#MATCH_JUMP          MATCH_FAIL
+#MATCH_NOWORD        MATCH_SWORDSTART
+#MATCH_LOOPCONTROL_RESET -1
+
+stkeys = [ ln.split(None, 1) for ln in '''\
+ALLIN             11
+ALLNOTIN          12
+IS                13
+ISIN              14
+ISNOTIN           15
+WORD              21
+WORDSTART         22
+WORDEND           23
+ALLINSET          31
+ISINSET           32
+ALLINCHARSET      41
+ISINCHARSET       42
+MAX_LOWLEVEL      99
+FAIL              100
+EOF               101
+SKIP              102
+MOVE              103
+JUMPTARGET        104
+MAX_SPECIALS      199
+SWORDSTART        211
+SWORDEND          212
+SFINDWORD         213
+CALL              201
+CALLARG           202
+TABLE             203
+SUBTABLE          207
+TABLEINLIST       204
+SUBTABLEINLIST    208
+LOOP              205
+LOOPCONTROL       206
+JUMP_TO           0
+JUMP_MATCHOK      1000000
+JUMP_MATCHFAIL    -1000000
+MOVE_EOF          -1
+MOVE_BOF          0
+FAIL_HERE         1
+THISTABLE         999
+LOOPCONTROL_BREAK 0
+CALLTAG           (1 << 8)
+APPENDTAG         (1 << 9)
+APPENDTAGOBJ      (1 << 10)
+APPENDMATCH       (1 << 11)
+LOOKAHEAD         (1 << 12)
+'''.splitlines() ]
+
+stkeys = dict([ (eval(v),k) for k, v in stkeys ])
+
 
 def gen( d ):
     
@@ -77,7 +131,7 @@ class EasyScript(object):
         self.code.append('halt 0')
         
         return 
-        
+    
     def setsegname( self, segname ):
         self.segpos[segname] = len(self.code)
         return
@@ -127,6 +181,7 @@ class EasyScript(object):
                 
             self.code.append( 'jump %sFORSTART' % (st,))
             self.setsegname( '%sFOREND' % (st,) )
+            self.code.append( 'pop 1' )
             
         elif name == 'expression' :
             
@@ -310,6 +365,54 @@ class EasyScript(object):
             raise Exception, ('unkown node', name)
         
         return
+    
+    def binarycode( self ):
+        
+        r = []
+        
+        for code in self.code :
+            cmd, arg = code.split(None,1)
+            
+            if cmd == 'halt' :
+                r.append( (cmd, int(arg)) )
+            elif cmd == 'pop' :
+                r.append( (cmd, int(arg)) )
+            elif cmd == 'set' :
+                r.append( (cmd, arg) )
+            elif cmd == 'sete' :
+                r.append( (cmd, arg) )
+            elif cmd == 'del' :
+                r.append( (cmd, arg) )
+            elif cmd == 'push' :
+                r.append( (cmd, eval(arg)) )
+            elif cmd == 'pvar' :
+                r.append( (cmd, arg) )
+            elif cmd == 'call' :
+                r.append( (cmd, int(arg)) )
+            elif cmd == 'oper' :
+                r.append( (cmd, arg) )
+            elif cmd == 'jmpf' :
+                r.append( (cmd, int(arg)) )
+            elif cmd == 'jmpt' :
+                r.append( (cmd, int(arg)) )
+            elif cmd == 'jump' :
+                r.append( (cmd, int(arg)) )
+            elif cmd == 'try' :
+                r.append( (cmd, int(arg)) )
+            elif cmd == 'ntry' :
+                r.append( (cmd, int(arg)) )
+            elif cmd == 'excp' :
+                r.append( (cmd, arg) )
+            elif cmd == 'arry' :
+                r.append( (cmd, int(arg)) )
+            elif cmd == 'apnd' :
+                r.append( (cmd, int(arg)) )
+            elif cmd == 'iter' :
+                r.append( (cmd, int(arg)) )
+            elif cmd == 'next' :
+                r.append( (cmd, int(arg)) )
+            
+        return r
     
     def run( self, ns=None ):
         
@@ -498,13 +601,85 @@ class GrammerChecker(object):
             self.info( script, child, lv+1 )
         
         return
+        
+    def state( self ):
+        
+        self.keys = {}
+        self.nodes = {}
+        
+        parser = generator.buildParser(self.grammer).parserbyname('file')
+        parser = [ self.compilestate(node) for node in parser ]
+        
+        return parser
+        
+    def compilestate( self, node ):
+        
+        if type(node) != types.TupleType :
+            return node
+        
+        if id(node) in self.nodes :
+            self.nodes[id(node)] = self.nodes.get(id(node),0)+1
+            return self.nodes[id(node)]
+        
+        self.nodes[id(node)] = self.nodes.get(id(node),0)+1
+        
+        node = list(node)
+        
+        if type(node[1]) == types.IntType :
+            node[1] = stkeys[node[1]]
+            self.keys[node[1]] = self.keys.get(node[1], 0)+1
+        
+        if node[1] == 'TABLEINLIST' :
+            node[1] = 'TABLE(INLIST)'
+            node[2] = node[2][0][node[2][1]]
+        
+        if node[1] == 'SUBTABLEINLIST' :
+            node[1] = 'SUBTABLE(INLIST)'
+            node[2] = node[2][0][node[2][1]]
+        
+        if type(node[2]) == types.TupleType :
+            node[2] = tuple( [ self.compilestate(child) for child in node[2] ] )
+        
+        return tuple(node)
+        
+    def tagbuilder( self, code, tag ):
+        
+        return
+        
+    
+class GrammerCheckerTest( GrammerChecker ):
+    
+    #http://www.egenix.com/products/python/mxBase/mxTextTools/doc/#_Toc293606134
+    
+    #grammer = r'''
+    #    file       := [A-Z]+, 'ab', statement
+    #    statement  := 'cd' / 'ef'
+    #'''
+    
+    # 11 14 21 101 203 204 207 208
+    pass
+    
+def test2():
+    
+    import pprint
+    
+    checker = GrammerCheckerTest()
+    
+    #pprint.pprint( generator.buildParser(checker.grammer).parserbyname('file') )
+    
+    print checker.state()
+    print
+    print len(checker.keys), checker.keys
+    
+    return
     
 def foo( a, b ):
     
     print a, b
     return a**b
 
-if __name__ == '__main__' :
+
+def test():
     
     vm = EasyScript()
     
@@ -549,15 +724,15 @@ while (a) {
 
 del a
 
-try {
-    print(a)
-} except Exception as e {
-    print('var a not found')
-    print(e)
-}
-
 '''
-    
+
+#try {
+#    print(a)
+#} except Exception as e {
+#    print('var a not found')
+#    print(e)
+#}
+
     import pprint
     print '== code tree =='
     checker = GrammerChecker()
@@ -573,11 +748,20 @@ try {
     
     print
     print
+    bc = zip(*vm.binarycode())
+    print list(bc[0])
+    print list(bc[1])
     
     print '== run result ==' 
     vm.run( {'foo':foo, 'abc':2, 'print':pprint.pprint, 'Exception':Exception} )
     
+    return
     
+
+if __name__ == '__main__' :
+    
+
+    test2()
     
     
     
