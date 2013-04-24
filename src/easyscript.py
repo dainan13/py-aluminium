@@ -1,5 +1,15 @@
 from simpleparse.parser import Parser
 
+import types
+
+def gen( d ):
+    
+    for i in d :
+        yield i
+        
+    return
+
+
 class EasyScript(object):
     
     grammer = r'''
@@ -23,9 +33,10 @@ class EasyScript(object):
         continue   := 'continue'
         
         expr       := expr2, ( [ ]*, relop, [ ]*, expr2 )*
-        >expr2<    := funcexpr / number / ( '(', expr, ')' ) / var / string
+        >expr2<    := funcexpr / number / ( '(', [ ]*, expr, [ ]*, ')' ) / var / string / array
         funcexpr   := var, '(', [ ]*, args?, [ ]*, ')'
         args       := expr, ( [ ]*, ',', [ ]*, expr )*
+        array      := '[', [ ]*, expr, ( [ ]*, ',', [ ]*, expr )*, [ ]*, ']'
         
         relop      := [-+*/] / '==' / '!=' / '&&' / '||'
         
@@ -280,6 +291,14 @@ class EasyScript(object):
             
             for child in children :
                 self._compile( script, child )
+        
+        elif name == 'array' :
+            
+            self.code.append( 'arry 0' )
+            
+            for child in children :
+                self._compile( script, child )
+                self.code.append( 'apnd 2' )
             
         elif name == 'statement' :
             
@@ -306,7 +325,7 @@ class EasyScript(object):
             
             cmd, arg = self.code[cp].split(None,1)
             
-            #print cp, cmd, arg, self.stack
+            #print ' '*10, cp, cmd, arg, self.stack
             
             if cmd == 'halt' :
                 break
@@ -385,6 +404,25 @@ class EasyScript(object):
             elif cmd == 'excp' :
                 self.stack.append( isinstance(error, self.namespace[arg]) )
             
+            elif cmd == 'arry' :
+                self.stack.append( [] )
+            
+            elif cmd == 'apnd' :
+                ax = self.stack.pop( -1 ) 
+                self.stack[-1].append( ax )
+            
+            elif cmd == 'iter' :
+                if type( self.stack[-1] ) != types.GeneratorType :
+                    self.stack.append( gen(self.stack.pop(-1)) )
+            
+            elif cmd == 'next' :
+                try :
+                    self.stack.append( self.stack[-1].next() )
+                    self.stack.append(True)
+                except StopIteration as e:
+                    self.stack.append(False)
+                    
+            
             else :
                 raise Exception, (cmd, 'cmd not found')
             
@@ -419,9 +457,10 @@ class GrammerChecker(object):
         continue   := 'continue'
         
         expr       := expr2, ( [ ]*, relop, [ ]*, expr2 )*
-        >expr2<    := funcexpr / number / ( '(', expr, ')' ) / var / string
+        >expr2<    := funcexpr / number / ( '(', [ ]*, expr, [ ]*, ')' ) / var / string / array
         funcexpr   := var, '(', [ ]*, args?, [ ]*, ')'
         args       := expr, ( [ ]*, ',', [ ]*, expr )*
+        array      := '[', [ ]*, expr, ( [ ]*, ',', [ ]*, expr )*, [ ]*, ']'
         
         relop      := [-+*/] / '==' / '!=' / '&&' / '||'
         
@@ -474,8 +513,7 @@ a = foo( 1 +(4 / 2) , abc )
 b = a
 a = a+1
 a = 1+a
-print(a)
-print(b)
+print(a);print(b)
 
 if a == 11 {
     if b == 9 {
@@ -491,6 +529,9 @@ if a == 10 {
     print(789)
 }
 
+for i in [1,2,4,8,16,32] {
+    print(i)
+}
 
 while (a) {
     
