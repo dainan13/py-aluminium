@@ -604,8 +604,8 @@ class GrammerChecker(object):
         
     def state( self ):
         
-        self.keys = {}
         self.nodes = {}
+        self.nodei = {}
         
         parser = generator.buildParser(self.grammer).parserbyname('file')
         parser = [ self.compilestate(node) for node in parser ]
@@ -617,9 +617,11 @@ class GrammerChecker(object):
         if type(node) != types.TupleType :
             return node
         
+        idnode = id(node)
+        
         if id(node) in self.nodes :
             self.nodes[id(node)] = self.nodes.get(id(node),0)+1
-            return self.nodes[id(node)]
+            return self.nodei[id(node)]
         
         self.nodes[id(node)] = self.nodes.get(id(node),0)+1
         
@@ -630,30 +632,106 @@ class GrammerChecker(object):
             self.keys[node[1]] = self.keys.get(node[1], 0)+1
         
         if node[1] == 'TABLEINLIST' :
-            node[1] = 'TABLE(INLIST)'
+            node[1] = 'TABLE inlist'
             node[2] = node[2][0][node[2][1]]
         
         if node[1] == 'SUBTABLEINLIST' :
-            node[1] = 'SUBTABLE(INLIST)'
+            node[1] = 'SUBTABLE inlist'
             node[2] = node[2][0][node[2][1]]
         
         if type(node[2]) == types.TupleType :
             node[2] = tuple( [ self.compilestate(child) for child in node[2] ] )
         
-        return tuple(node)
+        r = tuple(node)
+        self.nodei[idnode] = r 
+
+        return r
         
-    def tagbuilder( self, code, tag ):
+    def tagbuilder( self, code ):
         
-        return
+        return self.taglist( code, self.state(), 0 )
         
+    def taglist( self, code, tagparsers, st ):
+        
+        cur = st
+        r = []
+        
+        tagpos = 0
+        
+        mxtag = len(tagparsers)
+        
+        while( tagpos < mxtag ):
+        
+            print st, tagpos
+        
+            tag = tagparsers[tagpos]
+            
+            jmpf = None if len(tag)<4 else tag[3]
+            jmpt = 1 if len(tag)<5 else tag[4]
+            
+            _cur, node = self.tag( code, tag, cur )
+            
+            jump = jmpf if (_cur == cur and tag[1] != 'EOF') else jmpt 
+            
+            if jump is None :
+                break
+            
+            tagpos += jump
+            if _cur != cur :
+                r.extend(node)
+            cur = _cur
+            
+        else :
+            
+            return cur, r
+        
+        return st, []
+    
+    def tag( self, code, tag, st ):
+        
+        cur = st
+        r = []
+        
+        name = tag[0]
+        cmd = tag[1].split()[0]
+        arg = tag[2]
+        
+        childrens = []
+        
+        print name, cmd, arg, cur
+        
+        if cmd == 'SUBTABLE' or cmd == 'TABLE' :
+            cur, childrens = self.taglist( code, arg, cur )
+        
+        elif cmd == 'ALLIN':
+            
+            while( code[cur] in arg ):
+                cur += 1
+        
+        elif cmd == 'WORD' :
+            
+            if code[cur:cur+len(arg)] == arg :
+                cur += len(arg)
+        
+        elif cmd == 'EOF' :
+            pass
+        
+        else :
+            raise Exception, ('UnkownTag', tag[1])
+
+        if name :
+            return cur, [(name,st,cur,childrens)]
+        else :
+            return cur, []
     
 class GrammerCheckerTest( GrammerChecker ):
     
     #http://www.egenix.com/products/python/mxBase/mxTextTools/doc/#_Toc293606134
     
     #grammer = r'''
-    #    file       := [A-Z]+, 'ab', statement
-    #    statement  := 'cd' / 'ef'
+    #    file       := [A-Z]*, 'ab'+, statement+
+    #    statement  := var+, 'gh'
+    #    var        := 'cd' / 'ef'
     #'''
     
     # 11 14 21 101 203 204 207 208
@@ -670,6 +748,10 @@ def test2():
     print checker.state()
     print
     print len(checker.keys), checker.keys
+    
+    print
+    print 
+    #print checker.tagbuilder('AAAabcdefghcdgh')
     
     return
     
