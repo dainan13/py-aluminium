@@ -115,7 +115,7 @@ class EasyScript(object):
         
     def compile( self, script ):
         
-        gtree = vm.parser.parse(script)
+        gtree = self.parser.parse(script)
         
         for st in gtree[1] :
             self._compile( script, st )
@@ -578,7 +578,8 @@ class GrammerChecker(object):
     
     def check( self, script ):
         
-        st, nodes, ed = self.parser.parse(script)
+        #st, nodes, ed = self.parser.parse(script)
+        st, nodes, ed = self.tagbuilder(script)
         
         if ed == len(script):
             print 'Grammer OK'
@@ -604,52 +605,56 @@ class GrammerChecker(object):
         
     def state( self ):
         
-        self.nodes = {}
-        self.nodei = {}
+        self.tagcmds = {}
         
         parser = generator.buildParser(self.grammer).parserbyname('file')
+        r = [ id(node) for node in parser ]
         parser = [ self.compilestate(node) for node in parser ]
         
-        return parser
-        
-    def compilestate( self, node ):
-        
-        if type(node) != types.TupleType :
-            return node
-        
-        idnode = id(node)
-        
-        if id(node) in self.nodes :
-            self.nodes[id(node)] = self.nodes.get(id(node),0)+1
-            return self.nodei[id(node)]
-        
-        self.nodes[id(node)] = self.nodes.get(id(node),0)+1
-        
-        node = list(node)
-        
-        if type(node[1]) == types.IntType :
-            node[1] = stkeys[node[1]]
-            self.keys[node[1]] = self.keys.get(node[1], 0)+1
-        
-        if node[1] == 'TABLEINLIST' :
-            node[1] = 'TABLE inlist'
-            node[2] = node[2][0][node[2][1]]
-        
-        if node[1] == 'SUBTABLEINLIST' :
-            node[1] = 'SUBTABLE inlist'
-            node[2] = node[2][0][node[2][1]]
-        
-        if type(node[2]) == types.TupleType :
-            node[2] = tuple( [ self.compilestate(child) for child in node[2] ] )
-        
-        r = tuple(node)
-        self.nodei[idnode] = r 
-
         return r
+        
+    def compilestate( self, tag ):
+        
+        idtag = id(tag)
+        
+        if idtag in self.tagcmds :
+            return
+        
+        self.tagcmds[idtag] = None
+        
+        name = tag[0]
+        cmd = stkeys[tag[1]]
+        arg = tag[2]
+        jmpf = None if len(tag)<4 else tag[3]
+        jmpt = 1 if len(tag)<5 else tag[4]
+        
+        if len(tag) > 5 :
+            raise Exception, '...'
+        
+        if cmd == 'TABLEINLIST' :
+            cmd = 'TABLE'
+            arg = arg[0][arg[1]]
+        
+        if cmd == 'SUBTABLEINLIST' :
+            cmd = 'SUBTABLE'
+            arg = arg[0][arg[1]]
+        
+        if cmd == 'TABLE' or cmd == 'SUBTABLE' :
+            
+            for child in arg :
+                self.compilestate(child)
+            
+            arg = [ id(child) for child in arg ]
+        
+        self.tagcmds[idtag] = (name,cmd,arg,jmpf,jmpt)
+        
+        return
         
     def tagbuilder( self, code ):
         
-        return self.taglist( code, self.state(), 0 )
+        cur, nodes = self.taglist( code, self.state(), 0 )
+        
+        return (0, nodes, cur)
         
     def taglist( self, code, tagparsers, st ):
         
@@ -659,19 +664,20 @@ class GrammerChecker(object):
         tagpos = 0
         
         mxtag = len(tagparsers)
-        
+
         while( tagpos < mxtag ):
         
-            print st, tagpos
+            print st, tagpos, '/', mxtag, tagparsers[tagpos]
         
-            tag = tagparsers[tagpos]
+            tag = self.tagcmds[tagparsers[tagpos]]
             
-            jmpf = None if len(tag)<4 else tag[3]
-            jmpt = 1 if len(tag)<5 else tag[4]
+            jmpf = tag[3]
+            jmpt = tag[4]
             
             _cur, node = self.tag( code, tag, cur )
             
-            jump = jmpf if (_cur == cur and tag[1] != 'EOF') else jmpt 
+            jump = jmpf if _cur == cur else jmpt 
+            jump = jmpt if tag[1] == 'EOF' else jump
             
             if jump is None :
                 break
@@ -698,18 +704,24 @@ class GrammerChecker(object):
         
         childrens = []
         
-        print name, cmd, arg, cur
+        print name, cmd, arg, cur, code[:cur+1]
         
         if cmd == 'SUBTABLE' or cmd == 'TABLE' :
             cur, childrens = self.taglist( code, arg, cur )
         
         elif cmd == 'ALLIN':
-            
             while( code[cur] in arg ):
                 cur += 1
         
+        elif cmd == 'ALLNOTIN':
+            while( code[cur] not in arg ):
+                cur += 1
+        
+        elif cmd == 'ISIN' :
+            if code[cur] in arg :
+                cur += 1
+        
         elif cmd == 'WORD' :
-            
             if code[cur:cur+len(arg)] == arg :
                 cur += len(arg)
         
@@ -728,11 +740,11 @@ class GrammerCheckerTest( GrammerChecker ):
     
     #http://www.egenix.com/products/python/mxBase/mxTextTools/doc/#_Toc293606134
     
-    #grammer = r'''
-    #    file       := [A-Z]*, 'ab'+, statement+
-    #    statement  := var+, 'gh'
-    #    var        := 'cd' / 'ef'
-    #'''
+    grammer = r'''
+        file       := [A-Z]*, 'ab'+, statement+
+        statement  := var+, 'gh'
+        var        := 'cd' / 'ef' / 'ij'
+    '''
     
     # 11 14 21 101 203 204 207 208
     pass
@@ -747,11 +759,15 @@ def test2():
     
     print checker.state()
     print
-    print len(checker.keys), checker.keys
+    for k, v in checker.tagcmds.items():
+        print k, v
+    
+    print set( [ v[1] for v in checker.tagcmds.values() ] )
+    
     
     print
     print 
-    #print checker.tagbuilder('AAAabcdefghcdgh')
+    print checker.tagbuilder('AAAabcdefghcdgh')
     
     return
     
