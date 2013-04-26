@@ -113,9 +113,10 @@ class EasyScript(object):
         
         return
         
-    def compile( self, script ):
+    def compile( self, script, gtree=None ):
         
-        gtree = self.parser.parse(script)
+        if gtree == None :
+            gtree = self.parser.parse(script)
         
         for st in gtree[1] :
             self._compile( script, st )
@@ -296,8 +297,9 @@ class EasyScript(object):
             while( children and children[0][0] == 'statement' ):
                 child = children.pop(0)
                 self._compile( script, child )
-                self.code.append( 'jump %sENDIF' % (pst,) )
-                self.setsegname( '%sIFFAILD' % (st,) )
+                
+            self.code.append( 'jump %sENDIF' % (pst,) )
+            self.setsegname( '%sIFFAILD' % (st,) )
             
         elif name == 'elsestate' :
             
@@ -590,7 +592,7 @@ class GrammerChecker(object):
         for node in nodes :
             self.info( script, node, 0 )
         
-        return
+        return (st, nodes, ed)
         
     def info( self, script, node, lv ):
         
@@ -611,6 +613,21 @@ class GrammerChecker(object):
         r = [ id(node) for node in parser ]
         parser = [ self.compilestate(node) for node in parser ]
         
+        tbname = [ (k, v[1] + ('%03d' % (i,)) ) for i, (k, v) in enumerate( self.tagcmds.items() ) ]
+        tbname = dict(tbname)
+        
+        rr = {}
+        for k, v in self.tagcmds.items() :
+            
+            if v[1] not in ('TABLE','SUBTABLE'):
+                rr[tbname[k]] = v
+            else :
+                rr[tbname[k]] = (v[0],v[1],[ tbname[tn] for tn in v[2] ],v[3],v[4])
+            
+        self.tagcmds = rr
+        
+        r = [ tbname[tn] for tn in r ]
+        
         return r
         
     def compilestate( self, tag ):
@@ -629,7 +646,7 @@ class GrammerChecker(object):
         jmpt = 1 if len(tag)<5 else tag[4]
         
         if len(tag) > 5 :
-            raise Exception, '...'
+            raise Exception, '... args to more'
         
         if cmd == 'TABLEINLIST' :
             cmd = 'TABLE'
@@ -652,7 +669,7 @@ class GrammerChecker(object):
         
     def tagbuilder( self, code ):
         
-        cur, nodes = self.taglist( code, self.state(), 0 )
+        match, cur, nodes = self.taglist( code, self.state(), 0 )
         
         return (0, nodes, cur)
         
@@ -667,31 +684,29 @@ class GrammerChecker(object):
 
         while( tagpos < mxtag ):
         
-            print st, tagpos, '/', mxtag, tagparsers[tagpos]
+            #print st, tagpos, '/', mxtag, tagparsers[tagpos]
         
             tag = self.tagcmds[tagparsers[tagpos]]
             
             jmpf = tag[3]
             jmpt = tag[4]
             
-            _cur, node = self.tag( code, tag, cur )
+            match, _cur, node = self.tag( code, tag, cur )
             
-            jump = jmpf if _cur == cur else jmpt 
-            jump = jmpt if tag[1] == 'EOF' else jump
-            
+            jump = jmpt if match else jmpf 
+
             if jump is None :
                 break
             
             tagpos += jump
-            if _cur != cur :
-                r.extend(node)
+            r.extend(node)
             cur = _cur
             
         else :
             
-            return cur, r
+            return True, cur, r
         
-        return st, []
+        return False, st, []
     
     def tag( self, code, tag, st ):
         
@@ -704,47 +719,56 @@ class GrammerChecker(object):
         
         childrens = []
         
-        print name, cmd, arg, cur, code[:cur+1]
+        match = False
         
         if cmd == 'SUBTABLE' or cmd == 'TABLE' :
-            cur, childrens = self.taglist( code, arg, cur )
+            match, cur, childrens = self.taglist( code, arg, cur )
         
         elif cmd == 'ALLIN':
             while( code[cur] in arg ):
                 cur += 1
+                match = True
         
         elif cmd == 'ALLNOTIN':
             while( code[cur] not in arg ):
                 cur += 1
+                match = True
         
         elif cmd == 'ISIN' :
             if code[cur] in arg :
                 cur += 1
+                match = True
         
         elif cmd == 'WORD' :
             if code[cur:cur+len(arg)] == arg :
                 cur += len(arg)
+                match = True
         
         elif cmd == 'EOF' :
-            pass
+            if len(code) == cur :
+                match = True
         
         else :
             raise Exception, ('UnkownTag', tag[1])
 
-        if name :
-            return cur, [(name,st,cur,childrens)]
+        print name, cmd, repr(arg), match
+        
+        if name and match :
+            return match, cur, [(name,st,cur,childrens)]
+        elif match :
+            return match, cur, childrens
         else :
-            return cur, []
+            return match, cur, []
     
 class GrammerCheckerTest( GrammerChecker ):
     
     #http://www.egenix.com/products/python/mxBase/mxTextTools/doc/#_Toc293606134
     
-    grammer = r'''
-        file       := [A-Z]*, 'ab'+, statement+
-        statement  := var+, 'gh'
-        var        := 'cd' / 'ef' / 'ij'
-    '''
+    #grammer = r'''
+    #    file       := [A-Z]*, 'ab'+, statement+
+    #    statement  := var+, 'gh'
+    #    var        := 'cd' / 'ef' / 'ij'
+    #'''
     
     # 11 14 21 101 203 204 207 208
     pass
@@ -752,6 +776,7 @@ class GrammerCheckerTest( GrammerChecker ):
 def test2():
     
     import pprint
+    import json
     
     checker = GrammerCheckerTest()
     
@@ -760,14 +785,16 @@ def test2():
     print checker.state()
     print
     for k, v in checker.tagcmds.items():
-        print k, v
+        print repr(k), ':', json.dumps( v ), ','
     
+    print
+    print
     print set( [ v[1] for v in checker.tagcmds.values() ] )
-    
+    #print set( [ v[2] for v in checker.tagcmds.values() ] )
     
     print
     print 
-    print checker.tagbuilder('AAAabcdefghcdgh')
+    #print checker.tagbuilder('AAAabcdefghcdgh')
     
     return
     
@@ -834,13 +861,13 @@ del a
     import pprint
     print '== code tree =='
     checker = GrammerChecker()
-    checker.check(script)
-    
+    gtree = checker.check(script)
+
     print
     print
     
     print '== binary code =='
-    vm.compile( script )
+    vm.compile( script, gtree )
     for code in vm.code :
         print code
     
