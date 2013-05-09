@@ -67,24 +67,28 @@ def gen( d ):
 class EasyScript(object):
     
     grammer = r'''
-        file       := ( [ ]*, (statement, [ ]*)?, ( ';' / '\n' ) )*
-        >block<    := ( [ ]*, (statement, [ ]*)?, ( ';' / '\n' ) )*
+        file       := block
+        >block<    := ( ts, (statement, ts)?, ( ';' / '\n' ) )*
         
-        statement  := ifstate / forstate / break / continue / whilestate / delstate / trystate / assignment / expression
-        assignment := var, [ ]*, '=', [ ]*, expr
+        statement  := ifstate / forstate / break / continue / return / yield / whilestate / delstate / trystate / assignment / expression
+        assignment := var, ts, '=', ts, expr
         expression := expr
         
-        delstate   := 'del', [ ]+, var
-        forstate   := 'for', [ ]+, var, [ ]+, 'in', [ ]+, expr, [ ]*, '{', block, [ ]*, '}'
-        whilestate := 'while', [ ]*, expr, [ ]*, '{', block, [ ]*, '}'
-        ifstate    := 'if', [ ]*, expr, [ ]*, '{', block, [ ]*, '}', elifstate*, elsestate?
-        elifstate  := [ \n]*, 'elif', [ ]*, expr, [ ]*, '{', block, '}'
-        elsestate  := [ \n]*, 'else', [ \n]*, '{', block, '}'
-        trystate   := 'try', [ ]*, '{', block, [ ]*, '}', exceptstate+
-        exceptstate:= [ \n]*, 'except', [ ]+, var, [ ]+, 'as', [ ]+, var, [ ]*, '{', block, [ ]*, '}'
+        delstate   := 'del', tb, var
+        forstate   := 'for', tb, var, tb, 'in', tb, expr, ts, '{', block, ts, '}'
+        whilestate := 'while', tb, expr, ts, '{', block, ts, '}'
+        ifstate    := 'if', tb, expr, ts, '{', block, ts, '}', elifstate*, elsestate?
+        elifstate  := ts, 'elif', ts, expr, ts, '{', block, ts, '}'
+        elsestate  := ts, 'else', ts, '{', block, ts, '}'
+        trystate   := 'try', ts, '{', block, ts, '}', exceptstate+
+        exceptstate:= ts, 'except', tb, var, tb, 'as', tb, var, ts, '{', block, ts, '}'
+        
+        function   := 'function', tb, var, ts, '(', ts, (var, ts)*, ')', ts, '{', block, ts, '}'
         
         break      := 'break'
         continue   := 'continue'
+        return     := 'return', (tb, expr)?
+        yield      := 'yield', (tb, expr)?
         
         expr       := expr2, ( [ ]*, relop, [ ]*, expr2 )*
         >expr2<    := funcexpr / number / ( '(', [ ]*, expr, [ ]*, ')' ) / var / string / array
@@ -99,6 +103,10 @@ class EasyScript(object):
         >string2<  := '"', -["]+, '"'
         var        := [a-zA-Z_]+, [a-zA-Z0-9_]*
         number     := [0-9]+, ( '.', [0-9]+ )?
+        
+        <tb>       := ( [ \011-\015]+ )+
+        <ts>       := ( [ \011-\015]+ )*
+        comment    :=  '#',-'\n'*,'\n'
     '''
     
     parser = Parser(grammer,'file')
