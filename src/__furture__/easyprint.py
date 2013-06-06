@@ -8,7 +8,7 @@ import types
 import unicodedata
 import xml.sax.saxutils as saxutils
 import re
-from Al import realnum
+import realnum
 
 
 """
@@ -998,8 +998,11 @@ class Table( Grid ):
         
         ks = [ tuple(k[:i]) for k, pth, v in tbv for i in range(1,len(k)+1) ]
         ks = list( set( ks ) )
-        func = lambda x: header_sort.index(x[0]) if x[0] in header_sort else len(header_sort)
-        ks = sorted(ks, key=func)
+        if header_sort:
+            func = lambda x,y: cmp(x, y) if x[0]==y[0] else cmp(header_sort.index(x[0]), header_sort.index(y[0]))
+            ks = sorted(ks, cmp=func)
+        else:
+            ks = sorted(ks)
         #ks.sort()
         
         kcs = [ ( k, sum( 1 for _k in ks 
