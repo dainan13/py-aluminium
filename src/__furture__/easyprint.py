@@ -186,7 +186,7 @@ def AutoNode( d, **sytles ):
     if type(d) == types.BooleanType :
         return Bool( d, **sytles )
     
-    return Text( str(d), **sytles )
+    return Text( unicode(d), **sytles )
 
 
 class Node( object ):
@@ -404,7 +404,6 @@ class Text( Node ):
     def _console_length_( self ):
         
         l = max( [ self._onelinelen(l) for l in self.texts ] )
-        
         return super( Text, self )._console_length_( l )
             
     def _console_height_( self ):
@@ -434,17 +433,18 @@ class Text( Node ):
         align = self.styles.get('text-align','center')
         
         if align == 'left' :
-            _align = lambda s : ' '*padding[1] + s.ljust( _w, ' ' ) + ' '*padding[3]
+            _align = lambda s : ' '*padding[1] + s.ljust( 
+                    _w - (self._onelinelen(s) - len(s)), ' ' ) + ' '*padding[3]
         elif align == 'right' :
-            _align = lambda s : ' '*padding[1] + s.rjust( _w, ' ' ) + ' '*padding[3]
+            _align = lambda s : ' '*padding[1] + s.rjust( 
+                    _w - (self._onelinelen(s) - len(s)), ' ' ) + ' '*padding[3]
         elif align == 'center' :
-            _align = lambda s : ' '*padding[1] + s.center( _w, ' ' ) + ' '*padding[3]
+            _align = lambda s : ' '*padding[1] + s.center( 
+                    _w - (self._onelinelen(s) - len(s)), ' ' ) + ' '*padding[3]
         
         fg = self.styles.get('color', None)
         bg = self.styles.get('background', None)
-        
         r = [ ColorString( _align(l[:w]), fg=fg, bg=bg ) for l in r ]
-        
         return r
         
     def _html_print_( self, pname='div', attr={} ):
@@ -623,8 +623,12 @@ class Grid( Node ):
         self.hdrows = hdrows
         self.ftrows = ftrows
         
-        self.x_max = max( (x+l) for x, y, l, h, n in contains )
-        self.y_max = max( (y+h) for x, y, l, h, n in contains )
+        if not contains:
+            self.x_max = 0
+            self.y_max = 0
+        else:
+            self.x_max = max( (x+l) for x, y, l, h, n in contains )
+            self.y_max = max( (y+h) for x, y, l, h, n in contains )
         
         bdrows = bdrows or [ self.y_max - hdrows - ftrows ]
         bdrows = [ sum(bdrows[:i+1]) for i in range(len(bdrows)) ]
@@ -761,8 +765,8 @@ class Grid( Node ):
         #
         
         border = self.styles.get( 'borderchars', ' xx-x+++x+++|+++' )
-        border_fgc, border_bgc = self.styles.get( 'bordercolor', (237,None) )
-        #border_fgc, border_bgc = styles.get( 'bordercolor', (22,None) )
+        #border_fgc, border_bgc = self.styles.get( 'bordercolor', (237,None) )
+        border_fgc, border_bgc = self.styles.get( 'bordercolor', (7,None) )
         border_width = 1 if border[3] else 0
         border_heigth = 1 if border[12] else 0
         
@@ -961,7 +965,6 @@ class Table( Grid ):
         cvrt = convert.get( type(data), lambda x : x )
         
         data = cvrt(data)
-        
         if type(data) not in ( types.ListType, types.TupleType ):
             return [( rk, pth, AutoNode(data) ),]
         
@@ -997,10 +1000,23 @@ class Table( Grid ):
         #print tbv
         
         ks = [ tuple(k[:i]) for k, pth, v in tbv for i in range(1,len(k)+1) ]
-        ks = list( set( ks ) )
+        
+        ks = set( ks )
         if header_sort:
-            func = lambda x,y: cmp(x, y) if x[0]==y[0] else cmp(header_sort.index(x[0]), header_sort.index(y[0]))
-            ks = sorted(ks, cmp=func)
+            if type(header_sort) == types.ListType :
+                def get_header_index(z):
+                    try:
+                        return header_sort.index(z)
+                    except Exception as e:
+                        return len(header_sort)+1
+                func = lambda x,y: cmp(x, y) if x[0]==y[0] else    \
+                    cmp(get_header_index(x[0]), get_header_index(y[0]))
+                ks = sorted(ks, cmp=func)
+            elif type(header_sort) == types.TupleType:
+                ks_1 = list(ks - set(header_sort))
+                ks = list(header_sort) + sorted(ks_1)
+            else:
+                raise Exception, "header_sort only support tuple or list."
         else:
             ks = sorted(ks)
         #ks.sort()
@@ -1020,7 +1036,10 @@ class Table( Grid ):
         colnum, colsum = colnum[:-1], colnum[-1]
         #colsum = sum( 1 for k, e, c in kcs if e )
         
-        rowmax = max( len(k) for k in ks )
+        if not ks:
+            rowmax = 0
+        else:
+            rowmax = max( len(k) for k in ks )
         
         hdrows = rowmax
         
@@ -1063,7 +1082,7 @@ class Table( Grid ):
         # pth : row
         t += [ ( colnum[k], rownum[pth], colspans[k], rowspans[pth], v ) 
                for k, pth, v in tbv ]
-        
+
         
         #print rowmax, colsum
         
@@ -1078,7 +1097,7 @@ class Table( Grid ):
         #print blanks
         
         t += blanks
-        
+
         return t, hdrows, bdrows
         
     def _console_print_( self, w=None, h=None ):
@@ -1270,8 +1289,6 @@ if __name__ == '__main__' :
 
     #print ColorString.sum([ ColorString( str(b).ljust(4), bg = b ) for b in range(232,256) ])
     
-    print
-    print
     
     d = [ { 'colA' : 'A.1.alpha\r\nA.1.beta' ,
             'colB' : [1,2],
@@ -1299,6 +1316,31 @@ if __name__ == '__main__' :
         
     ep.htmlprint()
 
+    
+#   o = [ {u'engines': 1, u'status': u'Success'}, 
+#       {u'engines': [1, {u'engine_state': u'offline',
+#               u'host': u'fdafas',
+#               u'port': 123,
+#               u'ssh_user': u'',
+#               u'work_path': u''},
+#              {u'engine_state': u'offline',
+#               u'host': u'abc',
+#               u'port': 123,
+#               u'ssh_user': u'',
+#               u'work_path': u''},
+#              {u'engine_state': u'offline',
+#               u'host': u'abc',
+#               u'port': 1233,
+#               u'ssh_user': u'',
+#               u'work_path': u''}],
+#        u'status': u'Success'},
+#   {u'engines': 1, u'status': u'Success'}]
+#    # header_sort如果只需要排序一级表头, 只需要传入[]就行, 排二级以下要传入(), 且按顺序严格排序
+#   ep = Table(o, header_sort=(('status',), ('engines',), ('engines', 'host'), (u'engines', u'port'),
+#                                          (u'engines', u'work_path'), (u'engines', u'ssh_user'),
+#                                          (u'engines', u'engine_state')))
+#   ep.consoleprint()
+    
     chart = Chart([ x*123 for x in range(100) ])
     chart.smart_show()
 
