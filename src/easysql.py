@@ -754,7 +754,7 @@ class SQLConnectionPool( object ):
                         user=conn_args[2], passwd=conn_args[3],
                         connect_timeout = self.default_timeout,
 #                        use_unicode=True, 
-                        charset="utf8",
+                        charset="utf8mb4",
                     )
             except MySQLdb.OperationalError, e :
                 self._traceback( infos, wrt, tuple(conn_args), sql, 0, self.connectionfailed )
