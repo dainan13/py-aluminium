@@ -53,20 +53,22 @@ def formatcond( k, v ):
 
         return  left + ' AND ' + right
 
+    if type(v) is types.TupleType and len(v) > 2 and v[0].upper() == 'IN':
+        return  '(' + ' OR '.join(['`' + k + '` = ' + formatvalue(value) for value in v[1:]]) + ')'
 
     return '`' + k + '` = ' + formatvalue(v)
 
 def makecond( condition ):
-    
+
     if type(condition) in (types.TupleType, types.ListType ):
         condition = [' '.join((col.join(['`', '`']), oper, formatvalue(val))) for col, oper, val in condition]
-        
+
     elif type(condition) == types.DictType:
         condition = [ formatcond(k,v) for k, v in condition.items() ]
-    
+
     else :
         raise EasySqlLiteException, 'Can not format condition'
-    
+
     return " AND ".join(condition)
 
 
@@ -83,30 +85,31 @@ class ConnLite( object ):
         cur.execute( sql )
         dsc = cur.description
         dsc = [ d[0] for d in dsc ]
+
         rst = cur.fetchall()
         cur.close()
 
         return [ dict(zip(dsc,r)) for r in rst ]
-        
+
     def readlarge( self, sql ):
 
         cur = self.conn.cursor()
-        cur.execute( query )
+        cur.execute(sql)
         dsc = cur.description
         dsc = [ d[0] for d in dsc ]
-        
+
         rst = cur.fetchone()
         while rst :
             yield dict(zip(dsc,rst))
             rst = cur.fetchone()
-        
+
         cur.close()
-        
+
         return
 
     def query( self, sql, _unused = None ):
 
-        return self.conn.query( sql )
+         return self.conn.query( sql )
 
     write = query
 
@@ -183,34 +186,34 @@ class ConnLite( object ):
     def put( self, tb, data, *args, **kwargs ):
 
         return self.puts( tb, [data], *args, **kwargs )
-        
+
     def update( self, tb, data, where=None ):
         if data == {} :
             return
         tb = formattable( tb )
-            
+
         kvs = ', '.join( '`%s` = %s' % ( k, formatvalue(v) ) for k, v in data.items() )
-        
+
         sql = "UPDATE %s SET %s" % ( str(tb), kvs, )
-        
+
         if where:
             sql = "%s WHERE %s" % ( sql, makecond(where), )
-        
+
         print sql
         return self.write( sql, )
-        
+
     def delete( self, tb, where=None ):
-        
+
         if type(tb) in (types.TupleType, types.ListType ):
             tb = '`%s`.`%s`' % tuple(tb)
         else :
             tb = '`%s`' % (tb,)
-            
+
         sql = "DELETE FROM %s" % (str(tb),)
-        
+
         if where:
             sql = "%s WHERE %s" % ( sql, makecond(where), )
-            
+
         print sql
 
         self.write( sql, True )
@@ -242,24 +245,24 @@ class ConnLite( object ):
         tb = formattable( tb )
 
         return self.read( "DESCRIBE " + tb )
-        
+
     def getMasterStatus( self, ):
-        
+
         return self.read( "SHOW MASTER STATUS" )
-        
+
     def getUptime( self, ):
 
         return self.read( "SHOW STATUS LIKE 'Uptime'" )
-        
+
     def querybinlog( self, pos, serverid, logname, com_binlog_dump ):
-        
+
         arg = struct.pack( '<L', pos )
         arg = arg + struct.pack( '<H', 0 )
         arg = arg + struct.pack( '<L', serverid )
         arg = arg + str( logname )
-        
+
         self.conn._execute_command( com_binlog_dump, arg )
-        
+
         return
 
 class Connection( ConnLite ):
@@ -322,7 +325,7 @@ class Connection( ConnLite ):
         else:
             return (None, [])
     def read( self, sql ):
-        
+
         #print 'ESQL, read>', sql
 
         for i in range( self.retrytimes ):
@@ -346,6 +349,12 @@ class Connection( ConnLite ):
             except pymysql.ProgrammingError, e :
                 e.args = tuple( list(e.args)+[sql,] )
                 raise
+            except pymysql.err.Error:
+                self.reconnect()
+
+            except pymysql.err.Error:
+                self.reconnect()
+
 
         else :
             raise
@@ -353,9 +362,9 @@ class Connection( ConnLite ):
         return [ dict(zip(dsc,r)) for r in rst ]
 
     def write( self, sql, retry=False ):
-        
+
         #print sql
-        
+
         affectRows = 0
         self.reconnect()
         oe_retry = ( 2006, 2013 ) if retry else ( 2006, )
@@ -380,9 +389,9 @@ class Connection( ConnLite ):
                 raise
         else :
             raise
-        
+
         #print 'process ok'
-        
+
         return affectRows
 
 
@@ -420,13 +429,13 @@ class Table( object ):
         return self.conn.put( self.name, data, *args, **kwargs )
 
     def update( self, data, *args, **kwargs ):
-        
+
         data = dict([( k, v ) for k, v in data.items() if k in self.cols])
-        
+
         return self.conn.update( self.name, data, *args, **kwargs )
-        
+
     def delete( self, *args, **kwargs ):
-        
+
         return self.conn.delete( self.name, *args, **kwargs )
 
 class Database( object ):
@@ -474,9 +483,18 @@ if __name__ == '__main__' :
          }
 
     edb = Database(db, tablefilter=lambda x: True)
+    where = {'a': [1, 2]}
+    print ' WHERE ' + makecond(where)
+    where = {'a': (1, 2)}
+    print ' WHERE ' + makecond(where)
+    where = {'a': ('IN', 1, 2)}
+    print ' WHERE ' + makecond(where)
 
-    #print edb.stt_cpuall_fivemin.gets(['AN','coreid','ctime','iowait'],where = {'ctime':(None,'2011-08-22 00:00:00')},order = ['ctime'],reverse = True,limit = '10')
+
+#print edb.stt_cpuall_fivemin.gets(['AN','coreid','ctime','iowait'],where = {'ctime':(None,'2011-08-22 00:00:00')},order = ['ctime'],reverse = True,limit = '10')
     #print edb.table_info.puts([{'table_name':'tname'},{'table_name':'tname2'}])
     #print edb.conn.getdatabases()
-    print edb.table_info.put({'table_name':'tname'})
+    print edb.conn.getdatabases()
+    print edb.conn.gettables()
+    #print edb.table_info.put({'table_name':'tname'})
     #print edb.conn.getcols('stt_cpuall_fivemin');
