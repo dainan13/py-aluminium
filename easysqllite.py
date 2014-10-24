@@ -1,7 +1,12 @@
+#!/bin/env python
+# -*- coding: UTF-8 -*-
+
 """easy sql
 @author: dn13(dn13@gmail.com)
 @author: Fibrizof(dfang84@gmail.com)
 """
+
+__version__ = "20141024"
 
 import types
 import struct
@@ -34,12 +39,15 @@ def formatvalue( v ):
         return str(v)
 
     if type(v) == datetime.datetime :
-        return pymysql.escape_string( v.strftime('%Y-%m-%d %H:%M:%S') )
+        return pymysql.converters.escape_str( v.strftime('%Y-%m-%d %H:%M:%S') )
 
     if type(v) in (types.TupleType, types.ListType):
         return (','.join([formatvalue(vv) for vv in v])) .join(['(', ')'])
 
-    return pymysql.escape_string((v))
+    if type(v) in types.StringTypes:
+        return pymysql.converters.escape_str((v))
+    
+    return pymysql.converters.escape_str((str(v)))
 
 def formatcond( k, v ):
 
@@ -268,7 +276,7 @@ class ConnLite( object ):
 class Connection( ConnLite ):
 
     def __init__( self, dbopt ):
-
+        self.charset = None
         self.dbopt = dbopt
         self.conn = pymysql.connect( **self.dbopt )
         self.conn.query('SET AUTOCOMMIT = 1')
@@ -276,15 +284,19 @@ class Connection( ConnLite ):
 
         return
 
-    def __del__(self):
+    def close(self):
         try:
             self.conn.close()
         except:
             pass
 
+    def __del__(self):
+        self.close()
+
     def reconnect( self ):
         for i in range(5):
             try :
+                self.close()
                 self.conn = pymysql.connect( **self.dbopt )
                 self.conn.query('SET AUTOCOMMIT = 1')
                 return
@@ -294,6 +306,9 @@ class Connection( ConnLite ):
                 continue
         raise
             
+    def set_charset(self, charset):
+        self.charset = charset
+    
     def read_with_desc( self, sql ):
         for i in range( self.retrytimes ):
             try :
@@ -366,7 +381,7 @@ class Connection( ConnLite ):
         #print sql
 
         affectRows = 0
-        self.reconnect()
+        # self.reconnect()
         oe_retry = ( 2006, 2013 ) if retry else ( 2006, )
 
         for i in range(self.retrytimes):
@@ -498,3 +513,4 @@ if __name__ == '__main__' :
     print edb.conn.gettables()
     #print edb.table_info.put({'table_name':'tname'})
     #print edb.conn.getcols('stt_cpuall_fivemin');
+
